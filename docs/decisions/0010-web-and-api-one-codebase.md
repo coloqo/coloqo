@@ -11,7 +11,8 @@
   output is static files, not a process.
 - **Deployment differs by configuration, not by code.**
   - Self-hosted edition: the server serves the static files itself — one container.
-  - Cloud: the same single container in the pilot; later the static files go through a CDN or
+  - Cloud: the same single container in the pilot (revised 2026-10-18, decision 0016: the
+    server wheel with the web inside, no container); later the static files go through a CDN or
     nginx, and the API scales separately (long-lived SSE connections).
 - **One address.** `/` — static files, `/api` — the server; a reverse proxy routes them.
   Different domains would bring CORS and cross-site cookies into the web login.

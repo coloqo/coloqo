@@ -6,3 +6,6 @@ __pycache__/
 !.env.example
 .DS_Store
 dist/
+
+# The built web, copied in by the release workflow (decision 0016)
+server/src/coloqo_server/static/

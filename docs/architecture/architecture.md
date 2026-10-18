@@ -203,3 +203,7 @@ A11. Cloud deployment: where the first instance lives, domain, backups.
     **Decided 2026-10-17** — `app.coloqo.team` on a separate VDS in Russia, `docker compose` with
     PostgreSQL and Caddy, nightly encrypted backups at another provider for 14 days, web session
     protection (`docs/decisions/0013-cloud-deployment.md`).
+
+    **Revised 2026-10-18** — no containers on the cloud instance: a systemd service, Caddy from
+    apt, the server with the web inside from a GitHub Release by tag `server-v*`; the image stays
+    for the self-hosted edition (`docs/decisions/0016-cloud-without-containers.md`).

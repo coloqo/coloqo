@@ -65,9 +65,10 @@ docs/decisions/     accepted design decisions, NNNN-short-title.md
 server/             FastAPI server, Python 3.14, uv (src/coloqo_server, tests)
 web/                React + TypeScript + Vite; built to static files the server serves
 plugin/             the `coloqo` package on PyPI, Python >= 3.12, Apache-2.0
-deploy/             cloud instance: compose.yaml, Caddyfile, setup notes
-Dockerfile          one image: server plus built web (decision 0010)
-.github/workflows/  CI: checks, image to GHCR on main; plugin release on a plugin-v* tag
+deploy/             cloud instance without containers (decision 0016): setup.sh, deploy.sh,
+                    systemd unit, Caddyfile
+Dockerfile          image for the self-hosted edition: server plus built web
+.github/workflows/  CI: checks, image to GHCR on main; releases on plugin-v* and server-v* tags
 ```
 
 Checks: `uv run pytest`, `uv run ruff check`, `uv run ruff format --check` in `server/` and

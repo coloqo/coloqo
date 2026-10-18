@@ -22,7 +22,7 @@ cd web && npm install && npm run dev   # http://localhost:5173, /api идёт н
 ```
 
 Проверки: `uv run pytest`, `uv run ruff check` в `server/` и `plugin/`; `npm run lint`,
-`npm run build` в `web/`. Образ — `Dockerfile` в корне; развёртывание —
+`npm run build` в `web/`. Выпуск и развёртывание облака —
 [deploy/README.md](deploy/README.md) (на английском).
 
 ## Лицензия
