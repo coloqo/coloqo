@@ -1,0 +1,9 @@
+# /etc/systemd/system/coloqo-backup.service: the nightly copy (backup.sh).
+
+[Unit]
+Description=Coloqo nightly backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/coloqo/backup.sh

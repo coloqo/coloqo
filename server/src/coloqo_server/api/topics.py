@@ -702,6 +702,7 @@ async def create_topic(
         last_number=0,
         turns_since_human=0,
     )
+    to_user_id, to_assistant_id = await _addressee(db, area.team_id, body.to)
     db.add(topic)
     await db.flush()
     recipients = add_events(
@@ -718,6 +719,8 @@ async def create_topic(
             "author_user_id": actor.user.id,
             "author_assistant_id": topic.holder_assistant_id,
             "holder_assistant_id": topic.holder_assistant_id,
+            "to_user_id": to_user_id,
+            "to_assistant_id": to_assistant_id,
         },
     )
     # The opening Message is not a turn: the conversation starts with it.

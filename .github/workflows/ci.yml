@@ -8,6 +8,18 @@ on:
 jobs:
   server:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: coloqo
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: coloqo
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      COLOQO_TEST_DATABASE_URL: postgresql+psycopg://coloqo:dev@127.0.0.1:5432/coloqo_test
     defaults:
       run:
         working-directory: server
@@ -18,6 +30,8 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
+      - name: Check that protocol/openapi.json matches the server
+        run: uv run python -m coloqo_server.openapi | diff -u ../protocol/openapi.json -
 
   plugin:
     runs-on: ubuntu-latest
