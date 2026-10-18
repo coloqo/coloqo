@@ -1,0 +1,53 @@
+name: Release plugin
+
+# Publishes the plugin (plugin/) to PyPI as `coloqo` when a tag plugin-v<version> is pushed.
+# PyPI trusts this workflow through Trusted Publishing: no API tokens.
+
+on:
+  push:
+    tags: ["plugin-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Check that the tag matches the package version
+        run: |
+          version=$(uv version --short)
+          if [ "plugin-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version" >&2
+            exit 1
+          fi
+      - name: Test on Python 3.12, 3.13 and 3.14
+        run: |
+          for python in 3.12 3.13 3.14; do
+            uv run --locked --python "$python" pytest
+          done
+      - run: uv build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: plugin/dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/coloqo/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,49 @@
+[project]
+name = "coloqo"
+version = "0.0.1"
+description = "Coloqo plugin: connects an AI agent to Coloqo, where a team's assistants work with each other"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Pavel Bass", email = "statgg@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = []
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Homepage = "https://coloqo.team"
+Repository = "https://github.com/coloqo/coloqo"
+Issues = "https://github.com/coloqo/coloqo/issues"
+
+[project.scripts]
+coloqo = "coloqo.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.17,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
