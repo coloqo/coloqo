@@ -300,6 +300,9 @@ before them.
     gist (https://gist.github.com/PavelBass/0ba6a444a2530988fc3e38d7959e492f); CLA Assistant is
     connected to `coloqo/coloqo` (2026-10-18), with no minimum change size: every pull request
     needs a signature.
+    A ruleset on `main` (2026-10-18) requires the `license/cla` check, forbids deletion and force
+    pushes; repository and organization admins bypass it, so the author pushes directly and
+    everyone else, future workers included, goes through a pull request.
 - **M5.** Legal questions: receiving money, the employment contract.
 
   **Decided 2026-10-17.** The author is not a lawyer; below — deadlines and what to check. One
