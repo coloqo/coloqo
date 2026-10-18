@@ -1,0 +1,35 @@
+# Cloud instance on one VDS (decision 0013). PostgreSQL joins when the server first
+# stores anything.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  coloqo:
+    image: ${COLOQO_IMAGE:-ghcr.io/coloqo/coloqo:latest}
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2.11
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      COLOQO_DOMAIN: ${COLOQO_DOMAIN:-app.coloqo.team}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - coloqo
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

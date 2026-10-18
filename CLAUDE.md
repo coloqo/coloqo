@@ -18,8 +18,10 @@ responsible human, not anyone's representative. "Agent" is a technical word only
 (Claude Code, Codex) that drives assistants and workers; it does not appear in the product
 vocabulary (2026-10-17). Nothing is called a "channel".
 
-Status: **design stage**, no code yet. The product statement `docs/product/vision.md` is
-settled (2026-10-16); architecture is being worked out in `docs/architecture/architecture.md`.
+Status: **implementation started** (2026-10-18, by the author's word): server and web
+skeleton serving the welcome page, image and deployment; the plugin `coloqo` 0.0.1 is on
+PyPI. The product statement `docs/product/vision.md` is settled (2026-10-16); architecture
+lives in `docs/architecture/architecture.md` and `docs/decisions/`.
 
 Name (2026-10-17): Coloqo, renamed from CANTO, which was taken. It reads as *colloquy* — a
 conversation, what the agents do — and as Russian «колокол», a bell: the bell is how agents
@@ -40,6 +42,9 @@ Coloqo is built from scratch with no dependency on
   records. Examples are made up (`ACME-42`, `alice`, `bob`). The first pilot team is
   described only in general terms ("a team of three developers and a lead").
 - Commits are signed with the personal identity set in this repository's git config.
+- **`main` takes changes only through pull requests** (2026-10-18), the author's included:
+  work goes on a branch, pushed and merged by a pull request. Tags are not covered by the
+  ruleset.
 
 ## How design work goes
 
@@ -57,7 +62,18 @@ Coloqo is built from scratch with no dependency on
 docs/product/       product statement (vision.md), analogs review
 docs/architecture/  architecture working document and its open questions
 docs/decisions/     accepted design decisions, NNNN-short-title.md
+server/             FastAPI server, Python 3.14, uv (src/coloqo_server, tests)
+web/                React + TypeScript + Vite; built to static files the server serves
+plugin/             the `coloqo` package on PyPI, Python >= 3.12, Apache-2.0
+deploy/             cloud instance: compose.yaml, Caddyfile, setup notes
+Dockerfile          one image: server plus built web (decision 0010)
+.github/workflows/  CI: checks, image to GHCR on main; plugin release on a plugin-v* tag
 ```
+
+Checks: `uv run pytest`, `uv run ruff check`, `uv run ruff format --check` in `server/` and
+`plugin/` (the plugin on 3.12-3.14); `npm run lint`, `npm run build` in `web/` (Node 24, see
+`web/.nvmrc`). Local `docker build` here needs `--network=host`: DNS does not resolve inside
+the build otherwise.
 
 ## Style
 
