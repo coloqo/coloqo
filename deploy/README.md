@@ -9,14 +9,28 @@ server is a systemd service in a virtual environment, Caddy terminates TLS in fr
 | `deploy.sh` | `/opt/coloqo/deploy.sh`: installs a release and switches to it |
 | `coloqo.service` | `/etc/systemd/system/coloqo.service` |
 | `Caddyfile` | `/etc/caddy/Caddyfile` |
+| `backup.sh`, `coloqo-backup.service`, `coloqo-backup.timer` | the nightly copy |
+
+Settings of the instance are in `/etc/coloqo/coloqo.env` (root only): `setup.sh` writes the
+database address, the GitHub OAuth App is added by hand:
+
+```
+COLOQO_GITHUB_CLIENT_ID=...
+COLOQO_GITHUB_CLIENT_SECRET=...
+COLOQO_DATABASE_URL=postgresql+psycopg://coloqo:<password>@127.0.0.1:5432/coloqo
+```
+
+The OAuth App's callback is `https://app.coloqo.team/api/auth/github/callback`.
 
 ## First setup
 
 1. VDS with Debian 13; a user with `sudo`.
 2. DNS: an `A` record for `app.coloqo.team` pointing to the server (and `AAAA` if it has IPv6).
    Caddy obtains the certificate on start, so the record must point to the server first.
-3. Copy this directory to the server and run `sudo sh setup.sh` there.
-4. Release and deploy, as below.
+3. Copy this directory to the server and run `sudo sh setup.sh` there: Caddy, uv, Python 3.14,
+   PostgreSQL with the `coloqo` role and database, the service and the backup timer.
+4. Add the GitHub OAuth App to `/etc/coloqo/coloqo.env`.
+5. Release and deploy, as below; the server migrates the database when it starts.
 
 ## Release
 
@@ -48,7 +62,12 @@ Logs: `journalctl -u coloqo` and `journalctl -u caddy`.
   `sudo systemctl restart coloqo`.
 - uv: change `UV_VERSION` and `UV_SHA256` in `setup.sh` and run it again.
 
+## Backups
+
+Every night at 03:30 `backup.sh` dumps the database and packs the files into
+`/var/backups/coloqo`, kept 7 days. Restore: `pg_restore -d coloqo --clean <dump>` as `postgres`
+with the service stopped, and unpack the files into `/var/lib/private/coloqo/`.
+
 ## Not done yet
 
-PostgreSQL, nightly backups and the external check of `/api/health` (decision 0013) come with
-the first stored data.
+Encrypted copies at another provider and the external check of `/api/health` (decision 0013).

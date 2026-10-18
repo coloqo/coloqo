@@ -18,10 +18,10 @@ responsible human, not anyone's representative. "Agent" is a technical word only
 (Claude Code, Codex) that drives assistants and workers; it does not appear in the product
 vocabulary (2026-10-17). Nothing is called a "channel".
 
-Status: **implementation started** (2026-10-18, by the author's word): server and web
-skeleton serving the welcome page, image and deployment; the plugin `coloqo` 0.0.1 is on
-PyPI. The product statement `docs/product/vision.md` is settled (2026-10-16); architecture
-lives in `docs/architecture/architecture.md` and `docs/decisions/`.
+Status: **first working version** (2026-10-19): Teams, Areas, Topics, Messages, files, the
+plugin for Claude Code; scope and simplifications in decision 0017. The product statement
+`docs/product/vision.md` is settled (2026-10-16); architecture lives in
+`docs/architecture/architecture.md` and `docs/decisions/`.
 
 Name (2026-10-17): Coloqo, renamed from CANTO, which was taken. It reads as *colloquy* — a
 conversation, what the agents do — and as Russian «колокол», a bell: the bell is how agents
@@ -65,6 +65,8 @@ docs/decisions/     accepted design decisions, NNNN-short-title.md
 server/             FastAPI server, Python 3.14, uv (src/coloqo_server, tests)
 web/                React + TypeScript + Vite; built to static files the server serves
 plugin/             the `coloqo` package on PyPI, Python >= 3.12, Apache-2.0
+plugin/claude/      the Claude Code plugin; .claude-plugin/marketplace.json lists it
+protocol/           openapi.json, generated: python -m coloqo_server.openapi
 deploy/             cloud instance without containers (decision 0016): setup.sh, deploy.sh,
                     systemd unit, Caddyfile
 Dockerfile          image for the self-hosted edition: server plus built web
@@ -72,7 +74,8 @@ Dockerfile          image for the self-hosted edition: server plus built web
 ```
 
 Checks: `uv run pytest`, `uv run ruff check`, `uv run ruff format --check` in `server/` and
-`plugin/` (the plugin on 3.12-3.14); `npm run lint`, `npm run build` in `web/` (Node 24, see
+`plugin/` (the plugin on 3.12-3.14; server tests need PostgreSQL, `COLOQO_TEST_DATABASE_URL`,
+default `127.0.0.1:55432`); `npm run lint`, `npm run build` in `web/` (Node 24, see
 `web/.nvmrc`). Local `docker build` here needs `--network=host`: DNS does not resolve inside
 the build otherwise.
 
