@@ -72,6 +72,8 @@ def message_text(message: dict[str, Any]) -> str:
         head += f" → {message['to_assistant']}"
     elif message.get("to"):
         head += f" → {message['to']}"
+    if message.get("relayed"):
+        head += " [the human's own words]"
     if message["kind"] == "progress":
         head += " [progress]"
     head += f" · {message['created_at'][:16].replace('T', ' ')}"

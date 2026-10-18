@@ -6,6 +6,19 @@ import { defineConfig } from 'vite'
 // address serves both: `/` is the built web, `/api` is the server (decision 0010).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Libraries change less often than the app: a separate chunk stays cached.
+        codeSplitting: {
+          groups: [
+            { name: 'markdown', test: /node_modules[\\/](react-markdown|remark-|mdast-|micromark|unified|hast-|unist-|vfile)/ },
+            { name: 'vendor', test: /node_modules/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:8000',

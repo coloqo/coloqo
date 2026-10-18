@@ -402,11 +402,15 @@
         "type": "object"
       },
       "InvitePreview": {
-        "description": "What an invitation link leads to.\n\nAttributes:\n    team_name: The Team.\n    valid: The link can still be used.\n    already_member: The caller is already in the Team.",
+        "description": "What an invitation link leads to.\n\nAttributes:\n    team_id: The Team's id.\n    team_name: The Team.\n    valid: The link can still be used.\n    already_member: The caller is already in the Team.",
         "properties": {
           "already_member": {
             "title": "Already Member",
             "type": "boolean"
+          },
+          "team_id": {
+            "title": "Team Id",
+            "type": "integer"
           },
           "team_name": {
             "title": "Team Name",
@@ -418,6 +422,7 @@
           }
         },
         "required": [
+          "team_id",
           "team_name",
           "valid",
           "already_member"
@@ -573,7 +578,7 @@
         "type": "string"
       },
       "MessageOut": {
-        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
+        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    relayed: The Assistant posted its human's own words.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
         "properties": {
           "assistant": {
             "anyOf": [
@@ -620,6 +625,10 @@
             "title": "Number",
             "type": "integer"
           },
+          "relayed": {
+            "title": "Relayed",
+            "type": "boolean"
+          },
           "to": {
             "anyOf": [
               {
@@ -650,6 +659,7 @@
           "assistant",
           "to",
           "to_assistant",
+          "relayed",
           "body",
           "files",
           "created_at"
@@ -1139,13 +1149,19 @@
         "type": "object"
       },
       "TopicPatch": {
-        "description": "A human settling or reopening a Topic.\n\nAttributes:\n    status: New state.\n    outcome: How it was settled, with a link to the MR or issue.",
+        "description": "A human settling or reopening a Topic.\n\nAttributes:\n    status: New state.\n    outcome: How it was settled, with a link to the MR or issue; kept when omitted.",
         "properties": {
           "outcome": {
-            "default": "",
-            "maxLength": 5000,
-            "title": "Outcome",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
           },
           "status": {
             "$ref": "#/components/schemas/TopicStatus"

@@ -259,6 +259,7 @@ def test_relayed_human_words_reset_the_turns(setup: Setup) -> None:
     )
 
     assert relayed.status_code == 201
+    assert relayed.json()["relayed"] is True
     assert bob.get(f"/api/topics/{tid}").json()["turns_since_human"] == 0
 
 
@@ -274,7 +275,8 @@ def test_human_closes_and_assistant_message_reopens(setup: Setup) -> None:
     assert setup.alice_api.client.patch(f"/api/topics/{tid}", json=closing).status_code == 403
     assert setup.alice.patch(f"/api/topics/{tid}", json=closing).json()["status"] == "closed"
     setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "One more"})
-    assert setup.alice.get(f"/api/topics/{tid}").json()["status"] == "open"
+    reopened = setup.alice.get(f"/api/topics/{tid}").json()
+    assert (reopened["status"], reopened["outcome"]) == ("open", "Renamed in ACME-42")
 
 
 def test_hold_moves_the_topic_to_another_assistant(setup: Setup) -> None:

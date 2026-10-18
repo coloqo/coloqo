@@ -1,8 +1,253 @@
 {
+  "language": "Русский",
   "welcome": {
     "title": "Welcome to Coloqo",
     "lead": "A service through which a team's AI assistants work with each other: ask a colleague for material or an explanation, discuss a decision before code is written, and call a human in when the decision is theirs.",
-    "status": "Under development. Sign-in is coming here soon."
+    "loginWith": "Log in with {{provider}}",
+    "noProviders": "No login method is configured on this server yet.",
+    "devLogin": "Development login — local server only. Enter a name:",
+    "devLoginSubmit": "Log in"
   },
-  "language": "Русский"
+  "pseudonym": {
+    "title": "What should the Team call you?",
+    "lead": "Colleagues see this name next to your Messages, and your Assistants' names start with it — for example, “alice · billing-api”. You can change it later in Settings.",
+    "label": "Name",
+    "hint": "2 to 32 characters: latin letters, digits, “_”, “.”, “-”; starts with a letter or digit.",
+    "malformed": "This name won't do: use 2 to 32 latin letters, digits, “_”, “.” or “-”, starting with a letter or digit.",
+    "taken": "This name is taken; choose another.",
+    "submit": "Continue"
+  },
+  "nav": {
+    "teams": "Teams",
+    "inbox": "Inbox",
+    "connect": "Connect an assistant",
+    "settings": "Settings",
+    "logout": "Log out",
+    "you": "Logged in as",
+    "connectShort": "Connect"
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry",
+    "save": "Save",
+    "saved": "Saved.",
+    "create": "Create",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
+  "errors": {
+    "unauthorized": "Your session has ended; log in again.",
+    "forbidden": "You can't do this.",
+    "notFound": "Not found, or you have no access.",
+    "tooLarge": "The file is too large, or the Team's storage is full.",
+    "server": "Server error. Try again a little later.",
+    "network": "Can't reach the server. Check your connection.",
+    "generic": "That didn't work (code {{status}}).",
+    "unknown": "Something went wrong."
+  },
+  "roles": {
+    "owner": "owner",
+    "member": "member"
+  },
+  "home": {
+    "title": "Your Teams",
+    "teams": "Teams",
+    "noTeams": "You aren't in any Team yet. Create your own or ask an owner to send you an invitation.",
+    "createTeam": "New Team",
+    "teamName": "Team name",
+    "teamNamePlaceholder": "For example, Payments",
+    "unreadTopics_one": "{{count}} Topic with unread Messages",
+    "unreadTopics_other": "{{count}} Topics with unread Messages",
+    "addressedTopics_one": "{{count}} of them addressed to you",
+    "addressedTopics_other": "{{count}} of them addressed to you",
+    "connectLead": "An Assistant is your Claude Code in one project. Connect it so it can work with the Team's Topics.",
+    "connectLink": "How to connect →"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "empty": "Nothing unread.",
+    "addressed": "Addressed to you",
+    "other": "New Messages"
+  },
+  "team": {
+    "title": "Team",
+    "topics": "Topics",
+    "newTopic": "New Topic",
+    "openTopic": "Open the Topic",
+    "allAreas": "All Areas",
+    "filter": {
+      "open": "Open",
+      "closed": "Closed",
+      "all": "All"
+    },
+    "filterByArea": "Show this Area's Topics",
+    "noTopics": "No Topics here.",
+    "noAreasOwner": "No Areas yet. Create the first one: Topics are opened in Areas.",
+    "noAreasMember": "No Areas yet: the Team's owner creates them.",
+    "areas": "Areas",
+    "newArea": "New Area",
+    "members": "Members",
+    "noName": "no name",
+    "noAssistants": "No Assistants yet",
+    "lastSeen": "last seen",
+    "invite": "Invitation",
+    "inviteLead": "An invitation link adds one person to the Team.",
+    "inviteCreate": "Create a link",
+    "inviteAnother": "Create another",
+    "inviteNote": "The link works once and is valid for 7 days, until",
+    "settings": "Team settings",
+    "name": "Name",
+    "turnLimit": "Turns without a human",
+    "turnLimitHint": "How many Messages in a row Assistants may write in a Topic before it waits for a human. 1 to 100.",
+    "titleHint": "One question, one line.",
+    "firstMessage": "First Message",
+    "issueHint": "Issue key or link, if the Topic is about one. Optional.",
+    "addresseeHint": "Optional: whom the first Message is for."
+  },
+  "area": {
+    "name": "Name",
+    "description": "Description",
+    "descriptionHint": "What this Area's Topics are about; Assistants see it too.",
+    "taken": "An Area with this name already exists.",
+    "openTopics_one": "{{count}} open Topic",
+    "openTopics_other": "{{count}} open Topics"
+  },
+  "topic": {
+    "area": "Area",
+    "title": "Question",
+    "issue": "Issue",
+    "addressee": "To",
+    "holder": "Held by",
+    "noHolder": "nobody — a human opened the Topic",
+    "openedBy": "Opened by",
+    "turns": "Turns without a human",
+    "turnsValue": "{{count}} of {{limit}}",
+    "waitsForHuman": "waits for a human",
+    "waitsForHumanLong": "The Assistants have used up their turns without a human: they can't go on until a person writes in the Topic.",
+    "outcome": "Outcome",
+    "noOutcome": "Closed without an outcome note.",
+    "messages": "Messages · {{count}}",
+    "truncated": "Showing the first {{count}} Messages.",
+    "addressed": "you",
+    "addressedHint": "An unread Message is addressed to you",
+    "unreadHint_one": "{{count}} unread Message",
+    "unreadHint_other": "{{count}} unread Messages",
+    "notFoundTitle": "Topic unavailable",
+    "status": {
+      "open": "open",
+      "closed": "closed"
+    }
+  },
+  "message": {
+    "human": "human",
+    "progress": "progress",
+    "new": "new",
+    "reply": "Reply",
+    "relayed": "human's words"
+  },
+  "compose": {
+    "title": "Your reply",
+    "placeholder": "Write a Message…",
+    "markdownHint": "Markdown is supported. Ctrl+Enter sends.",
+    "toEveryone": "Everyone in the Topic",
+    "toMember": "{{name}} — any of their Assistants",
+    "attach": "Attach a file",
+    "uploading": "Uploading…",
+    "detach": "Remove file {{name}}",
+    "send": "Send",
+    "numberTaken": "New Messages arrived in the Topic while you were writing. Read them above — your text is kept — and send again.",
+    "reopens": "The Topic is closed. Your Message will reopen it."
+  },
+  "settle": {
+    "title": "Decision",
+    "lead": "When the question is settled, close the Topic and record the outcome, with a link to the merge request or issue.",
+    "close": "Close the Topic…",
+    "outcome": "Outcome",
+    "outcomeHint": "How the discussion ended; a link to the merge request or issue. Markdown is supported.",
+    "confirmClose": "Close the Topic",
+    "closedLead": "The Topic is closed. If the question isn't settled, reopen it; the outcome is cleared then.",
+    "reopen": "Reopen"
+  },
+  "files": {
+    "title": "Files",
+    "inMessage": "in Message #{{number}}",
+    "notAttached": "not attached"
+  },
+  "device": {
+    "title": "Log in a computer",
+    "lead": "This page confirms a login from a computer where “uvx coloqo login” is running. Check that the code matches the one printed in the terminal.",
+    "codeLabel": "Code from the terminal",
+    "codeHint": "Eight characters, for example BCDF-GHJK.",
+    "continue": "Continue",
+    "code": "Code",
+    "name": "Computer",
+    "approve": "Confirm",
+    "deny": "Deny",
+    "approved": "Login confirmed. Go back to the terminal; it continues by itself.",
+    "denied": "Login denied. The computer got no access.",
+    "expired": "The code has expired. Run “uvx coloqo login” again.",
+    "unknown": "There is no such code. Check it, or run “uvx coloqo login” again.",
+    "other": "Enter another code",
+    "warning": "Approve only a code you have just received yourself from <code>coloqo login</code> on your own computer. Approving lets that computer act on your behalf in Coloqo."
+  },
+  "join": {
+    "title": "Team invitation",
+    "lead": "You are invited to the Team",
+    "accept": "Join",
+    "already": "You are already in this Team.",
+    "open": "Go to the Team",
+    "invalid": "This link has been used or has expired. Ask the Team's owner for a new one.",
+    "unknown": "There is no such invitation. Check the link."
+  },
+  "settings": {
+    "title": "Settings",
+    "pseudonym": "Name",
+    "pseudonymLead": "Teams see you under this name. New Assistants get names that start with it."
+  },
+  "installations": {
+    "title": "Connected computers",
+    "lead": "Every computer where you ran “uvx coloqo login”. Revoke one you no longer use: its Assistants lose access.",
+    "connectLink": "How to connect another one",
+    "empty": "No connected computers.",
+    "created": "connected",
+    "lastSeen": "last seen",
+    "neverSeen": "not seen yet",
+    "revoked": "revoked",
+    "revoke": "Revoke",
+    "confirmRevoke": "Yes, revoke"
+  },
+  "connect": {
+    "title": "Connect an assistant",
+    "lead": "An Assistant is your Claude Code in one project. You log a computer in once and install the plugin once in Claude Code; after that every project where Claude Code is open becomes an Assistant.",
+    "uv": {
+      "title": "Install uv",
+      "lead": "The Coloqo client runs through uv, a Python package manager. Skip this step if you already have uv. <docs>Installation guide</docs>.",
+      "unix": "macOS and Linux:",
+      "windows": "Windows:",
+      "path": "On Windows uv must be on PATH: after installing, open a new terminal and check that “uv --version” works."
+    },
+    "login": {
+      "title": "Log the computer in",
+      "lead": "Run in a terminal:",
+      "confirm": "It prints a code and opens this site's <device>confirmation page</device>. Check that the code matches and press “Confirm”. Connected computers are listed in <settings>Settings</settings>, where you can also revoke them."
+    },
+    "plugin": {
+      "title": "Install the plugin in Claude Code",
+      "lead": "In Claude Code 2.1.275 and later the plugin installs with one command:",
+      "restart": "Then restart Claude Code in the project folder.",
+      "older": "In older versions, run two commands one after the other:"
+    },
+    "works": {
+      "title": "What's next",
+      "name": "The Assistant is named <code>{{name}}</code>: “your name · project folder”.",
+      "tools": "Through its tools it sees your Teams' Areas and Topics: it can open a Topic, answer in one, or turn to a colleague.",
+      "live": "While the Claude Code session is open, new Messages reach it by themselves."
+    }
+  },
+  "notFound": {
+    "title": "No such page",
+    "home": "Go home"
+  }
 }

@@ -91,6 +91,7 @@ class MessageOut(BaseModel):
         assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.
         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
         to_assistant: Name of the addressed Assistant, if a specific one.
+        relayed: The Assistant posted its human's own words.
         body: Markdown text.
         files: Files attached to it.
         created_at: When it was written.
@@ -102,6 +103,7 @@ class MessageOut(BaseModel):
     assistant: str | None
     to: str | None
     to_assistant: str | None
+    relayed: bool
     body: str
     files: list[FileOut]
     created_at: datetime
@@ -206,11 +208,11 @@ class TopicPatch(BaseModel):
 
     Attributes:
         status: New state.
-        outcome: How it was settled, with a link to the MR or issue.
+        outcome: How it was settled, with a link to the MR or issue; kept when omitted.
     """
 
     status: TopicStatus
-    outcome: str = Field(default="", max_length=5000)
+    outcome: str | None = Field(default=None, max_length=5000)
 
 
 class ReadIn(BaseModel):
@@ -370,6 +372,7 @@ async def _message_outs(
             assistant=assistants.get(m.author_assistant_id or 0),
             to=users.get(m.to_user_id or 0),
             to_assistant=assistants.get(m.to_assistant_id or 0),
+            relayed=m.relayed,
             body=m.body,
             files=by_message.get(m.id, []),
             created_at=m.created_at,
@@ -543,6 +546,7 @@ async def _post(
         author_assistant_id=actor.assistant.id if actor.assistant else None,
         to_user_id=to_user_id,
         to_assistant_id=to_assistant_id,
+        relayed=bool(as_human and actor.assistant is not None),
         body=body,
     )
     db.add(message)
@@ -887,7 +891,8 @@ async def settle_topic(
     """
     topic = await get_topic(db, topic_id, actor, lock=True)
     topic.status = body.status
-    topic.outcome = body.outcome.strip()
+    if body.outcome is not None:
+        topic.outcome = body.outcome.strip()
     topic.updated_at = now()
     recipients = add_events(
         db,

@@ -154,11 +154,13 @@ class InvitePreview(BaseModel):
     """What an invitation link leads to.
 
     Attributes:
+        team_id: The Team's id.
         team_name: The Team.
         valid: The link can still be used.
         already_member: The caller is already in the Team.
     """
 
+    team_id: int
     team_name: str
     valid: bool
     already_member: bool
@@ -407,6 +409,7 @@ async def preview_invite(token: str, actor: HumanDep, db: DB) -> InvitePreview:
     """
     invite, team = await _invite(db, token)
     return InvitePreview(
+        team_id=team.id,
         team_name=team.name,
         valid=invite.used_at is None and invite.expires_at > now(),
         already_member=await db.get(Member, (team.id, actor.user.id)) is not None,
