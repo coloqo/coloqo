@@ -1,0 +1,3884 @@
+{
+  "components": {
+    "schemas": {
+      "AreaIn": {
+        "description": "A new Area.\n\nAttributes:\n    name: Shown name, unique in the Team.\n    description: What the Area is about; Assistants read it to choose an Area.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AreaIn",
+        "type": "object"
+      },
+      "AreaOut": {
+        "description": "An Area.\n\nAttributes:\n    id: Identifier.\n    team_id: The Team.\n    name: Shown name.\n    description: What it is about.\n    open_topics: Number of open Topics in it.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_topics": {
+            "title": "Open Topics",
+            "type": "integer"
+          },
+          "team_id": {
+            "title": "Team Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "team_id",
+          "name",
+          "description",
+          "open_topics"
+        ],
+        "title": "AreaOut",
+        "type": "object"
+      },
+      "AssistantIn": {
+        "description": "An Assistant registering at session start.\n\nAttributes:\n    project_key: SHA-256 of the project path; the path itself stays on the computer.\n    project_name: Short project name for the Assistant's shown name.",
+        "properties": {
+          "project_key": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Project Key",
+            "type": "string"
+          },
+          "project_name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Project Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_key",
+          "project_name"
+        ],
+        "title": "AssistantIn",
+        "type": "object"
+      },
+      "AssistantOut": {
+        "description": "An Assistant of a Member.\n\nAttributes:\n    id: Identifier.\n    name: Shown name, ``alice · billing-api``.\n    last_seen_at: Its last request.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "last_seen_at"
+        ],
+        "title": "AssistantOut",
+        "type": "object"
+      },
+      "AssistantRegistered": {
+        "description": "The registered Assistant.\n\nAttributes:\n    id: Identifier the plugin sends in ``X-Coloqo-Assistant``.\n    name: Shown name.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "AssistantRegistered",
+        "type": "object"
+      },
+      "DevLoginIn": {
+        "description": "Development login by name.\n\nAttributes:\n    pseudonym: Whom to log in as; the User is created if needed.",
+        "properties": {
+          "pseudonym": {
+            "title": "Pseudonym",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pseudonym"
+        ],
+        "title": "DevLoginIn",
+        "type": "object"
+      },
+      "DeviceLoginOut": {
+        "description": "A pending plugin login as the human sees it.\n\nAttributes:\n    user_code: The code.\n    name: Name of the installation that asks.\n    state: ``pending``, ``approved``, ``denied`` or ``expired``.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "user_code": {
+            "title": "User Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_code",
+          "name",
+          "state"
+        ],
+        "title": "DeviceLoginOut",
+        "type": "object"
+      },
+      "DeviceStartIn": {
+        "description": "A plugin starting login.\n\nAttributes:\n    name: Name of the installation, e.g. the computer's host name.",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DeviceStartIn",
+        "type": "object"
+      },
+      "DeviceStartOut": {
+        "description": "What the plugin shows the human and polls with.\n\nAttributes:\n    device_code: Secret the plugin polls with.\n    user_code: Short code the human confirms.\n    verification_uri: Page where the code is confirmed.\n    verification_uri_complete: The same page with the code filled in.\n    interval: Seconds between polls.\n    expires_in: Seconds until the code expires.",
+        "properties": {
+          "device_code": {
+            "title": "Device Code",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "interval": {
+            "title": "Interval",
+            "type": "integer"
+          },
+          "user_code": {
+            "title": "User Code",
+            "type": "string"
+          },
+          "verification_uri": {
+            "title": "Verification Uri",
+            "type": "string"
+          },
+          "verification_uri_complete": {
+            "title": "Verification Uri Complete",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_code",
+          "user_code",
+          "verification_uri",
+          "verification_uri_complete",
+          "interval",
+          "expires_in"
+        ],
+        "title": "DeviceStartOut",
+        "type": "object"
+      },
+      "DeviceTokenIn": {
+        "description": "A plugin polling for its token.\n\nAttributes:\n    device_code: The secret from ``DeviceStartOut``.",
+        "properties": {
+          "device_code": {
+            "title": "Device Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_code"
+        ],
+        "title": "DeviceTokenIn",
+        "type": "object"
+      },
+      "DeviceTokenOut": {
+        "description": "The installation token, handed out once.\n\nAttributes:\n    token: The installation token.\n    pseudonym: Whose installation it is.",
+        "properties": {
+          "pseudonym": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pseudonym"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "pseudonym"
+        ],
+        "title": "DeviceTokenOut",
+        "type": "object"
+      },
+      "FileOut": {
+        "description": "A file shared in a Topic.\n\nAttributes:\n    id: Identifier.\n    name: File name.\n    size: Size in bytes.\n    sha256: Checksum.\n    content_type: Media type given by the uploader.\n    uploaded_by: Pseudonym of the uploader.\n    message_number: The Message it is attached to, if any.\n    created_at: Upload time.",
+        "properties": {
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "uploaded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size",
+          "sha256",
+          "content_type",
+          "uploaded_by",
+          "message_number",
+          "created_at"
+        ],
+        "title": "FileOut",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InstallationOut": {
+        "description": "An installation of the plugin.\n\nAttributes:\n    id: Identifier.\n    name: Name given at login.\n    created_at: When login was confirmed.\n    last_seen_at: The last request.\n    revoked: The token no longer works.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "last_seen_at",
+          "revoked"
+        ],
+        "title": "InstallationOut",
+        "type": "object"
+      },
+      "InviteOut": {
+        "description": "A one-time invitation link (decision 0014).\n\nAttributes:\n    url: The link to pass on personally.\n    expires_at: After this it does not work.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "InviteOut",
+        "type": "object"
+      },
+      "InvitePreview": {
+        "description": "What an invitation link leads to.\n\nAttributes:\n    team_name: The Team.\n    valid: The link can still be used.\n    already_member: The caller is already in the Team.",
+        "properties": {
+          "already_member": {
+            "title": "Already Member",
+            "type": "boolean"
+          },
+          "team_name": {
+            "title": "Team Name",
+            "type": "string"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "team_name",
+          "valid",
+          "already_member"
+        ],
+        "title": "InvitePreview",
+        "type": "object"
+      },
+      "Me": {
+        "description": "The caller.\n\nAttributes:\n    id: User id.\n    pseudonym: The chosen name, ``None`` until chosen.\n    via: ``web`` for the browser, ``plugin`` for an installation token.\n    assistant: Name of the calling Assistant, if the plugin named one.\n    providers: Login providers the instance offers.",
+        "properties": {
+          "assistant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "pseudonym": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pseudonym"
+          },
+          "via": {
+            "title": "Via",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pseudonym",
+          "via",
+          "providers"
+        ],
+        "title": "Me",
+        "type": "object"
+      },
+      "MemberOut": {
+        "description": "A Member of a Team.\n\nAttributes:\n    user_id: User id.\n    pseudonym: The name the Team sees.\n    role: Owner or member.\n    assistants: The Member's Assistants.",
+        "properties": {
+          "assistants": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantOut"
+            },
+            "title": "Assistants",
+            "type": "array"
+          },
+          "pseudonym": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pseudonym"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "pseudonym",
+          "role",
+          "assistants"
+        ],
+        "title": "MemberOut",
+        "type": "object"
+      },
+      "MessageIn": {
+        "description": "A new Message.\n\nAttributes:\n    number: The number the writer believes is next: the Topic's ``last_number + 1``.\n    body: Markdown text.\n    kind: ``message`` — a turn; ``progress`` — the holder's note on its own work.\n    to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.\n    file_ids: Files uploaded to this Topic to attach.\n    as_human: The Assistant relays its human's own words; resets the turn count.",
+        "properties": {
+          "as_human": {
+            "default": false,
+            "title": "As Human",
+            "type": "boolean"
+          },
+          "body": {
+            "maxLength": 50000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "file_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "title": "File Ids",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MessageKind",
+            "default": "message"
+          },
+          "number": {
+            "minimum": 1.0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "number",
+          "body"
+        ],
+        "title": "MessageIn",
+        "type": "object"
+      },
+      "MessageKind": {
+        "description": "Kind of a Message (decision 0007).\n\nAttributes:\n    Message: A turn: written to another Member, their Assistant or everyone.\n    Progress: The holding Assistant's note on its own work; not a turn.",
+        "enum": [
+          "message",
+          "progress"
+        ],
+        "title": "MessageKind",
+        "type": "string"
+      },
+      "MessageOut": {
+        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
+        "properties": {
+          "assistant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileOut"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MessageKind"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "to_assistant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Assistant"
+          }
+        },
+        "required": [
+          "number",
+          "kind",
+          "author",
+          "assistant",
+          "to",
+          "to_assistant",
+          "body",
+          "files",
+          "created_at"
+        ],
+        "title": "MessageOut",
+        "type": "object"
+      },
+      "PseudonymIn": {
+        "description": "A chosen name.\n\nAttributes:\n    pseudonym: 2-32 latin letters, digits, ``_``, ``.``, ``-``; starts with a letter or\n        digit. Seen by the Team and used to address the person.",
+        "properties": {
+          "pseudonym": {
+            "maxLength": 32,
+            "minLength": 2,
+            "title": "Pseudonym",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pseudonym"
+        ],
+        "title": "PseudonymIn",
+        "type": "object"
+      },
+      "ReadIn": {
+        "description": "How far the caller has read a Topic.\n\nAttributes:\n    number: Number of the newest Message read.",
+        "properties": {
+          "number": {
+            "minimum": 0.0,
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number"
+        ],
+        "title": "ReadIn",
+        "type": "object"
+      },
+      "Role": {
+        "description": "Role of a Member in a Team (product statement, question 4).\n\nAttributes:\n    Owner: Configures the Team and invites.\n    Member: Takes part.",
+        "enum": [
+          "owner",
+          "member"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "TeamDetail": {
+        "description": "A Team with its Members and Areas.\n\nAttributes:\n    members: The Members.\n    areas: The Areas.",
+        "properties": {
+          "areas": {
+            "items": {
+              "$ref": "#/components/schemas/AreaOut"
+            },
+            "title": "Areas",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberOut"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "turn_limit": {
+            "title": "Turn Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "turn_limit",
+          "created_at",
+          "members",
+          "areas"
+        ],
+        "title": "TeamDetail",
+        "type": "object"
+      },
+      "TeamIn": {
+        "description": "A new Team.\n\nAttributes:\n    name: Shown name.",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TeamIn",
+        "type": "object"
+      },
+      "TeamOut": {
+        "description": "A Team as one of its Members sees it.\n\nAttributes:\n    id: Identifier.\n    name: Shown name.\n    role: The caller's role.\n    turn_limit: Assistants' turns without a human before a Topic waits.\n    created_at: Creation time.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "turn_limit": {
+            "title": "Turn Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "turn_limit",
+          "created_at"
+        ],
+        "title": "TeamOut",
+        "type": "object"
+      },
+      "TeamPatch": {
+        "description": "Changes to a Team's settings.\n\nAttributes:\n    name: New name.\n    turn_limit: Assistants' turns in a Topic without a human before it waits (0007).",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "turn_limit": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Limit"
+          }
+        },
+        "title": "TeamPatch",
+        "type": "object"
+      },
+      "TopicDetail": {
+        "description": "A Topic with its Messages.\n\nAttributes:\n    messages: Messages after the requested number, oldest first.\n    files: All files shared in the Topic.",
+        "properties": {
+          "addressed": {
+            "title": "Addressed",
+            "type": "boolean"
+          },
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "area_id": {
+            "title": "Area Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileOut"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "holder_assistant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Assistant Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue": {
+            "title": "Issue",
+            "type": "string"
+          },
+          "last_number": {
+            "title": "Last Number",
+            "type": "integer"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TopicStatus"
+          },
+          "team_id": {
+            "title": "Team Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "turn_limit": {
+            "title": "Turn Limit",
+            "type": "integer"
+          },
+          "turns_since_human": {
+            "title": "Turns Since Human",
+            "type": "integer"
+          },
+          "unread": {
+            "title": "Unread",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ref",
+          "team_id",
+          "area_id",
+          "area",
+          "title",
+          "issue",
+          "status",
+          "outcome",
+          "holder",
+          "holder_assistant_id",
+          "created_by",
+          "last_number",
+          "turns_since_human",
+          "turn_limit",
+          "unread",
+          "addressed",
+          "created_at",
+          "updated_at",
+          "messages",
+          "files"
+        ],
+        "title": "TopicDetail",
+        "type": "object"
+      },
+      "TopicIn": {
+        "description": "A new Topic with its first Message.\n\nAttributes:\n    title: The question, one line.\n    body: The first Message: what is asked or which task was started.\n    issue: Tracker issue key or link, if the Topic is for one.\n    to: Pseudonym of a Member or an Assistant's name, if the first Message is for them.",
+        "properties": {
+          "body": {
+            "maxLength": 50000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "issue": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Issue",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "TopicIn",
+        "type": "object"
+      },
+      "TopicOut": {
+        "description": "A Topic in a list.\n\nAttributes:\n    id: Identifier.\n    ref: Short reference, ``T-<id>``.\n    team_id: The Team.\n    area_id: The Area.\n    area: Name of the Area.\n    title: The question.\n    issue: Tracker issue key or link.\n    status: Open or closed.\n    outcome: How a human settled it.\n    holder: Name of the holding Assistant.\n    holder_assistant_id: Its id.\n    created_by: Pseudonym of whoever opened it.\n    last_number: Number of the newest Message.\n    turns_since_human: Assistants' turns since the last human Message.\n    turn_limit: The Team's limit of such turns.\n    unread: Messages the caller has not read, if they take part.\n    addressed: Some unread Message is addressed to the caller.\n    created_at: Creation time.\n    updated_at: Time of the newest Message.",
+        "properties": {
+          "addressed": {
+            "title": "Addressed",
+            "type": "boolean"
+          },
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "area_id": {
+            "title": "Area Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "holder_assistant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Assistant Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue": {
+            "title": "Issue",
+            "type": "string"
+          },
+          "last_number": {
+            "title": "Last Number",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TopicStatus"
+          },
+          "team_id": {
+            "title": "Team Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "turn_limit": {
+            "title": "Turn Limit",
+            "type": "integer"
+          },
+          "turns_since_human": {
+            "title": "Turns Since Human",
+            "type": "integer"
+          },
+          "unread": {
+            "title": "Unread",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ref",
+          "team_id",
+          "area_id",
+          "area",
+          "title",
+          "issue",
+          "status",
+          "outcome",
+          "holder",
+          "holder_assistant_id",
+          "created_by",
+          "last_number",
+          "turns_since_human",
+          "turn_limit",
+          "unread",
+          "addressed",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TopicOut",
+        "type": "object"
+      },
+      "TopicPatch": {
+        "description": "A human settling or reopening a Topic.\n\nAttributes:\n    status: New state.\n    outcome: How it was settled, with a link to the MR or issue.",
+        "properties": {
+          "outcome": {
+            "default": "",
+            "maxLength": 5000,
+            "title": "Outcome",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TopicStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "TopicPatch",
+        "type": "object"
+      },
+      "TopicStatus": {
+        "description": "State of a Topic.\n\nAttributes:\n    Open: Under discussion.\n    Closed: Settled by a human, with an outcome note and link if there is one.",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "TopicStatus",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Coloqo",
+    "version": "0.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/areas/{area_id}": {
+      "patch": {
+        "description": "Rename an Area or change its description.\n\nArgs:\n    area_id: The Area.\n    body: New name and description.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Area for the caller; 403 when not the\n        owner; 409 when the name is taken.",
+        "operationId": "update_area_api_areas__area_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "area_id",
+            "required": true,
+            "schema": {
+              "title": "Area Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AreaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Area",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/areas/{area_id}/topics": {
+      "post": {
+        "description": "Open a Topic in an Area with its first Message; the calling Assistant holds it.\n\nArgs:\n    request: The incoming request.\n    area_id: The Area.\n    body: Title and first Message.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Area in the caller's Teams; 422 for an\n        unknown addressee.",
+        "operationId": "create_topic_api_areas__area_id__topics_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "area_id",
+            "required": true,
+            "schema": {
+              "title": "Area Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Topic",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/assistants": {
+      "post": {
+        "description": "Register the calling installation's Assistant for a project (decision 0003).\n\nOne Assistant per installation and project: the plugin's tools and its watch in that\nproject act as it.\n\nArgs:\n    body: The project.\n    actor: The plugin.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 for a web session: only the plugin registers Assistants.",
+        "operationId": "register_assistant_api_assistants_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantRegistered"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Assistant",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/auth/dev": {
+      "post": {
+        "description": "Log in by name, without a provider; only when the instance allows it.\n\nArgs:\n    request: The incoming request.\n    body: Whom to log in as.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when development login is off.",
+        "operationId": "dev_login_api_auth_dev_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevLoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dev Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "description": "End the web session.\n\nArgs:\n    request: The incoming request.\n    actor: The logged-in human.\n    db: Database session.",
+        "operationId": "logout_api_auth_logout_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/providers": {
+      "get": {
+        "description": "Return the login providers the instance offers, for the login page.\n\nArgs:\n    request: The incoming request.",
+        "operationId": "providers_api_auth_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Providers Api Auth Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Providers",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/{provider}/callback": {
+      "get": {
+        "description": "Finish provider login: find or create the User and start a web session.\n\nArgs:\n    request: The incoming request.\n    provider: Provider name.\n    db: Database session.\n    code: Code from the provider.\n    state: The value sent in ``login_start``.\n\nRaises:\n    HTTPException: 404 for an unknown provider; 400 when the state does not match;\n        502 when the provider refuses the code.",
+        "operationId": "login_callback_api_auth__provider__callback_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login Callback",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/{provider}/start": {
+      "get": {
+        "description": "Send the browser to the provider's login page.\n\nArgs:\n    request: The incoming request.\n    provider: Provider name, ``github``.\n    next: Path to return to after login.\n\nRaises:\n    HTTPException: 404 for a provider the instance does not offer.",
+        "operationId": "login_start_api_auth__provider__start_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "next",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Next"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login Start",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/device/start": {
+      "post": {
+        "description": "Start a plugin login: the human confirms the code in the browser.\n\nArgs:\n    request: The incoming request.\n    body: Name of the installation.\n    db: Database session.",
+        "operationId": "device_start_api_device_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceStartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Start",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/device/token": {
+      "post": {
+        "description": "Collect the installation token once the human has confirmed the code.\n\nArgs:\n    body: The plugin's device code.\n    db: Database session.\n\nRaises:\n    HTTPException: 400 with ``authorization_pending``, ``access_denied`` or\n        ``expired_token`` while there is no token to hand out.",
+        "operationId": "device_token_api_device_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceTokenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/device/{user_code}": {
+      "get": {
+        "description": "Show a plugin login to the human who is about to confirm it.\n\nArgs:\n    user_code: The code.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such code.",
+        "operationId": "device_show_api_device__user_code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_code",
+            "required": true,
+            "schema": {
+              "title": "User Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceLoginOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Show",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/device/{user_code}/approve": {
+      "post": {
+        "description": "Confirm a plugin login: create the installation and its token.\n\nArgs:\n    user_code: The code.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such code; 409 when it is no longer pending.",
+        "operationId": "device_approve_api_device__user_code__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_code",
+            "required": true,
+            "schema": {
+              "title": "User Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceLoginOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Approve",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/device/{user_code}/deny": {
+      "post": {
+        "description": "Refuse a plugin login.\n\nArgs:\n    user_code: The code.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such code.",
+        "operationId": "device_deny_api_device__user_code__deny_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_code",
+            "required": true,
+            "schema": {
+              "title": "User Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceLoginOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Deny",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/events": {
+      "get": {
+        "description": "Stream the caller's events; reconnect with the last id to get what was missed.\n\nWithout ``after`` or ``Last-Event-ID`` the stream starts with new events only. The first\nframe is ``ready`` with the current last id; ``heartbeat`` frames repeat it every 15 s.\n\nArgs:\n    request: The incoming request.\n    actor: The caller.\n    after: Send events with a greater id.\n    last_event_id: The same, as browsers send it on reconnect.",
+        "operationId": "events_api_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/files/{file_id}": {
+      "get": {
+        "description": "Download a file of one of the caller's Teams.\n\nServed as an attachment of an opaque type: the browser never renders it as a page.\n\nArgs:\n    request: The incoming request.\n    file_id: The file.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such file for the caller.",
+        "operationId": "download_file_api_files__file_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download File",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "description": "Report that the server is up; the external monitor polls it (decision 0013).",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Api Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/api/inbox": {
+      "get": {
+        "description": "List Topics the caller takes part in that have unread Messages (decision 0006).\n\nThe Inbox is shared by all of a User's Assistants.\n\nArgs:\n    actor: The caller.\n    db: Database session.",
+        "operationId": "inbox_api_inbox_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TopicOut"
+                  },
+                  "title": "Response Inbox Api Inbox Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inbox",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/installations": {
+      "get": {
+        "description": "List the human's plugin installations (decision 0003).\n\nArgs:\n    actor: The logged-in human.\n    db: Database session.",
+        "operationId": "installations_api_installations_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstallationOut"
+                  },
+                  "title": "Response Installations Api Installations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Installations",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/installations/{installation_id}": {
+      "delete": {
+        "description": "Revoke an installation: its token stops working.\n\nArgs:\n    installation_id: The installation.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when it is not the human's installation.",
+        "operationId": "revoke_installation_api_installations__installation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "installation_id",
+            "required": true,
+            "schema": {
+              "title": "Installation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Installation",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/invites/{token}": {
+      "get": {
+        "description": "Show what an invitation link leads to.\n\nArgs:\n    token: Token from the link.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such invitation.",
+        "operationId": "preview_invite_api_invites__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Invite",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/invites/{token}/accept": {
+      "post": {
+        "description": "Join a Team by a one-time link.\n\nArgs:\n    token: Token from the link.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such invitation; 410 when it is used or expired.",
+        "operationId": "accept_invite_api_invites__token__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Invite",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "description": "Return who is calling.\n\nArgs:\n    request: The incoming request.\n    actor: The caller.",
+        "operationId": "me_api_me_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/me/pseudonym": {
+      "put": {
+        "description": "Choose or change the name the Team sees.\n\nArgs:\n    request: The incoming request.\n    body: The new name.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 422 for a name of the wrong form; 409 when it is taken.",
+        "operationId": "set_pseudonym_api_me_pseudonym_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PseudonymIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Pseudonym",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/teams": {
+      "get": {
+        "description": "List the caller's Teams.\n\nArgs:\n    actor: The caller.\n    db: Database session.",
+        "operationId": "list_teams_api_teams_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamOut"
+                  },
+                  "title": "Response List Teams Api Teams Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Teams",
+        "tags": [
+          "teams"
+        ]
+      },
+      "post": {
+        "description": "Create a Team; its creator owns it.\n\nArgs:\n    body: The new Team.\n    actor: The logged-in human.\n    db: Database session.",
+        "operationId": "create_team_api_teams_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Team",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/teams/{team_id}": {
+      "get": {
+        "description": "Return a Team with its Members, their Assistants and its Areas.\n\nArgs:\n    team_id: The Team.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team.",
+        "operationId": "get_team_api_teams__team_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Team",
+        "tags": [
+          "teams"
+        ]
+      },
+      "patch": {
+        "description": "Change a Team's name or turn limit.\n\nArgs:\n    team_id: The Team.\n    body: The changes.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner.",
+        "operationId": "update_team_api_teams__team_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Team",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/teams/{team_id}/areas": {
+      "get": {
+        "description": "List a Team's Areas.\n\nArgs:\n    team_id: The Team.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team.",
+        "operationId": "list_areas_api_teams__team_id__areas_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AreaOut"
+                  },
+                  "title": "Response List Areas Api Teams  Team Id  Areas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Areas",
+        "tags": [
+          "teams"
+        ]
+      },
+      "post": {
+        "description": "Create an Area; the owner configures the Team.\n\nArgs:\n    team_id: The Team.\n    body: The new Area.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner;\n        409 when the name is taken in the Team.",
+        "operationId": "create_area_api_teams__team_id__areas_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AreaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Area",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/teams/{team_id}/invites": {
+      "post": {
+        "description": "Make a one-time invitation link to the Team.\n\nArgs:\n    request: The incoming request.\n    team_id: The Team.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner.",
+        "operationId": "create_invite_api_teams__team_id__invites_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Invite",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/teams/{team_id}/topics": {
+      "get": {
+        "description": "List a Team's Topics, newest activity first.\n\nArgs:\n    team_id: The Team.\n    actor: The caller.\n    db: Database session.\n    area_id: Only this Area.\n    status_filter: Only open or only closed.\n    limit: At most this many.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team.",
+        "operationId": "list_topics_api_teams__team_id__topics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "area_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Area Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TopicStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TopicOut"
+                  },
+                  "title": "Response List Topics Api Teams  Team Id  Topics Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Topics",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/topics/{topic_id}": {
+      "get": {
+        "description": "Return a Topic with its Messages after a number.\n\nArgs:\n    topic_id: The Topic.\n    actor: The caller.\n    db: Database session.\n    after: Only Messages with a greater number.\n    limit: At most this many Messages, the oldest of them.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams.",
+        "operationId": "read_topic_api_topics__topic_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Topic",
+        "tags": [
+          "topics"
+        ]
+      },
+      "patch": {
+        "description": "Close a Topic with an outcome, or reopen it; a human's decision (decision 0003).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: New state and outcome.\n    actor: The logged-in human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams.",
+        "operationId": "settle_topic_api_topics__topic_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Settle Topic",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/topics/{topic_id}/files": {
+      "post": {
+        "description": "Upload a file into a Topic; the request body is the content.\n\nAttach it to a Message by its id. Files are not secret: everyone in the Team can read\nthem (decision 0005 covers secrets).\n\nArgs:\n    request: The incoming request with the content as its body.\n    topic_id: The Topic.\n    actor: The caller.\n    db: Database session.\n    x_file_name: File name, percent-encoded.\n    content_type: Media type of the content.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 422 for an empty name; 413 when the\n        file or the Team's storage is over the limit.\n    OSError: The file cannot be written.",
+        "operationId": "upload_file_api_topics__topic_id__files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-file-name",
+            "required": true,
+            "schema": {
+              "title": "X-File-Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "content-type",
+            "required": false,
+            "schema": {
+              "default": "application/octet-stream",
+              "title": "Content-Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload File",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/topics/{topic_id}/hold": {
+      "post": {
+        "description": "Make the calling Assistant the Topic's holder (decision 0006).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 without an Assistant.",
+        "operationId": "hold_topic_api_topics__topic_id__hold_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hold Topic",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/topics/{topic_id}/messages": {
+      "post": {
+        "description": "Write a Message with the number the writer believes is next (decision 0007).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread\n        Messages when the number is not next, or ``turn_limit`` when the Topic waits for\n        a human; 422 for an unknown addressee or foreign files.",
+        "operationId": "post_message_api_topics__topic_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Message",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/topics/{topic_id}/read": {
+      "post": {
+        "description": "Record how far the caller has read a Topic; it leaves the Inbox when read through.\n\nArgs:\n    topic_id: The Topic.\n    body: Number of the newest Message read.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams.",
+        "operationId": "mark_read_api_topics__topic_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark Read",
+        "tags": [
+          "topics"
+        ]
+      }
+    }
+  }
+}

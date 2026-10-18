@@ -1,0 +1,204 @@
+"""Who is asking: web sessions, installation tokens, Assistants (decision 0003)."""
+
+import hashlib
+import secrets
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Annotated
+from urllib.parse import urlsplit
+
+from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from coloqo_server.models import Assistant, Installation, User, WebSession
+
+SESSION_COOKIE = "__Host-coloqo_session"
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def new_token() -> str:
+    """Return a fresh random token for a cookie, an installation or a link."""
+    return secrets.token_urlsafe(32)
+
+
+def token_hash(token: str) -> str:
+    """Return the SHA-256 the database keeps instead of the token itself.
+
+    Args:
+        token: The token as the client holds it.
+    """
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def now() -> datetime:
+    """Return the current time, timezone-aware."""
+    return datetime.now(UTC)
+
+
+@dataclass
+class Actor:
+    """Who makes a request.
+
+    Attributes:
+        user: The User on whose behalf the request is made.
+        installation: The plugin installation, or ``None`` for the web session.
+        assistant: The Assistant, when the plugin names one in ``X-Coloqo-Assistant``.
+    """
+
+    user: User
+    installation: Installation | None = None
+    assistant: Assistant | None = None
+
+    @property
+    def is_human(self) -> bool:
+        """The request comes from the human's own web session."""
+        return self.installation is None
+
+
+async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
+    """Yield a database session for one request.
+
+    Args:
+        request: The incoming request; the application keeps the database in its state.
+    """
+    async with request.app.state.database.sessions() as session:
+        yield session
+
+
+DB = Annotated[AsyncSession, Depends(get_db)]
+
+
+def _check_origin(request: Request) -> None:
+    """Refuse a state-changing cookie request from another site (decision 0013).
+
+    Args:
+        request: The incoming request.
+
+    Raises:
+        HTTPException: 403 when ``Origin`` is missing or is not the instance's address.
+    """
+    if request.method in SAFE_METHODS:
+        return
+    expected = urlsplit(request.app.state.settings.public_url)
+    origin = urlsplit(request.headers.get("origin", ""))
+    if (origin.scheme, origin.netloc) != (expected.scheme, expected.netloc):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Request from another origin")
+
+
+async def _web_user(request: Request, db: AsyncSession) -> User | None:
+    """Return the User of the request's session cookie, if it is valid.
+
+    Args:
+        request: The incoming request.
+        db: Database session.
+    """
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if not cookie:
+        return None
+    session = await db.scalar(
+        select(WebSession).where(
+            WebSession.token_hash == token_hash(cookie), WebSession.expires_at > now()
+        )
+    )
+    return await db.get(User, session.user_id) if session else None
+
+
+async def get_actor(
+    request: Request,
+    db: DB,
+    authorization: Annotated[str | None, Header()] = None,
+    x_coloqo_assistant: Annotated[int | None, Header()] = None,
+) -> Actor:
+    """Identify the caller by an installation token or by the web session.
+
+    Args:
+        request: The incoming request.
+        db: Database session.
+        authorization: ``Bearer <installation token>`` from the plugin.
+        x_coloqo_assistant: Id of the calling Assistant, registered by this installation.
+
+    Raises:
+        HTTPException: 401 without valid credentials; 403 for a foreign Assistant id or a
+            cookie request from another origin.
+    """
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        installation = await db.scalar(
+            select(Installation).where(
+                Installation.token_hash == token_hash(token.strip()),
+                Installation.revoked_at.is_(None),
+            )
+        )
+        if scheme.lower() != "bearer" or installation is None:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "The installation token is not valid or was revoked; run `coloqo login`",
+            )
+        installation.last_seen_at = now()
+        assistant = None
+        if x_coloqo_assistant is not None:
+            assistant = await db.get(Assistant, x_coloqo_assistant)
+            if assistant is None or assistant.installation_id != installation.id:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "Unknown Assistant")
+            assistant.last_seen_at = installation.last_seen_at
+        await db.commit()
+        user = await db.get(User, installation.user_id)
+        assert user is not None
+        return Actor(user=user, installation=installation, assistant=assistant)
+    user = await _web_user(request, db)
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not logged in")
+    _check_origin(request)
+    return Actor(user=user)
+
+
+async def get_member_actor(actor: Annotated[Actor, Depends(get_actor)]) -> Actor:
+    """Like ``get_actor``, and the User has chosen a pseudonym.
+
+    Args:
+        actor: The caller.
+
+    Raises:
+        HTTPException: 403 until the pseudonym is chosen in the web interface.
+    """
+    if actor.user.pseudonym is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Choose your name in the Coloqo web interface first"
+        )
+    return actor
+
+
+async def get_human(actor: Annotated[Actor, Depends(get_actor)]) -> Actor:
+    """Like ``get_actor``, for actions only a human may take, from the web (decision 0003).
+
+    Args:
+        actor: The caller.
+
+    Raises:
+        HTTPException: 403 for the plugin's installation token.
+    """
+    if not actor.is_human:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only a human can do this, in the Coloqo web interface"
+        )
+    return actor
+
+
+async def get_human_member(actor: Annotated[Actor, Depends(get_human)]) -> Actor:
+    """A human from the web who has chosen a pseudonym.
+
+    Args:
+        actor: The caller.
+
+    Raises:
+        HTTPException: 403 until the pseudonym is chosen.
+    """
+    return await get_member_actor(actor)
+
+
+ActorDep = Annotated[Actor, Depends(get_member_actor)]
+AnyActorDep = Annotated[Actor, Depends(get_actor)]
+HumanDep = Annotated[Actor, Depends(get_human_member)]
+AnyHumanDep = Annotated[Actor, Depends(get_human)]

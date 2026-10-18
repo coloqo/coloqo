@@ -1,0 +1,437 @@
+"""Tests of Teams, Areas, Topics, Messages, the Inbox and files."""
+
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+
+from tests.conftest import Plugin
+
+
+@dataclass
+class Setup:
+    """A Team of alice (owner) and bob, an Area, and an Assistant each.
+
+    Attributes:
+        alice: Alice's web client.
+        bob: Bob's web client.
+        alice_api: Alice's Assistant.
+        bob_web: Bob's Assistant.
+        team_id: The Team.
+        area_id: The Area.
+    """
+
+    alice: TestClient
+    bob: TestClient
+    alice_api: Plugin
+    bob_web: Plugin
+    team_id: int
+    area_id: int
+
+
+@pytest.fixture
+def setup(human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]) -> Setup:
+    """Build the Team.
+
+    Args:
+        human: Factory of logged-in web clients.
+        plugin: Factory of plugin installations.
+    """
+    alice = human("alice")
+    bob = human("bob")
+    team_id = alice.post("/api/teams", json={"name": "Acme"}).json()["id"]
+    url = alice.post(f"/api/teams/{team_id}/invites").json()["url"]
+    token = url.rsplit("/", 1)[1]
+    assert bob.post(f"/api/invites/{token}/accept").json()["role"] == "member"
+    area_id = alice.post(
+        f"/api/teams/{team_id}/areas", json={"name": "Contracts", "description": "API contracts"}
+    ).json()["id"]
+    return Setup(
+        alice=alice,
+        bob=bob,
+        alice_api=plugin(alice, "billing-api"),
+        bob_web=plugin(bob, "web"),
+        team_id=team_id,
+        area_id=area_id,
+    )
+
+
+def _open(setup: Setup, to: str | None = None) -> dict:
+    """Open a Topic by Alice's Assistant.
+
+    Args:
+        setup: The Team.
+        to: Addressee of the first Message.
+    """
+    response = setup.alice_api.client.post(
+        f"/api/areas/{setup.area_id}/topics",
+        json={"title": "Rename field amount", "body": "Can we rename it?", "to": to},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_invite_works_once(setup: Setup, human: Callable[[str], TestClient]) -> None:
+    """A used invitation link does not let anyone else in.
+
+    Args:
+        setup: The Team.
+        human: Factory of logged-in web clients.
+    """
+    url = setup.alice.post(f"/api/teams/{setup.team_id}/invites").json()["url"]
+    token = url.rsplit("/", 1)[1]
+    carol, dave = human("carol"), human("dave")
+
+    assert carol.post(f"/api/invites/{token}/accept").status_code == 200
+    assert dave.get(f"/api/invites/{token}").json()["valid"] is False
+    assert dave.post(f"/api/invites/{token}/accept").status_code == 410
+    assert dave.get(f"/api/teams/{setup.team_id}").status_code == 404
+
+
+def test_only_owner_configures(setup: Setup) -> None:
+    """A member cannot create Areas or invite.
+
+    Args:
+        setup: The Team.
+    """
+    assert (
+        setup.bob.post(f"/api/teams/{setup.team_id}/areas", json={"name": "X"}).status_code == 403
+    )
+    assert setup.bob.post(f"/api/teams/{setup.team_id}/invites").status_code == 403
+
+
+def test_team_shows_members_and_assistants(setup: Setup) -> None:
+    """The Team lists its Members with their Assistants and its Areas.
+
+    Args:
+        setup: The Team.
+    """
+    team = setup.bob_web.client.get(f"/api/teams/{setup.team_id}").json()
+
+    assert [(m["pseudonym"], m["role"]) for m in team["members"]] == [
+        ("alice", "owner"),
+        ("bob", "member"),
+    ]
+    assert [a["name"] for a in team["members"][0]["assistants"]] == ["alice · billing-api"]
+    assert team["areas"][0]["name"] == "Contracts"
+
+
+def test_topic_opened_by_assistant_is_held_by_it(setup: Setup) -> None:
+    """The opening Assistant holds the Topic; the first Message is number 1.
+
+    Args:
+        setup: The Team.
+    """
+    topic = _open(setup)
+
+    assert topic["ref"] == f"T-{topic['id']}"
+    assert topic["holder"] == "alice · billing-api"
+    assert topic["last_number"] == 1
+    assert topic["turns_since_human"] == 0
+    assert topic["messages"][0]["assistant"] == "alice · billing-api"
+
+
+def test_addressed_topic_lands_in_inbox_until_read(setup: Setup) -> None:
+    """A Topic addressed to bob is in his Inbox until he reads it through.
+
+    Args:
+        setup: The Team.
+    """
+    topic = _open(setup, to="bob")
+    bob = setup.bob_web.client
+
+    (entry,) = bob.get("/api/inbox").json()
+    assert (entry["id"], entry["unread"], entry["addressed"]) == (topic["id"], 1, True)
+    bob.post(f"/api/topics/{topic['id']}/read", json={"number": 1})
+    assert bob.get("/api/inbox").json() == []
+
+
+def test_reply_with_taken_number_returns_unread(setup: Setup) -> None:
+    """A Message with a number that is not next is refused with what was missed (0007).
+
+    Args:
+        setup: The Team.
+    """
+    topic = _open(setup)
+    bob = setup.bob_web.client
+    first = bob.post(
+        f"/api/topics/{topic['id']}/messages", json={"number": 2, "body": "Yes", "to": "alice"}
+    )
+    assert first.status_code == 201, first.text
+
+    late = setup.alice_api.client.post(
+        f"/api/topics/{topic['id']}/messages", json={"number": 2, "body": "Also..."}
+    )
+
+    assert late.status_code == 409
+    detail = late.json()["detail"]
+    assert (detail["code"], detail["next_number"]) == ("number_taken", 3)
+    assert [m["body"] for m in detail["unread"]] == ["Yes"]
+    assert detail["unread"][0]["to"] == "alice"
+
+
+def test_unknown_addressee_lists_names(setup: Setup) -> None:
+    """Addressing nobody in the Team is refused with the names that work.
+
+    Args:
+        setup: The Team.
+    """
+    topic = _open(setup)
+
+    response = setup.bob_web.client.post(
+        f"/api/topics/{topic['id']}/messages", json={"number": 2, "body": "Hi", "to": "carol"}
+    )
+
+    assert response.status_code == 422
+    assert "alice · billing-api" in response.json()["detail"]
+
+
+def test_message_to_an_assistant_by_name(setup: Setup) -> None:
+    """A Message can be addressed to a specific Assistant.
+
+    Args:
+        setup: The Team.
+    """
+    topic = _open(setup)
+
+    response = setup.bob_web.client.post(
+        f"/api/topics/{topic['id']}/messages",
+        json={"number": 2, "body": "Hi", "to": "alice · billing-api"},
+    )
+
+    assert (response.json()["to"], response.json()["to_assistant"]) == (
+        "alice",
+        "alice · billing-api",
+    )
+
+
+def test_turn_limit_waits_for_a_human(setup: Setup) -> None:
+    """At the limit Assistants' turns are refused until a human writes (decision 0007).
+
+    Args:
+        setup: The Team.
+    """
+    setup.alice.patch(f"/api/teams/{setup.team_id}", json={"turn_limit": 2})
+    topic = _open(setup)
+    tid = topic["id"]
+    alice, bob = setup.alice_api.client, setup.bob_web.client
+
+    assert (
+        bob.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "a"}).status_code == 201
+    )
+    assert (
+        alice.post(f"/api/topics/{tid}/messages", json={"number": 3, "body": "b"}).status_code
+        == 201
+    )
+    blocked = bob.post(f"/api/topics/{tid}/messages", json={"number": 4, "body": "c"})
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "turn_limit"
+    progress = alice.post(
+        f"/api/topics/{tid}/messages", json={"number": 4, "body": "working", "kind": "progress"}
+    )
+    assert progress.status_code == 201
+    assert (
+        setup.bob.post(
+            f"/api/topics/{tid}/messages", json={"number": 5, "body": "go on"}
+        ).status_code
+        == 201
+    )
+    assert (
+        bob.post(f"/api/topics/{tid}/messages", json={"number": 6, "body": "c"}).status_code == 201
+    )
+
+
+def test_relayed_human_words_reset_the_turns(setup: Setup) -> None:
+    """An Assistant posting its human's words with ``as_human`` resets the count.
+
+    Args:
+        setup: The Team.
+    """
+    setup.alice.patch(f"/api/teams/{setup.team_id}", json={"turn_limit": 1})
+    tid = _open(setup)["id"]
+    bob = setup.bob_web.client
+    bob.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "a"})
+
+    relayed = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 3, "body": "Bob says: go", "as_human": True}
+    )
+
+    assert relayed.status_code == 201
+    assert bob.get(f"/api/topics/{tid}").json()["turns_since_human"] == 0
+
+
+def test_human_closes_and_assistant_message_reopens(setup: Setup) -> None:
+    """Only a human closes a Topic; a new turn in it reopens it.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+    closing = {"status": "closed", "outcome": "Renamed in ACME-42"}
+
+    assert setup.alice_api.client.patch(f"/api/topics/{tid}", json=closing).status_code == 403
+    assert setup.alice.patch(f"/api/topics/{tid}", json=closing).json()["status"] == "closed"
+    setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "One more"})
+    assert setup.alice.get(f"/api/topics/{tid}").json()["status"] == "open"
+
+
+def test_hold_moves_the_topic_to_another_assistant(setup: Setup) -> None:
+    """An Assistant can take over holding a Topic.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+
+    held = setup.bob_web.client.post(f"/api/topics/{tid}/hold").json()
+
+    assert held["holder"] == "bob · web"
+
+
+def test_outsider_sees_nothing(
+    setup: Setup, human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]
+) -> None:
+    """A User outside the Team gets 404 for its Topics and files.
+
+    Args:
+        setup: The Team.
+        human: Factory of logged-in web clients.
+        plugin: Factory of plugin installations.
+    """
+    tid = _open(setup)["id"]
+    eve = plugin(human("eve"), "x").client
+
+    assert eve.get(f"/api/topics/{tid}").status_code == 404
+    assert (
+        eve.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "hi"}).status_code == 404
+    )
+    assert eve.get(f"/api/teams/{setup.team_id}/topics").status_code == 404
+
+
+def test_file_upload_attach_download(setup: Setup) -> None:
+    """A file is uploaded, attached to a Message and downloaded by a colleague.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+    alice = setup.alice_api.client
+    uploaded = alice.post(
+        f"/api/topics/{tid}/files",
+        content=b"select 1;\n",
+        headers={"X-File-Name": "query%20one.sql", "Content-Type": "text/plain"},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    file = uploaded.json()
+
+    message = alice.post(
+        f"/api/topics/{tid}/messages",
+        json={"number": 2, "body": "The script", "file_ids": [file["id"]]},
+    ).json()
+    download = setup.bob_web.client.get(f"/api/files/{file['id']}")
+
+    assert file["name"] == "query one.sql"
+    assert message["files"][0]["id"] == file["id"]
+    assert download.content == b"select 1;\n"
+    assert "attachment" in download.headers["content-disposition"]
+    assert download.headers["content-type"] == "application/octet-stream"
+
+
+def test_file_limits(setup: Setup) -> None:
+    """Files over the size limit or over the Team's storage are refused.
+
+    Args:
+        setup: The Team; the test settings allow 1 KB per file and 4 KB per Team.
+    """
+    tid = _open(setup)["id"]
+    alice = setup.alice_api.client
+    headers = {"X-File-Name": "f.bin"}
+
+    assert (
+        alice.post(f"/api/topics/{tid}/files", content=b"x" * 2000, headers=headers).status_code
+        == 413
+    )
+    for _ in range(4):
+        assert (
+            alice.post(f"/api/topics/{tid}/files", content=b"x" * 1000, headers=headers).status_code
+            == 201
+        )
+    assert (
+        alice.post(f"/api/topics/{tid}/files", content=b"x" * 200, headers=headers).status_code
+        == 413
+    )
+
+
+def test_file_of_another_topic_cannot_be_attached(setup: Setup) -> None:
+    """Attaching a file uploaded to another Topic is refused.
+
+    Args:
+        setup: The Team.
+    """
+    first, second = _open(setup)["id"], _open(setup)["id"]
+    alice = setup.alice_api.client
+    file_id = alice.post(
+        f"/api/topics/{first}/files", content=b"a", headers={"X-File-Name": "a.txt"}
+    ).json()["id"]
+
+    response = alice.post(
+        f"/api/topics/{second}/messages", json={"number": 2, "body": "x", "file_ids": [file_id]}
+    )
+
+    assert response.status_code == 422
+
+
+def test_events_reach_every_member(setup: Setup, live_url: str) -> None:
+    """A Message makes an event for a Member's stream, which starts after the given id.
+
+    Args:
+        setup: The Team.
+        live_url: Address of the same application served by uvicorn.
+    """
+    tid = _open(setup, to="bob")["id"]
+    headers = {"Authorization": setup.bob_web.client.headers["Authorization"]}
+
+    frames = []
+    with (
+        httpx.Client(base_url=live_url, headers=headers, timeout=10) as client,
+        client.stream("GET", "/api/events?after=0") as stream,
+    ):
+        for line in stream.iter_lines():
+            frames.append(line)
+            if line.startswith("data:") and "event: message" in frames:
+                break
+
+    assert "event: ready" in frames
+    assert "event: topic" in frames
+    data = next(f for f in frames[frames.index("event: message") :] if f.startswith("data:"))
+    assert f'"topic_id": {tid}' in data
+    assert '"to_user_id"' in data
+
+
+def test_stream_wakes_on_new_message(setup: Setup, live_url: str) -> None:
+    """A Message posted while the stream waits reaches it at once.
+
+    Args:
+        setup: The Team.
+        live_url: Address of the same application served by uvicorn.
+    """
+    tid = _open(setup)["id"]
+    headers = {"Authorization": setup.bob_web.client.headers["Authorization"]}
+
+    with (
+        httpx.Client(base_url=live_url, headers=headers, timeout=10) as client,
+        client.stream("GET", "/api/events") as stream,
+    ):
+        lines = (line for line in stream.iter_lines() if line)
+        assert next(lines) == "retry: 3000"
+        assert next(lines) == "event: ready"
+        assert next(lines).startswith("data: ")
+        with httpx.Client(base_url=live_url, headers=headers) as writer:
+            posted = writer.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "hi"})
+            assert posted.status_code == 201
+        frame = [next(lines) for _ in range(3)]
+
+    assert frame[0].startswith("id: ")
+    assert frame[1] == "event: message"

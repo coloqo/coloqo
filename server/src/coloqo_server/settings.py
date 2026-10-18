@@ -30,6 +30,17 @@ class Settings(BaseSettings):
         host: Interface to listen on. The cloud instance listens on ``127.0.0.1`` behind
             Caddy; a container listens on all interfaces.
         port: Port to listen on.
+        database_url: SQLAlchemy URL of the PostgreSQL database (decision 0008).
+        public_url: The address people open; the origin that state-changing requests
+            from the web must come from, and the base of links the server hands out.
+        github_client_id: Client ID of the GitHub OAuth App; without it GitHub login is off.
+        github_client_secret: Client secret of the GitHub OAuth App.
+        dev_login: Allow logging in by name without a provider. For development and tests
+            only: anyone can log in as anyone.
+        files_dir: Where uploaded files are kept (decision 0008).
+        max_file_bytes: Largest file a Topic accepts.
+        team_storage_bytes: Total size of files a Team can keep.
+        event_retention_days: How long the event log is kept (decision 0008).
     """
 
     model_config = SettingsConfigDict(env_prefix="COLOQO_")
@@ -37,3 +48,12 @@ class Settings(BaseSettings):
     web_dir: Path | None = Field(default_factory=bundled_web_dir)
     host: str = "0.0.0.0"
     port: int = 8000
+    database_url: str = "postgresql+psycopg://coloqo:dev@127.0.0.1:55432/coloqo"
+    public_url: str = "http://localhost:5173"
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
+    dev_login: bool = False
+    files_dir: Path = Path("var/files")
+    max_file_bytes: int = 100 * 1024 * 1024
+    team_storage_bytes: int = 5 * 1024 * 1024 * 1024
+    event_retention_days: int = 7

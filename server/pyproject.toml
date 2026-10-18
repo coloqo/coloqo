@@ -1,12 +1,16 @@
 [project]
 name = "coloqo-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "Coloqo server: the API and, when configured, the built web interface"
 license = "AGPL-3.0-only"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.20.0",
     "fastapi>=0.143.3",
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.0",
+    "sqlalchemy[asyncio]>=2.1.5",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -14,6 +18,7 @@ dependencies = [
 dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.0",
     "ruff>=0.17.1",
 ]
 
@@ -29,3 +34,8 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
