@@ -290,6 +290,13 @@ before them.
     contribution arrives only under AGPL — it cannot be relicensed or kept in one process with a
     closed module without opening the module. Why not the DCO for the server: it gives no right to
     relicense. Why not an assignment of rights: it scares people away more and adds nothing.
+  - **Refined 2026-10-18:** the CLA covers the whole repository, the plugin included. CLA
+    Assistant works per repository, not per directory, and the plugin lives in the same
+    repository (decision 0011). For plugin contributors this is broader than M4 required, not
+    narrower. CLA text version 1.0 (2026-10-18) is based on the Apache ICLA, with an explicit
+    right to relicense, a statement on AI-assisted contributions and the right to assign the
+    rights to a legal entity that takes over the Project; to be shown to a lawyer. The promise
+    that the core stays open is in `CONTRIBUTING.md`.
 - **M5.** Legal questions: receiving money, the employment contract.
 
   **Decided 2026-10-17.** The author is not a lawyer; below — deadlines and what to check. One
