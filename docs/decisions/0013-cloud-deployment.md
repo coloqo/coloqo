@@ -2,6 +2,9 @@
 
 **Date:** 2026-10-17 · **Question:** A11, `docs/architecture/architecture.md`
 
+**Revised 2026-10-18:** no `docker compose` on the cloud instance — a systemd service, Caddy and
+later PostgreSQL from apt, the server from a GitHub Release built by CI (decision 0016).
+
 ## Decision
 
 - **Domain — `coloqo.team`** (registered by the author on 2026-10-17, DNS at Timeweb).

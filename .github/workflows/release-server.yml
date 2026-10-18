@@ -1,0 +1,82 @@
+name: Release server
+
+# Builds the server with the web bundled in and attaches it to a GitHub Release when a tag
+# server-v<version> is pushed (decision 0016). The cloud instance installs it from there.
+
+on:
+  push:
+    tags: ["server-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@v7
+      - name: Check that the tagged commit is on main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "The tagged commit is not on main" >&2; exit 1; }
+      - name: Check that the tag matches the package version
+        working-directory: server
+        run: |
+          version=$(uv version --short)
+          if [ "server-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version" >&2
+            exit 1
+          fi
+      - name: Build the web
+        working-directory: web
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+      - name: Test the server
+        working-directory: server
+        run: |
+          uv sync --locked
+          uv run ruff check
+          uv run ruff format --check
+          uv run pytest
+      - name: Build the wheel with the web inside
+        working-directory: server
+        run: |
+          cp -r ../web/dist src/coloqo_server/static
+          uv build --wheel
+          uv export --locked --no-dev --no-emit-project --format requirements.txt \
+            --output-file dist/requirements.txt
+          cd dist && sha256sum * > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: server/dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Server ${GITHUB_REF_NAME#server-v}" \
+            --notes "Deploy on the cloud instance: \`sudo /opt/coloqo/deploy.sh ${GITHUB_REF_NAME#server-v}\`."

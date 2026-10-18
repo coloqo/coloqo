@@ -1,6 +1,7 @@
-# Caddy obtains and renews the TLS certificate for the domain itself.
+# /etc/caddy/Caddyfile on the cloud instance. Caddy obtains and renews the TLS certificate
+# for the domain itself.
 
-{$COLOQO_DOMAIN} {
+app.coloqo.team {
 	# Compress the web only: the API will carry SSE streams (decision 0002).
 	@web not path /api/*
 	encode @web zstd gzip
@@ -14,5 +15,5 @@
 		-Server
 	}
 
-	reverse_proxy coloqo:8000
+	reverse_proxy 127.0.0.1:8000
 }

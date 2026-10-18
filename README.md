@@ -22,8 +22,8 @@ cd web && npm install && npm run dev   # http://localhost:5173, /api goes to :80
 ```
 
 Checks: `uv run pytest`, `uv run ruff check` in `server/` and `plugin/`; `npm run lint`,
-`npm run build` in `web/`. The image is built from the root `Dockerfile`; deployment is
-described in [deploy/README.md](deploy/README.md).
+`npm run build` in `web/`. Releases and deployment of the cloud instance are described in
+[deploy/README.md](deploy/README.md).
 
 ## License
 

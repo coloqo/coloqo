@@ -1,0 +1,39 @@
+# /etc/systemd/system/coloqo.service on the cloud instance (decision 0016).
+
+[Unit]
+Description=Coloqo server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/coloqo/current/bin/python -m coloqo_server
+Environment=COLOQO_HOST=127.0.0.1
+Environment=COLOQO_PORT=8000
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=2
+
+# A throwaway user per start; the service can write only its state directory.
+DynamicUser=yes
+StateDirectory=coloqo
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
