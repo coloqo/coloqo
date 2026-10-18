@@ -1,0 +1,12 @@
+# /etc/systemd/system/coloqo-backup.timer: run the backup every night.
+
+[Unit]
+Description=Coloqo nightly backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

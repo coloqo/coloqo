@@ -11,7 +11,26 @@ UV_SHA256=eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg debian-keyring debian-archive-keyring \
-    apt-transport-https unattended-upgrades >/dev/null
+    apt-transport-https unattended-upgrades postgresql >/dev/null
+
+# PostgreSQL from Debian (decision 0016): a role and a database for Coloqo; the server
+# connects over 127.0.0.1 with a password kept in /etc/coloqo/coloqo.env.
+install -d -m 0755 /etc/coloqo
+touch /etc/coloqo/coloqo.env
+chmod 600 /etc/coloqo/coloqo.env
+if ! grep -q '^COLOQO_DATABASE_URL=' /etc/coloqo/coloqo.env; then
+    password=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32)
+    if runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'coloqo'" | grep -q 1; then
+        runuser -u postgres -- psql -q -c "ALTER ROLE coloqo PASSWORD '$password'"
+    else
+        runuser -u postgres -- psql -q -c "CREATE ROLE coloqo LOGIN PASSWORD '$password'"
+    fi
+    echo "COLOQO_DATABASE_URL=postgresql+psycopg://coloqo:$password@127.0.0.1:5432/coloqo" \
+        >> /etc/coloqo/coloqo.env
+fi
+if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'coloqo'" | grep -q 1; then
+    runuser -u postgres -- createdb -O coloqo coloqo
+fi
 
 # Caddy from its official repository; unattended-upgrades updates it with Debian's
 # security fixes.
@@ -41,10 +60,14 @@ install -d -m 0755 /opt/coloqo /opt/coloqo/releases
 UV_PYTHON_INSTALL_DIR=/opt/coloqo/python uv python install --quiet 3.14
 
 install -m 0755 deploy.sh /opt/coloqo/deploy.sh
+install -m 0755 backup.sh /opt/coloqo/backup.sh
 install -m 0644 coloqo.service /etc/systemd/system/coloqo.service
+install -m 0644 coloqo-backup.service /etc/systemd/system/coloqo-backup.service
+install -m 0644 coloqo-backup.timer /etc/systemd/system/coloqo-backup.timer
 install -m 0644 Caddyfile /etc/caddy/Caddyfile
 systemctl daemon-reload
 systemctl enable --quiet coloqo
+systemctl enable --quiet --now coloqo-backup.timer
 systemctl reload-or-restart caddy
 
 echo "Set up. Deploy a release: sudo /opt/coloqo/deploy.sh <version>"

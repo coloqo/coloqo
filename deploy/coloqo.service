@@ -2,13 +2,17 @@
 
 [Unit]
 Description=Coloqo server
-After=network-online.target
-Wants=network-online.target
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
 
 [Service]
 ExecStart=/opt/coloqo/current/bin/python -m coloqo_server
+# Database address, GitHub OAuth App: written by setup.sh and by hand, readable by root only.
+EnvironmentFile=/etc/coloqo/coloqo.env
 Environment=COLOQO_HOST=127.0.0.1
 Environment=COLOQO_PORT=8000
+Environment=COLOQO_PUBLIC_URL=https://app.coloqo.team
+Environment=COLOQO_FILES_DIR=/var/lib/coloqo/files
 Environment=PYTHONUNBUFFERED=1
 Restart=on-failure
 RestartSec=2

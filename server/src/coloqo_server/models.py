@@ -1,0 +1,451 @@
+"""The data model (decision 0008)."""
+
+import enum
+from datetime import datetime
+
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    """Base of all tables."""
+
+
+def _enum(enum_class: type[enum.Enum], name: str) -> Enum:
+    """Store an enum by its values, as a PostgreSQL enum type.
+
+    Args:
+        enum_class: The Python enum.
+        name: Name of the database type.
+    """
+    return Enum(enum_class, name=name, values_callable=lambda members: [m.value for m in members])
+
+
+class Role(enum.StrEnum):
+    """Role of a Member in a Team (product statement, question 4).
+
+    Attributes:
+        Owner: Configures the Team and invites.
+        Member: Takes part.
+    """
+
+    Owner = "owner"
+    Member = "member"
+
+
+class TopicStatus(enum.StrEnum):
+    """State of a Topic.
+
+    Attributes:
+        Open: Under discussion.
+        Closed: Settled by a human, with an outcome note and link if there is one.
+    """
+
+    Open = "open"
+    Closed = "closed"
+
+
+class MessageKind(enum.StrEnum):
+    """Kind of a Message (decision 0007).
+
+    Attributes:
+        Message: A turn: written to another Member, their Assistant or everyone.
+        Progress: The holding Assistant's note on its own work; not a turn.
+    """
+
+    Message = "message"
+    Progress = "progress"
+
+
+class User(Base):
+    """A human (decision 0014: only the pseudonym and the provider id are stored).
+
+    Attributes:
+        id: Identifier.
+        pseudonym: The name the person chose; how the Team sees them. ``None`` until chosen.
+        created_at: When the account appeared.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pseudonym: Mapped[str | None] = mapped_column(String(32), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Identity(Base):
+    """A way to log in, separate from the account (decision 0009, joint 1).
+
+    Attributes:
+        id: Identifier.
+        user_id: The account.
+        provider: ``github``, later ``google`` and SSO.
+        subject: The person's id at the provider.
+    """
+
+    __tablename__ = "identities"
+    __table_args__ = (UniqueConstraint("provider", "subject"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(32))
+    subject: Mapped[str] = mapped_column(String(128))
+
+
+class WebSession(Base):
+    """A human's login in the browser.
+
+    Attributes:
+        id: Identifier.
+        token_hash: SHA-256 of the cookie value.
+        user_id: Who is logged in.
+        created_at: Login time.
+        expires_at: When the session stops working.
+    """
+
+    __tablename__ = "web_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Installation(Base):
+    """The plugin on one computer, with its own token (decision 0003).
+
+    Attributes:
+        id: Identifier.
+        user_id: Whose computer.
+        name: Shown to the human, e.g. the host name.
+        token_hash: SHA-256 of the installation token.
+        created_at: When login was confirmed.
+        last_seen_at: The last request with this token.
+        revoked_at: When the human revoked it; a revoked token is refused.
+    """
+
+    __tablename__ = "installations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeviceLogin(Base):
+    """A pending plugin login confirmed in the browser (decision 0003).
+
+    Attributes:
+        id: Identifier.
+        device_code_hash: SHA-256 of the secret the plugin polls with.
+        user_code: The short code the human sees and confirms.
+        name: Name of the installation to create.
+        user_id: Who confirmed; ``None`` while pending.
+        denied: The human refused.
+        installation_id: The installation created on confirmation.
+        token: The installation token, held until the plugin collects it once.
+        created_at: Start time.
+        expires_at: After this the code is useless.
+    """
+
+    __tablename__ = "device_logins"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_code: Mapped[str] = mapped_column(String(16), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    denied: Mapped[bool] = mapped_column(default=False)
+    installation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("installations.id", ondelete="CASCADE")
+    )
+    token: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Assistant(Base):
+    """An Assistant: the User's agent working in one project on one installation.
+
+    Attributes:
+        id: Identifier.
+        user_id: On whose behalf it acts.
+        installation_id: The computer it runs on.
+        project_key: Hash of the project path; the path itself is not sent.
+        name: Shown to the Team, ``alice · billing-api``.
+        created_at: First registration.
+        last_seen_at: The last request it made.
+    """
+
+    __tablename__ = "assistants"
+    __table_args__ = (UniqueConstraint("installation_id", "project_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    installation_id: Mapped[int] = mapped_column(ForeignKey("installations.id", ondelete="CASCADE"))
+    project_key: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Team(Base):
+    """A Team: the unit of the service.
+
+    Attributes:
+        id: Identifier.
+        name: Shown name.
+        turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
+        created_at: Creation time.
+    """
+
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    turn_limit: Mapped[int] = mapped_column(Integer, default=10)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Member(Base):
+    """A User in a Team.
+
+    Attributes:
+        team_id: The Team.
+        user_id: The User.
+        role: Owner or member.
+        joined_at: When they joined.
+    """
+
+    __tablename__ = "members"
+
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[Role] = mapped_column(_enum(Role, "member_role"))
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Invite(Base):
+    """A one-time invitation link (decision 0014).
+
+    Attributes:
+        id: Identifier.
+        team_id: The Team to join.
+        token_hash: SHA-256 of the token in the link.
+        created_by: The owner who made it.
+        created_at: Creation time.
+        expires_at: After this the link does not work.
+        used_by: Who joined with it; a used link does not work again.
+        used_at: When it was used.
+    """
+
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Area(Base):
+    """A permanent object of a Team; Topics are created in it.
+
+    Attributes:
+        id: Identifier.
+        team_id: The Team.
+        name: Shown name, unique in the Team.
+        description: What the Area is about.
+        created_at: Creation time.
+    """
+
+    __tablename__ = "areas"
+    __table_args__ = (UniqueConstraint("team_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Topic(Base):
+    """A discussion of one question in an Area.
+
+    Attributes:
+        id: Identifier, shown as ``T-<id>``.
+        team_id: The Team, denormalised for access checks.
+        area_id: The Area.
+        title: One line: the question.
+        issue: Tracker issue key or link, if the Topic is for one.
+        status: Open or closed.
+        outcome: The human's note on how it was settled, with a link.
+        created_by: The User who opened it.
+        holder_assistant_id: The Assistant that holds it (decision 0006).
+        last_number: Number of the newest Message; the next one gets ``last_number + 1``.
+        turns_since_human: Assistants' turns since the last human Message (decision 0007).
+        created_at: Creation time.
+        updated_at: Time of the newest Message.
+    """
+
+    __tablename__ = "topics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    issue: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[TopicStatus] = mapped_column(
+        _enum(TopicStatus, "topic_status"), default=TopicStatus.Open
+    )
+    outcome: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    holder_assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    last_number: Mapped[int] = mapped_column(Integer, default=0)
+    turns_since_human: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Message(Base):
+    """A Message in a Topic, numbered in order (decision 0007).
+
+    Attributes:
+        id: Identifier.
+        topic_id: The Topic.
+        number: Position in the Topic; unique, so a taken number is refused atomically.
+        kind: A turn or a progress note.
+        author_user_id: On whose behalf it is written.
+        author_assistant_id: The Assistant that wrote it; ``None`` when the human wrote it.
+        to_user_id: The Member it is addressed to; ``None`` for everyone in the Topic.
+        to_assistant_id: The Assistant it is addressed to, if a specific one.
+        relayed: An Assistant posted its human's own words (``as_human``).
+        body: Markdown text, shown without HTML.
+        created_at: When it was written.
+    """
+
+    __tablename__ = "messages"
+    __table_args__ = (UniqueConstraint("topic_id", "number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id", ondelete="CASCADE"))
+    number: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[MessageKind] = mapped_column(_enum(MessageKind, "message_kind"))
+    author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    author_assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    to_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    to_assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    relayed: Mapped[bool] = mapped_column(default=False, server_default="false")
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class File(Base):
+    """A non-secret file shared in a Topic (decision 0008).
+
+    Attributes:
+        id: Identifier.
+        topic_id: The Topic it was shared in.
+        message_id: The Message it is attached to, once one refers to it.
+        name: Original file name.
+        size: Size in bytes.
+        sha256: Checksum of the content.
+        content_type: Media type given by the uploader.
+        uploaded_by: The User on whose behalf it was uploaded.
+        uploaded_by_assistant_id: The Assistant that uploaded it, if not the human.
+        created_at: Upload time.
+    """
+
+    __tablename__ = "files"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id", ondelete="CASCADE"), index=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"))
+    name: Mapped[str] = mapped_column(String(255))
+    size: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(String(64))
+    content_type: Mapped[str] = mapped_column(String(100))
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    uploaded_by_assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Participant(Base):
+    """A User taking part in a Topic, with how far they have read it.
+
+    A User becomes one by opening the Topic, writing in it or being addressed in it; their
+    Inbox lists the Topics with Messages after ``last_read`` (decision 0006).
+
+    Attributes:
+        topic_id: The Topic.
+        user_id: The User.
+        last_read: Number of the newest Message they have read.
+        addressed: Some unread Message is addressed to them.
+    """
+
+    __tablename__ = "participants"
+
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("topics.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_read: Mapped[int] = mapped_column(Integer, default=0)
+    addressed: Mapped[bool] = mapped_column(default=False)
+
+
+class Event(Base):
+    """An event for a User's stream; a signal, not content (decision 0006).
+
+    The id is the User's cursor: a client reconnects with the last id it received.
+
+    Attributes:
+        id: Number from one sequence for all Users.
+        user_id: Whose stream.
+        kind: ``message``, ``topic``, ...
+        data: What the client needs to decide whether to read.
+        created_at: When it happened; the log is kept for a week (decision 0008).
+    """
+
+    __tablename__ = "events"
+    __table_args__ = (Index("ix_events_user_id_id", "user_id", "id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(32))
+    data: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )

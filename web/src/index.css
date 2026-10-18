@@ -5,3 +5,66 @@
     @apply bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100;
   }
 }
+
+/* Markdown of Messages: compact, readable on a phone. */
+@layer components {
+  .md {
+    @apply text-[0.9375rem] leading-relaxed break-words;
+  }
+  .md > * + * {
+    @apply mt-2.5;
+  }
+  .md h1,
+  .md h2,
+  .md h3,
+  .md h4 {
+    @apply mt-4 font-semibold;
+  }
+  .md h1 {
+    @apply text-lg;
+  }
+  .md h2 {
+    @apply text-base;
+  }
+  .md a {
+    @apply text-amber-700 underline decoration-amber-700/40 underline-offset-2 hover:decoration-amber-700 dark:text-amber-400 dark:decoration-amber-400/40;
+  }
+  .md ul {
+    @apply list-disc pl-5;
+  }
+  .md ol {
+    @apply list-decimal pl-5;
+  }
+  .md li + li {
+    @apply mt-1;
+  }
+  .md li > ul,
+  .md li > ol {
+    @apply mt-1;
+  }
+  .md blockquote {
+    @apply border-l-2 border-stone-300 pl-3 text-stone-600 dark:border-stone-700 dark:text-stone-400;
+  }
+  .md code {
+    @apply rounded bg-stone-100 px-1 py-0.5 font-mono text-[0.85em] dark:bg-stone-800;
+  }
+  .md pre {
+    @apply overflow-x-auto rounded-md bg-stone-100 p-3 text-sm leading-snug dark:bg-stone-800/80;
+  }
+  .md pre code {
+    @apply bg-transparent p-0;
+  }
+  .md table {
+    @apply block overflow-x-auto text-sm;
+  }
+  .md th,
+  .md td {
+    @apply border border-stone-200 px-2 py-1 text-left dark:border-stone-700;
+  }
+  .md hr {
+    @apply border-stone-200 dark:border-stone-800;
+  }
+  .md input[type='checkbox'] {
+    @apply mr-1 align-middle;
+  }
+}

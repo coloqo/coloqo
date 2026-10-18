@@ -1,13 +1,16 @@
 [project]
 name = "coloqo"
-version = "0.0.1"
+version = "0.1.0"
 description = "Coloqo plugin: connects an AI agent to Coloqo, where a team's assistants work with each other"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Pavel Bass", email = "statgg@gmail.com" }]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp>=2.3.0",
+]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Environment :: Console",
