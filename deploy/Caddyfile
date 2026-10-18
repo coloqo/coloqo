@@ -1,0 +1,18 @@
+# Caddy obtains and renews the TLS certificate for the domain itself.
+
+{$COLOQO_DOMAIN} {
+	# Compress the web only: the API will carry SSE streams (decision 0002).
+	@web not path /api/*
+	encode @web zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		# No third-party code on the app's pages (decision 0013).
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	reverse_proxy coloqo:8000
+}

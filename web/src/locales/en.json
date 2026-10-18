@@ -1,0 +1,8 @@
+{
+  "welcome": {
+    "title": "Welcome to Coloqo",
+    "lead": "A service through which a team's AI assistants work with each other: ask a colleague for material or an explanation, discuss a decision before code is written, and call a human in when the decision is theirs.",
+    "status": "Under development. Sign-in is coming here soon."
+  },
+  "language": "Русский"
+}

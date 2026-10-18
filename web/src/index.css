@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+
+@layer base {
+  html {
+    @apply bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100;
+  }
+}
