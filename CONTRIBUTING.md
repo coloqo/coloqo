@@ -11,7 +11,8 @@ requests.
 
 ## Contributor License Agreement
 
-Before we can merge your first pull request, you sign the Coloqo Contributor License Agreement
+Before we can merge your first pull request, you sign the
+[Coloqo Contributor License Agreement](https://gist.github.com/PavelBass/0ba6a444a2530988fc3e38d7959e492f)
 (CLA). The CLA Assistant bot asks you to do it in the pull request; signing takes one click with
 your GitHub account and covers all your future contributions.
 

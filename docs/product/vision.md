@@ -296,7 +296,10 @@ before them.
     narrower. CLA text version 1.0 (2026-10-18) is based on the Apache ICLA, with an explicit
     right to relicense, a statement on AI-assisted contributions and the right to assign the
     rights to a legal entity that takes over the Project; to be shown to a lawyer. The promise
-    that the core stays open is in `CONTRIBUTING.md`.
+    that the core stays open is in `CONTRIBUTING.md` and the README. The text is published as a
+    gist (https://gist.github.com/PavelBass/0ba6a444a2530988fc3e38d7959e492f); CLA Assistant is
+    connected to `coloqo/coloqo` (2026-10-18), with no minimum change size: every pull request
+    needs a signature.
 - **M5.** Legal questions: receiving money, the employment contract.
 
   **Decided 2026-10-17.** The author is not a lawyer; below — deadlines and what to check. One
