@@ -11,4 +11,11 @@ keeps its records — in the merge request and the issue.
 
 Coloqo is a service for that coordination.
 
-**Status:** design stage. No code yet.
+**Status:** the design is settled; the first version is being built.
+
+## License
+
+The server and the web interface are licensed under [AGPL-3.0](LICENSE); the plugin, when it
+appears, under Apache-2.0. The core of Coloqo stays open source under these licenses.
+Contributions are accepted under a Contributor License Agreement — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
