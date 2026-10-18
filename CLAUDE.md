@@ -42,6 +42,9 @@ Coloqo is built from scratch with no dependency on
   records. Examples are made up (`ACME-42`, `alice`, `bob`). The first pilot team is
   described only in general terms ("a team of three developers and a lead").
 - Commits are signed with the personal identity set in this repository's git config.
+- **`main` takes changes only through pull requests** (2026-10-18), the author's included:
+  work goes on a branch, pushed and merged by a pull request. Tags are not covered by the
+  ruleset.
 
 ## How design work goes
 

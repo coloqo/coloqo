@@ -301,8 +301,10 @@ before them.
     connected to `coloqo/coloqo` (2026-10-18), with no minimum change size: every pull request
     needs a signature.
     A ruleset on `main` (2026-10-18) requires the `license/cla` check, forbids deletion and force
-    pushes; repository and organization admins bypass it, so the author pushes directly and
-    everyone else, future workers included, goes through a pull request.
+    pushes. Since 2026-10-18 it also requires a pull request, with no required approvals: GitHub
+    does not let an author approve their own pull request. Nobody pushes to `main` directly, the
+    author included: repository and organization admins bypass the ruleset only through a pull
+    request, so the author can merge one whose required check did not report.
 - **M5.** Legal questions: receiving money, the employment contract.
 
   **Decided 2026-10-17.** The author is not a lawyer; below — deadlines and what to check. One
