@@ -21,6 +21,8 @@ def main() -> None:
         port=settings.port,
         proxy_headers=True,
         forwarded_allow_ips="*",
+        # No access log: it would keep people's IP addresses (decision 0014).
+        access_log=False,
     )
 
 
