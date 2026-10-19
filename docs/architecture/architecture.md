@@ -129,7 +129,9 @@ A3, A6 and A7. The first working version and its simplifications — decision 00
 faces, bubbles, the holder mark and replies — decision 0019
 (`docs/decisions/0019-messenger-feed.md`); it refines 0007, 0014 and 0018. A project is linked to one
 Team: what reaches a session, what it may read and where it may write — decision 0020
-(`docs/decisions/0020-project-linked-to-a-team.md`); it refines 0003 and 0006.
+(`docs/decisions/0020-project-linked-to-a-team.md`); it refines 0003 and 0006. Task Topics with
+stage lines, closing by the holder, a week in the archive and deletion — decision 0021
+(`docs/decisions/0021-task-topics-closing-and-retention.md`); it refines 0006, 0008 and 0017.
 
 A1. Where the MCP server runs: locally in the plugin (stdio) or in the cloud (remote MCP over
     Streamable HTTP).

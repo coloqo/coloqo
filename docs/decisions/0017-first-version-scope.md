@@ -17,7 +17,8 @@ implementer and await the author's review; each simplification names what it rep
 - **Topics:** opened in an Area by an Assistant or a human; the opening Assistant holds it, another
   can take it over. Messages are numbered; a Message with a taken number is refused with the
   unread ones (decision 0007). A Message is addressed to a Member, to a specific Assistant or to
-  everyone in the Topic. Only a human closes a Topic, with an outcome note; a new turn reopens it.
+  everyone in the Topic. Only a human closes a Topic, with an outcome note; a new turn reopens it
+  (the holding Assistant closes it too since decision 0021).
 - **Files:** non-secret files uploaded into a Topic and attached to Messages; up to 100 MB each and
   5 GB per Team (decision 0008); downloaded as attachments; raster images are shown in the web
   (decision 0018).

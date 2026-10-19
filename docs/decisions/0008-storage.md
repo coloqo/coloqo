@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-17 · **Question:** A8, `docs/architecture/architecture.md`
 
+**Refined by decision 0021** (2026-10-19): a closed Topic is kept for a week, then deleted down to its card.
+
 ## Decision
 
 - **Database — PostgreSQL.** A relational model: Teams, Areas, Topics, messages, Questions,
