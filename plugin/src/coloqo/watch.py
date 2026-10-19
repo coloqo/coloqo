@@ -112,6 +112,24 @@ def describe(kind: str, data: dict[str, Any], user_id: int, assistant_id: int) -
     return None
 
 
+def deliver(kind: str, data: dict[str, Any], user_id: int, assistant_id: int) -> str | None:
+    """Return the line to print for an event in this session, or ``None``.
+
+    The line must concern this Assistant, and the session's focus must let it through
+    (decision 0022); the focus is read anew for each event, so a change applies at once.
+
+    Args:
+        kind: Event kind.
+        data: Event data.
+        user_id: This Assistant's User.
+        assistant_id: This Assistant.
+    """
+    line = describe(kind, data, user_id, assistant_id)
+    if line and focus.allows(focus.load(), kind, data, assistant_id):
+        return line
+    return None
+
+
 def watch(project_dir: str | None = None) -> None:
     """Hold the event stream for the project's Assistant until the session ends.
 
@@ -150,8 +168,8 @@ def watch(project_dir: str | None = None) -> None:
                         continue
                     if event_id:
                         last_id = event_id
-                    line = describe(kind, data, user_id, assistant_id)
-                    if line and focus.allows(focus.load(), kind, data, assistant_id):
+                    line = deliver(kind, data, user_id, assistant_id)
+                    if line:
                         say(line)
         except NotLoggedIn:
             if not hinted:

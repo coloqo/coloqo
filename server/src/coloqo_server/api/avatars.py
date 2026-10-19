@@ -2,7 +2,6 @@
 
 import asyncio
 import io
-import warnings
 from pathlib import Path
 
 import httpx
@@ -66,10 +65,7 @@ def square_webp(data: bytes) -> bytes:
         HTTPException: 422 when it is not a picture Pillow can read, or is over 25 megapixels.
     """
     try:
-        with warnings.catch_warnings():
-            # Pillow only warns between its limit and twice it; here that is a refusal too.
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            return _encode(data)
+        return _encode(data)
     except Exception as error:
         # A decoder fails in many ways on a crafted file; each of them is "not a picture".
         raise HTTPException(
@@ -83,14 +79,17 @@ def _encode(data: bytes) -> bytes:
     Args:
         data: The picture.
 
+    The size is checked from the header, before decoding and below Pillow's own limit, so
+    Pillow's bomb warning never fires for a picture that gets that far.
+
     Raises:
-        PIL.Image.DecompressionBombWarning: The picture is over ``MAX_PIXELS``, as an error.
+        ValueError: The picture is over ``MAX_PIXELS``.
         PIL.UnidentifiedImageError: It is not a picture.
         OSError: It is broken.
     """
     with Image.open(io.BytesIO(data)) as picture:
         if picture.width * picture.height > MAX_PIXELS:
-            raise Image.DecompressionBombWarning("The picture is too large")
+            raise ValueError("The picture is too large")
         upright = ImageOps.exif_transpose(picture)
         has_alpha = upright.mode in ("RGBA", "LA", "PA") or "transparency" in upright.info
         square = ImageOps.fit(
