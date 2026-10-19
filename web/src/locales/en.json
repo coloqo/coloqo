@@ -150,8 +150,8 @@
     "showOriginal": "Show Message #{{number}}",
     "holdsNow": "Holds the Topic",
     "heldThen": "Held the Topic when writing",
-    "holds": "holds",
-    "held": "held"
+    "holds": "Holds the Topic",
+    "held": "Held the Topic"
   },
   "compose": {
     "title": "Your reply",
