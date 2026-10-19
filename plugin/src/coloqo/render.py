@@ -68,6 +68,8 @@ def message_text(message: dict[str, Any]) -> str:
         message: A Message from the API.
     """
     head = f"#{message['number']} {_author(message)}"
+    if message.get("reply_to"):
+        head += f" ↪ #{message['reply_to']}"
     if message.get("to_assistant"):
         head += f" → {message['to_assistant']}"
     elif message.get("to"):

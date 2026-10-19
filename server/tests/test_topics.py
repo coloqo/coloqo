@@ -177,6 +177,33 @@ def test_reply_with_taken_number_returns_unread(setup: Setup) -> None:
     assert detail["unread"][0]["to"] == "alice"
 
 
+def test_reply_points_to_an_earlier_message(setup: Setup) -> None:
+    """A reply names an earlier Message of the Topic; itself or a later one is refused.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+    bob = setup.bob_web.client
+
+    reply = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 2, "body": "Yes", "reply_to": 1}
+    )
+    to_itself = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 3, "body": "?", "reply_to": 3}
+    )
+    to_none = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 3, "body": "?", "reply_to": 0}
+    )
+    topic = setup.alice.get(f"/api/topics/{tid}").json()
+
+    assert reply.status_code == 201, reply.text
+    assert reply.json()["reply_to"] == 1
+    assert to_itself.status_code == 422
+    assert to_none.status_code == 422
+    assert [m["reply_to"] for m in topic["messages"]] == [None, 1]
+
+
 def test_unknown_addressee_lists_names(setup: Setup) -> None:
     """Addressing nobody in the Team is refused with the names that work.
 

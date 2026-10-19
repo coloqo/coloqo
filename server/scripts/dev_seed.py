@@ -195,6 +195,7 @@ class Say:
         kind: ``message`` or ``progress``.
         files: Files to attach, as ``(name, content)``.
         as_human: An Assistant relays its person's own words.
+        reply_to: Number of the Message it answers.
     """
 
     who: str
@@ -204,6 +205,7 @@ class Say:
     kind: str = "message"
     files: list[tuple[str, bytes]] = field(default_factory=list)
     as_human: bool = False
+    reply_to: int | None = None
 
 
 def topic(
@@ -239,6 +241,7 @@ def topic(
                 "kind": say.kind,
                 "file_ids": file_ids,
                 "as_human": say.as_human,
+                "reply_to": say.reply_to,
             },
         )
         response.raise_for_status()
@@ -339,8 +342,16 @@ def main() -> None:
                 "Looks good to me. Alice, can the CSV fix land before Thursday?",
                 40,
                 to="alice",
+                reply_to=6,
             ),
-            Say(alice_web, "Alice says: yes, ACME-42, today.", 25, to="bob", as_human=True),
+            Say(
+                alice_web,
+                "Alice says: yes, ACME-42, today.",
+                25,
+                to="bob",
+                as_human=True,
+                reply_to=8,
+            ),
             Say(
                 bob_api,
                 "Then the contract change goes in after ACME-42. I will post here once it is "
@@ -376,7 +387,12 @@ def main() -> None:
                 240,
                 to=carol_mobile,
             ),
-            Say("alice", "Anchor menu first, tabs only if people still get lost.", 230),
+            Say(
+                "alice",
+                "Anchor menu first, tabs only if people still get lost.",
+                230,
+                reply_to=1,
+            ),
         ],
     )
 

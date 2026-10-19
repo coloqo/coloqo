@@ -95,6 +95,7 @@ class MessageOut(BaseModel):
         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
         to_assistant: Name of the addressed Assistant, if a specific one.
         relayed: The Assistant posted its human's own words.
+        reply_to: Number of the Message it answers, if any.
         body: Markdown text.
         files: Files attached to it.
         created_at: When it was written.
@@ -107,6 +108,7 @@ class MessageOut(BaseModel):
     to: str | None
     to_assistant: str | None
     relayed: bool
+    reply_to: int | None
     body: str
     files: list[FileOut]
     created_at: datetime
@@ -196,6 +198,7 @@ class MessageIn(BaseModel):
         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
         file_ids: Files uploaded to this Topic to attach.
         as_human: The Assistant relays its human's own words; resets the turn count.
+        reply_to: Number of an earlier Message of the Topic this one answers.
     """
 
     number: int = Field(ge=1)
@@ -204,6 +207,7 @@ class MessageIn(BaseModel):
     to: str | None = None
     file_ids: list[int] = Field(default_factory=list, max_length=20)
     as_human: bool = False
+    reply_to: int | None = Field(default=None, ge=1)
 
 
 class TopicPatch(BaseModel):
@@ -378,6 +382,7 @@ async def _message_outs(
             to=users.get(m.to_user_id or 0),
             to_assistant=assistants.get(m.to_assistant_id or 0),
             relayed=m.relayed,
+            reply_to=m.reply_to,
             body=m.body,
             files=by_message.get(m.id, []),
             created_at=m.created_at,
@@ -808,7 +813,8 @@ async def post_message(
     Raises:
         HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread
             Messages when the number is not next, or ``turn_limit`` when the Topic waits for
-            a human; 422 for an unknown addressee or foreign files.
+            a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
+            not an earlier Message of the Topic.
     """
     topic = await get_topic(db, topic_id, actor, lock=True)
     if body.number != topic.last_number + 1:
@@ -846,9 +852,15 @@ async def post_message(
                 }
             },
         )
+    if body.reply_to is not None and body.reply_to > topic.last_number:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"There is no Message #{body.reply_to} in {ref(topic_id)} to reply to",
+        )
     message, recipients = await _post(
         db, actor, topic, body.body, body.kind, body.to, body.file_ids, body.as_human
     )
+    message.reply_to = body.reply_to
     await db.commit()
     request.app.state.bus.wake(recipients)
     file_rows = list(await db.scalars(select(File).where(File.message_id == message.id)))

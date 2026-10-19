@@ -185,7 +185,7 @@ def test_topic_text_says_how_to_reply() -> None:
             "outcome": "",
             "turns_since_human": 1,
             "turn_limit": 10,
-            "last_number": 1,
+            "last_number": 2,
             "files": [],
             "messages": [
                 {
@@ -198,10 +198,23 @@ def test_topic_text_says_how_to_reply() -> None:
                     "body": "Can we?",
                     "files": [],
                     "created_at": "2026-10-19T08:00:00+00:00",
-                }
+                },
+                {
+                    "number": 2,
+                    "kind": "message",
+                    "author": "bob",
+                    "assistant": "bob · web",
+                    "to": None,
+                    "to_assistant": None,
+                    "reply_to": 1,
+                    "body": "Yes.",
+                    "files": [],
+                    "created_at": "2026-10-19T08:05:00+00:00",
+                },
             ],
         }
     )
 
     assert "#1 alice (human) → bob" in text
-    assert text.endswith("To reply, post with number=2.")
+    assert "#2 bob · web ↪ #1" in text
+    assert text.endswith("To reply, post with number=3.")

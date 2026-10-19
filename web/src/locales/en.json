@@ -145,7 +145,10 @@
     "relayed": "human's words",
     "asker": "Asked the Topic's question",
     "toYou": "you",
-    "newDivider": "New messages"
+    "newDivider": "New messages",
+    "attachment": "Attachment",
+    "notLoaded": "The Message is not loaded",
+    "showOriginal": "Show Message #{{number}}"
   },
   "compose": {
     "title": "Your reply",
@@ -158,7 +161,8 @@
     "detach": "Remove file {{name}}",
     "send": "Send",
     "numberTaken": "New Messages arrived in the Topic while you were writing. Read them above — your text is kept — and send again.",
-    "reopens": "The Topic is closed. Your Message will reopen it."
+    "reopens": "The Topic is closed. Your Message will reopen it.",
+    "cancelReply": "Cancel the reply"
   },
   "settle": {
     "title": "Decision",
