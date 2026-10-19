@@ -93,7 +93,7 @@ export function AuthorAvatar({
     <span className="relative inline-block shrink-0" style={{ width: size, height: size }} title={title}>
       {face}
       {assistant && person && (
-        <span className="absolute -right-1 -bottom-1 rounded-full ring-2 ring-[var(--feed-ring)]">
+        <span className="absolute -right-1 -bottom-1 flex rounded-full ring-2 ring-[var(--feed-ring)]">
           <PersonAvatar name={person} size={badge} />
         </span>
       )}
