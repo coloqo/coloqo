@@ -1,6 +1,7 @@
 """Tests of Teams, Areas, Topics, Messages, the Inbox and files."""
 
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 import httpx
@@ -418,6 +419,35 @@ def test_non_raster_file_is_only_downloaded(
     assert download.headers["content-type"] == "application/octet-stream"
     assert download.headers["content-disposition"].startswith("attachment")
     assert download.headers["x-content-type-options"] == "nosniff"
+
+
+def test_signature_across_chunks(setup: Setup, live_url: str) -> None:
+    """The first bytes are collected from the first chunks of a body; later ones do not count.
+
+    The test client sends a body in one piece, so the upload goes to uvicorn in three chunks
+    with pauses between them.
+
+    Args:
+        setup: The Team.
+        live_url: Address of the same application served by uvicorn.
+    """
+    tid = _open(setup)["id"]
+    headers = {
+        "Authorization": setup.alice_api.client.headers["Authorization"],
+        "X-File-Name": "shot.png",
+    }
+
+    def body() -> Iterator[bytes]:
+        """Yield a PNG cut inside its signature, then bytes that are no image."""
+        for chunk in (PNG[:3], PNG[3:], bytes(16)):
+            yield chunk
+            time.sleep(0.05)
+
+    with httpx.Client(base_url=live_url, timeout=10) as client:
+        response = client.post(f"/api/topics/{tid}/files", content=body(), headers=headers)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["preview"]
 
 
 def test_large_image_is_not_previewed(setup: Setup) -> None:
