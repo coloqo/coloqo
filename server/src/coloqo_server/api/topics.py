@@ -96,6 +96,7 @@ class MessageOut(BaseModel):
         to_assistant: Name of the addressed Assistant, if a specific one.
         relayed: The Assistant posted its human's own words.
         reply_to: Number of the Message it answers, if any.
+        by_holder: Its Assistant held the Topic when it was written.
         body: Markdown text.
         files: Files attached to it.
         created_at: When it was written.
@@ -109,6 +110,7 @@ class MessageOut(BaseModel):
     to_assistant: str | None
     relayed: bool
     reply_to: int | None
+    by_holder: bool
     body: str
     files: list[FileOut]
     created_at: datetime
@@ -383,6 +385,7 @@ async def _message_outs(
             to_assistant=assistants.get(m.to_assistant_id or 0),
             relayed=m.relayed,
             reply_to=m.reply_to,
+            by_holder=m.by_holder,
             body=m.body,
             files=by_message.get(m.id, []),
             created_at=m.created_at,
@@ -557,6 +560,7 @@ async def _post(
         to_user_id=to_user_id,
         to_assistant_id=to_assistant_id,
         relayed=bool(as_human and actor.assistant is not None),
+        by_holder=actor.assistant is not None and actor.assistant.id == topic.holder_assistant_id,
         body=body,
     )
     db.add(message)

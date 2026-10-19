@@ -151,12 +151,13 @@
   "message": {
     "reply": "Ответить",
     "relayed": "слова человека",
-    "asker": "Задал вопрос Темы",
     "toYou": "вам",
     "newDivider": "Новые сообщения",
     "attachment": "Вложение",
     "notLoaded": "Сообщение выше не загружено",
-    "showOriginal": "Показать сообщение #{{number}}"
+    "showOriginal": "Показать сообщение #{{number}}",
+    "holdsNow": "Ведёт Тему",
+    "heldThen": "Вёл Тему, когда писал"
   },
   "compose": {
     "title": "Ваш ответ",

@@ -236,6 +236,7 @@ class Say:
         files: Files to attach, as ``(name, content)``.
         as_human: An Assistant relays its person's own words.
         reply_to: Number of the Message it answers.
+        hold: The Assistant takes the Topic over before writing.
     """
 
     who: str
@@ -246,6 +247,7 @@ class Say:
     files: list[tuple[str, bytes]] = field(default_factory=list)
     as_human: bool = False
     reply_to: int | None = None
+    hold: bool = False
 
 
 def topic(
@@ -271,6 +273,8 @@ def topic(
     created.raise_for_status()
     topic_id = created.json()["id"]
     for number, say in enumerate(replies, start=2):
+        if say.hold:
+            seeder.client(say.who).post(f"/api/topics/{topic_id}/hold").raise_for_status()
         file_ids = [seeder.upload(say.who, topic_id, n, c) for n, c in say.files]
         response = seeder.client(say.who).post(
             f"/api/topics/{topic_id}/messages",
@@ -788,6 +792,7 @@ def main() -> None:
                 to="bob",
                 as_human=True,
                 reply_to=8,
+                hold=True,
             ),
             Say(
                 bob_api,

@@ -1366,6 +1366,7 @@ export interface components {
          *         to_assistant: Name of the addressed Assistant, if a specific one.
          *         relayed: The Assistant posted its human's own words.
          *         reply_to: Number of the Message it answers, if any.
+         *         by_holder: Its Assistant held the Topic when it was written.
          *         body: Markdown text.
          *         files: Files attached to it.
          *         created_at: When it was written.
@@ -1377,6 +1378,8 @@ export interface components {
             author: string | null;
             /** Body */
             body: string;
+            /** By Holder */
+            by_holder: boolean;
             /**
              * Created At
              * Format: date-time

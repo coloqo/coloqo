@@ -164,7 +164,7 @@ function MessageItem({
   message,
   original,
   me,
-  asker,
+  holder,
   grouped,
   narrow,
   onReply,
@@ -172,7 +172,7 @@ function MessageItem({
   message: Message
   original: Message | undefined
   me: Me
-  asker: string | null
+  holder: string | null
   grouped: boolean
   narrow: boolean
   onReply: (message: Message) => void
@@ -187,7 +187,7 @@ function MessageItem({
   const others = message.files.filter((file) => !file.preview)
   const size = narrow ? 32 : 40
   const name = message.assistant ?? message.author ?? t('team.noName')
-  const asks = asker !== null && message.author === asker
+  const held = message.by_holder ? (message.assistant !== null && message.assistant === holder ? 'now' : 'then') : null
   const bubble = progress
     ? 'border border-dashed border-stone-300 text-stone-500 italic dark:border-stone-700 dark:text-stone-400'
     : mine
@@ -200,9 +200,9 @@ function MessageItem({
           <AuthorAvatar
             person={message.author}
             assistant={message.assistant !== null}
-            asker={asks}
+            holder={held}
             size={size}
-            title={asks ? t('message.asker') : undefined}
+            title={held === 'now' ? t('message.holdsNow') : held === 'then' ? t('message.heldThen') : undefined}
           />
         )}
       </div>
@@ -703,7 +703,7 @@ export function TopicPage({ me }: { me: Me }) {
                     <MessageItem
                       message={message}
                       me={me}
-                      asker={data.created_by}
+                      holder={data.holder}
                       grouped={!divider && !newDay && continues(message, previous)}
                       narrow={narrow}
                       original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}

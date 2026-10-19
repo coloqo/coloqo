@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 
 // The faces of a Topic's feed (decision 0019): a person by their initials, an Assistant and a
-// Worker by one icon each, with the person they act for in the corner.
+// Worker by one icon each, with the person they act for in the corner and a flag on whoever
+// held the Topic.
 
 const PALETTE = ['#7c5cbf', '#2f8f6b', '#c0573a', '#3b6fb6', '#a3489a', '#5f7d2a', '#b07a12', '#2b8a9a']
 
@@ -69,18 +70,19 @@ export function WorkerIcon({ size }: { size: number }) {
 
 /**
  * The face of a Message's author: the person alone, or an Assistant with the person it writes
- * for in the corner. ``asker`` marks the person who opened the Topic.
+ * for in the corner. ``holder`` flags an Assistant that held the Topic when it wrote: amber
+ * while it still holds it, grey once it does not.
  */
 export function AuthorAvatar({
   person,
   assistant,
-  asker,
+  holder,
   size,
   title,
 }: {
   person: string | null
   assistant: boolean
-  asker: boolean
+  holder: 'now' | 'then' | null
   size: number
   title?: string
 }) {
@@ -97,12 +99,17 @@ export function AuthorAvatar({
           <PersonAvatar name={person} size={badge} />
         </span>
       )}
-      {asker && (
+      {holder && (
         <span
-          className="absolute -top-1 -left-1 grid place-items-center rounded-full bg-amber-500 font-bold text-white ring-2 ring-[var(--feed-ring)]"
-          style={{ width: mark, height: mark, fontSize: Math.round(mark * 0.72) }}
+          className={`absolute -top-1 -left-1 grid place-items-center rounded-full ring-2 ring-[var(--feed-ring)] ${
+            holder === 'now' ? 'bg-amber-500' : 'bg-stone-400 dark:bg-stone-500'
+          }`}
+          style={{ width: mark, height: mark }}
         >
-          ?
+          <svg viewBox="0 0 12 12" aria-hidden="true" style={{ width: mark * 0.62, height: mark * 0.62 }}>
+            <path d="M3 1.5v9" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+            <path d="M3.6 2h5.6L7.8 4.1l1.4 2.1H3.6z" fill="#fff" />
+          </svg>
         </span>
       )}
     </span>

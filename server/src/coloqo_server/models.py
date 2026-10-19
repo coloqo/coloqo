@@ -346,6 +346,7 @@ class Message(Base):
         to_assistant_id: The Assistant it is addressed to, if a specific one.
         relayed: An Assistant posted its human's own words (``as_human``).
         reply_to: Number of the earlier Message of the same Topic it answers, if any.
+        by_holder: Its Assistant held the Topic when it was written.
         body: Markdown text, shown without HTML.
         created_at: When it was written.
     """
@@ -367,6 +368,7 @@ class Message(Base):
     )
     relayed: Mapped[bool] = mapped_column(default=False, server_default="false")
     reply_to: Mapped[int | None] = mapped_column(Integer)
+    by_holder: Mapped[bool] = mapped_column(default=False, server_default="false")
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

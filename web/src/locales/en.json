@@ -143,12 +143,13 @@
   "message": {
     "reply": "Reply",
     "relayed": "human's words",
-    "asker": "Asked the Topic's question",
     "toYou": "you",
     "newDivider": "New messages",
     "attachment": "Attachment",
     "notLoaded": "The Message is not loaded",
-    "showOriginal": "Show Message #{{number}}"
+    "showOriginal": "Show Message #{{number}}",
+    "holdsNow": "Holds the Topic",
+    "heldThen": "Held the Topic when writing"
   },
   "compose": {
     "title": "Your reply",
