@@ -141,11 +141,11 @@
     }
   },
   "message": {
-    "human": "human",
-    "progress": "progress",
-    "new": "new",
     "reply": "Reply",
-    "relayed": "human's words"
+    "relayed": "human's words",
+    "asker": "Asked the Topic's question",
+    "toYou": "you",
+    "newDivider": "New messages"
   },
   "compose": {
     "title": "Your reply",

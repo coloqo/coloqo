@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 
@@ -17,6 +17,7 @@ import {
 } from '../api/client'
 import { useTeam, useTopic } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
+import { AuthorAvatar } from '../components/Avatar'
 import { Bell } from '../components/Bell'
 import { Page } from '../components/Layout'
 import { Markdown } from '../components/Markdown'
@@ -24,7 +25,7 @@ import { Time } from '../components/Time'
 import { StatusBadge } from '../components/Topics'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Loading, Notice, Textarea } from '../components/ui'
 import { MessageImages } from '../components/Images'
-import { errorText, fileSize, issueLink } from '../lib/format'
+import { absoluteTime, errorText, fileSize, issueLink } from '../lib/format'
 
 /** Whether the page is in front of the person, so that reading can be recorded. */
 function usePageVisible() {
@@ -73,71 +74,143 @@ function FileLink({ file }: { file: FileInfo }) {
   )
 }
 
+/** Whether the screen is phone-sized; the feed's faces shrink there. */
+function useNarrow() {
+  const query = '(max-width: 639px)'
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const list = window.matchMedia(query)
+    const change = () => setNarrow(list.matches)
+    list.addEventListener('change', change)
+    return () => list.removeEventListener('change', change)
+  }, [])
+  return narrow
+}
+
+const GROUP_GAP_MS = 10 * 60 * 1000
+
+/** A Message continues the previous one's group: same author, close in time, same addressee. */
+function continues(message: Message, previous: Message | undefined): boolean {
+  return (
+    previous !== undefined &&
+    message.kind === 'message' &&
+    previous.kind === 'message' &&
+    previous.author === message.author &&
+    previous.assistant === message.assistant &&
+    previous.to === message.to &&
+    previous.to_assistant === message.to_assistant &&
+    new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < GROUP_GAP_MS
+  )
+}
+
+function clock(value: string, lang: string): string {
+  return new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+}
+
 function MessageItem({
   message,
   me,
-  unread,
+  asker,
+  grouped,
+  narrow,
   onReply,
 }: {
   message: Message
   me: Me
-  unread: boolean
+  asker: string | null
+  grouped: boolean
+  narrow: boolean
   onReply: (to: string) => void
 }) {
-  const { t } = useTranslation()
-  const human = message.assistant === null
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage ?? 'ru'
+  const mine = message.author === me.pseudonym
   const toMe = message.to !== null && message.to === me.pseudonym
   const addressee = message.to_assistant ?? message.to
   const replyTo = message.assistant ?? message.author
+  const progress = message.kind === 'progress'
   const images = message.files.filter((file) => file.preview)
   const others = message.files.filter((file) => !file.preview)
+  const size = narrow ? 32 : 40
+  const name = message.assistant ?? message.author ?? t('team.noName')
+  // On a pointer that hovers, the details of a grouped Message wait for the hover; on touch they show.
+  const onHover = '[@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
   return (
     <li
       id={`m-${message.number}`}
-      className={`scroll-mt-4 border-l-2 px-4 py-3 ${
-        toMe ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : 'border-transparent'
+      className={`group relative flex scroll-mt-4 gap-3 border-l-2 pr-4 pl-3.5 sm:pl-[14px] ${grouped ? 'pt-0.5 pb-1' : 'pt-3 pb-1'} ${
+        toMe ? 'border-amber-500' : 'border-transparent'
+      } ${
+        mine
+          ? 'bg-stone-100/80 [--feed-ring:#f3f2f0] dark:bg-stone-800/50 dark:[--feed-ring:#262321]'
+          : '[--feed-ring:#ffffff] dark:[--feed-ring:#1c1917]'
       }`}
     >
-      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="font-mono text-xs text-stone-500 dark:text-stone-400">#{message.number}</span>
-        {human ? (
-          <>
-            <span className="font-semibold">{message.author ?? t('team.noName')}</span>
-            <Badge tone="blue">{t('message.human')}</Badge>
-          </>
+      <div className="flex shrink-0 justify-center" style={{ width: size }}>
+        {grouped ? (
+          <time dateTime={message.created_at} title={absoluteTime(message.created_at, lang, true)} className={`pt-1 text-[11px] text-stone-400 tabular-nums ${onHover}`}>
+            {clock(message.created_at, lang)}
+          </time>
         ) : (
-          <span className="font-semibold">{message.assistant}</span>
+          <AuthorAvatar
+            person={message.author}
+            assistant={message.assistant !== null}
+            asker={asker !== null && message.author === asker}
+            size={size}
+            title={asker !== null && message.author === asker ? t('message.asker') : undefined}
+          />
         )}
-        {message.relayed && <Badge tone="blue">{t('message.relayed')}</Badge>}
-        {message.kind === 'progress' && <Badge>{t('message.progress')}</Badge>}
-        {addressee && (
-          <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-600 dark:text-stone-400'}`}>
-            {toMe && <Bell className="size-3.5" />}→ {addressee}
-          </span>
-        )}
-        {unread && <Badge tone="amber">{t('message.new')}</Badge>}
-        <span className="ml-auto flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-          <Time value={message.created_at} absolute />
-          {replyTo && replyTo !== me.pseudonym && (
-            <button
-              type="button"
-              className="rounded px-1.5 py-0.5 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-              onClick={() => onReply(replyTo)}
-            >
-              {t('message.reply')}
-            </button>
-          )}
-        </span>
       </div>
-      <Markdown text={message.body} />
-      {images.length > 0 && <MessageImages images={images} />}
-      {others.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {others.map((file) => (
-            <FileLink key={file.id} file={file} />
-          ))}
+      <div className="min-w-0 flex-1">
+        {!grouped && (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+            <span className="font-semibold">{name}</span>
+            {message.relayed && <Badge tone="blue">{t('message.relayed')}</Badge>}
+            {addressee && (
+              <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-500 dark:text-stone-400'}`}>
+                {toMe && <Bell className="size-3.5 self-center" />}→ {toMe ? t('message.toYou') : addressee}
+              </span>
+            )}
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              <Time value={message.created_at} absolute />
+            </span>
+          </div>
+        )}
+        <div className={progress ? 'text-sm text-stone-500 italic dark:text-stone-400' : undefined}>
+          <Markdown text={message.body} />
         </div>
-      )}
+        {images.length > 0 && <MessageImages images={images} />}
+        {others.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {others.map((file) => (
+              <FileLink key={file.id} file={file} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className={`absolute top-1 right-3 flex items-center gap-1 rounded-md border border-stone-200 bg-white px-1 text-xs text-stone-500 shadow-sm dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 [@media(hover:none)]:hidden ${onHover}`}>
+        <span className="px-1 font-mono">#{message.number}</span>
+        {replyTo && replyTo !== me.pseudonym && (
+          <button
+            type="button"
+            className="rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+            onClick={() => onReply(replyTo)}
+          >
+            {t('message.reply')}
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
+
+function NewDivider() {
+  const { t } = useTranslation()
+  return (
+    <li className="flex items-center gap-3 px-4 py-2 text-xs font-medium tracking-wide text-amber-700 uppercase dark:text-amber-400" aria-label={t('message.newDivider')}>
+      <span className="h-px flex-1 bg-amber-300 dark:bg-amber-800" />
+      {t('message.newDivider')}
+      <span className="h-px flex-1 bg-amber-300 dark:bg-amber-800" />
     </li>
   )
 }
@@ -465,6 +538,7 @@ export function TopicPage({ me }: { me: Me }) {
   const [newFrom, setNewFrom] = useState<number | null>(null)
   const scrolled = useRef(false)
   const marking = useRef(0)
+  const narrow = useNarrow()
 
   const data = topic.data
   const lastNumber = data?.last_number ?? 0
@@ -504,6 +578,12 @@ export function TopicPage({ me }: { me: Me }) {
     )
   }
 
+  // The line "New messages" stands before the first one someone else wrote since the page opened.
+  const firstNew =
+    newFrom === null
+      ? -1
+      : data.messages.findIndex((m) => m.number >= newFrom && !(m.assistant === null && m.author === me.pseudonym))
+
   const reply = (name: string) => {
     setTo(name)
     const box = document.getElementById('compose-body')
@@ -521,20 +601,23 @@ export function TopicPage({ me }: { me: Me }) {
             {data.messages.length < data.last_number && (
               <Notice>{t('topic.truncated', { count: data.messages.length })}</Notice>
             )}
-            <ol className="divide-y divide-stone-200 dark:divide-stone-800">
-              {data.messages.map((message) => (
-                <MessageItem
-                  key={message.number}
-                  message={message}
-                  me={me}
-                  unread={
-                    newFrom !== null &&
-                    message.number >= newFrom &&
-                    !(message.assistant === null && message.author === me.pseudonym)
-                  }
-                  onReply={reply}
-                />
-              ))}
+            <ol className="flex flex-col pb-3">
+              {data.messages.map((message, index) => {
+                const divider = index === firstNew
+                return (
+                  <Fragment key={message.number}>
+                    {divider && <NewDivider />}
+                    <MessageItem
+                      message={message}
+                      me={me}
+                      asker={data.created_by}
+                      grouped={!divider && continues(message, data.messages[index - 1])}
+                      narrow={narrow}
+                      onReply={reply}
+                    />
+                  </Fragment>
+                )
+              })}
             </ol>
           </Card>
           <Compose topic={data} to={to} setTo={setTo} />
