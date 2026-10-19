@@ -8,6 +8,7 @@ import os
 import sys
 from typing import Any
 
+from coloqo import focus
 from coloqo.api import Api, ColoqoError, NotLoggedIn, Project
 from coloqo.render import topic_line
 
@@ -27,13 +28,17 @@ def _input() -> dict[str, Any]:
 
 
 def session_start() -> None:
-    """Register the project's Assistant and tell the session who it is and what is unread."""
+    """Register the project's Assistant and tell the session what the server briefs it with.
+
+    A linked project gets Coloqo's rules, its held Topics, the Inbox and the session's focus;
+    an unlinked one a single quiet line (decisions 0020, 0021, 0022).
+    """
     data = _input()
     api = Api(timeout=8)
     try:
-        name = api.register(Project.detect(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd")))
-        teams = api.request("GET", "/teams")
-        unread = api.request("GET", "/inbox")
+        api.register(Project.detect(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd")))
+        briefing = api.request("GET", "/briefing")
+        unread = api.request("GET", "/inbox") if briefing.get("team_id") else []
     except NotLoggedIn:
         print(LOGIN_HINT)
         return
@@ -42,28 +47,40 @@ def session_start() -> None:
         return
     finally:
         api.close()
-    lines = [
-        f"Coloqo: you are the Assistant «{name}» in Coloqo, where your user's Team's assistants "
-        "work together. Teams: " + (", ".join(f"«{t['name']}»" for t in teams) or "none yet") + "."
-    ]
-    if unread:
-        lines.append(f"Inbox — {len(unread)} topics with unread messages:")
-        lines.extend(f"- {topic_line(t)}" for t in unread[:10])
-        lines.append("Mention them to the user; read with the coloqo read_topic tool.")
+    lines = [briefing["text"]]
+    if briefing.get("team_id"):
+        current = focus.load(data.get("session_id"))
+        if unread:
+            lines.append(f"Inbox — {len(unread)} topics with unread messages:")
+            lines.extend(f"- {topic_line(t)}" for t in unread[:10])
+            lines.append("Mention them to the user; read with the coloqo read_topic tool.")
+        lines.append(
+            f"This session's Coloqo focus: {current.describe()} (what reaches it unasked; the "
+            "user changes it with /coloqo:focus or by asking you to call set_focus)."
+        )
     print("\n".join(lines))
 
 
 def user_prompt_submit() -> None:
-    """Remind the session of Topics with unread messages addressed to the user."""
-    _input()
+    """Remind the session of Topics addressed to the user that its focus lets through."""
+    data = _input()
+    current = focus.load(data.get("session_id"))
+    if current.mode == "quiet":
+        return
     api = Api(timeout=3)
     try:
+        api.register(Project.detect(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd")))
         unread = api.request("GET", "/inbox")
     except ColoqoError:
         return
     finally:
         api.close()
     addressed = [t for t in unread if t.get("addressed")]
+    if current.mode == "mine":
+        addressed = [t for t in addressed if t.get("holder_assistant_id") == api.assistant_id]
+    elif current.mode == "people":
+        people = {p.lower() for p in current.people}
+        addressed = [t for t in addressed if str(t.get("created_by") or "").lower() in people]
     if addressed:
         lines = ["Coloqo — unread messages addressed to your user:"]
         lines.extend(f"- {topic_line(t)}" for t in addressed[:5])

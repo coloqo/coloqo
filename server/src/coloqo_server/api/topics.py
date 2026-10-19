@@ -1331,6 +1331,7 @@ async def settle_topic(
             "team_id": topic.team_id,
             "status": topic.status.value,
             "author": actor.assistant.name if actor.assistant else actor.user.pseudonym,
+            "author_assistant_id": actor.assistant.id if actor.assistant else None,
             "holder_assistant_id": topic.holder_assistant_id,
             "outcome": topic.outcome,
             "automatic": False,

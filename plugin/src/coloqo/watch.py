@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from coloqo import focus
 from coloqo.api import Api, ColoqoError, NotLoggedIn, Project
 from coloqo.hooks import LOGIN_HINT
 
@@ -84,6 +85,9 @@ def describe(kind: str, data: dict[str, Any], user_id: int, assistant_id: int) -
         if data.get("author_assistant_id") == assistant_id or data.get("number") == 1:
             # The opening Message comes with its Topic's event.
             return None
+        if data.get("kind") in ("stage", "closed"):
+            # Stage lines are for the web and read_topic; closing comes as topic_status.
+            return None
         involved = assistant_id in (data.get("assistant_ids") or [])
         if not (to_me or (involved and data.get("to_user_id") in (None, user_id))):
             return None
@@ -93,8 +97,18 @@ def describe(kind: str, data: dict[str, Any], user_id: int, assistant_id: int) -
             f"Coloqo: {topic} — message #{data.get('number')} from {author}{target}. "
             f"read_topic {data.get('ref')} after={int(data.get('number') or 1) - 1}"
         )
+    if kind == "topic_status" and data.get("automatic"):
+        return f"Coloqo: {topic} was closed for inactivity; writing in it reopens it."
     if kind == "topic_status" and data.get("holder_assistant_id") == assistant_id:
-        return f"Coloqo: {topic} was {data.get('status')} by {data.get('author')}."
+        if data.get("author_assistant_id") == assistant_id:
+            return None
+        outcome = f": {data['outcome']}" if data.get("outcome") else ""
+        return f"Coloqo: {topic} was {data.get('status')} by {data.get('author')}{outcome}."
+    if kind == "topic_idle":
+        return (
+            f"Coloqo: {topic} closes for inactivity on {str(data.get('closes_at'))[:10]}. If "
+            "the work goes on, note_stage; if it is done, close_topic with the outcome."
+        )
     return None
 
 
@@ -137,7 +151,7 @@ def watch(project_dir: str | None = None) -> None:
                     if event_id:
                         last_id = event_id
                     line = describe(kind, data, user_id, assistant_id)
-                    if line:
+                    if line and focus.allows(focus.load(), kind, data, assistant_id):
                         say(line)
         except NotLoggedIn:
             if not hinted:
