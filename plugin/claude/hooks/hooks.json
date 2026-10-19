@@ -3,14 +3,14 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "uvx coloqo@0.1.0 hook session-start", "timeout": 60 }
+          { "type": "command", "command": "uvx coloqo@0.2.0 hook session-start", "timeout": 60 }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "uvx coloqo@0.1.0 hook user-prompt-submit", "timeout": 10 }
+          { "type": "command", "command": "uvx coloqo@0.2.0 hook user-prompt-submit", "timeout": 10 }
         ]
       }
     ]
