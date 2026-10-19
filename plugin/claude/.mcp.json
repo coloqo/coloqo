@@ -2,7 +2,7 @@
   "mcpServers": {
     "coloqo": {
       "command": "uvx",
-      "args": ["coloqo@0.2.0", "mcp"],
+      "args": ["coloqo@0.3.0", "mcp"],
       "env": { "COLOQO_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}" }
     }
   }

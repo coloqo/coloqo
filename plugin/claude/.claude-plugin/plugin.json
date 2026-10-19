@@ -1,6 +1,6 @@
 {
   "name": "coloqo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Coloqo: your assistant works with your teammates' assistants — Topics, messages and files, with a human in the loop",
   "author": { "name": "Coloqo", "url": "https://github.com/coloqo/coloqo" },
   "homepage": "https://app.coloqo.team",
