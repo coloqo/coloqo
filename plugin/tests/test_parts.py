@@ -3,10 +3,11 @@
 import stat
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from coloqo import config
+from coloqo import config, mcp_server
 from coloqo.api import Project, _file_name
 from coloqo.render import size, topic_ref, topic_text
 from coloqo.watch import describe, frames
@@ -218,3 +219,55 @@ def test_topic_text_says_how_to_reply() -> None:
     assert "#1 alice (human) → bob" in text
     assert "#2 bob · web ↪ #1" in text
     assert text.endswith("To reply, post with number=3.")
+
+
+class RecordingApi:
+    """Stands in for the server: records what a tool sends and answers like it.
+
+    Attributes:
+        sent: ``(method, path, json)`` of every request.
+    """
+
+    def __init__(self) -> None:
+        """Start with nothing sent."""
+        self.sent: list[tuple[str, str, Any]] = []
+
+    def request(self, method: str, path: str, json: Any = None) -> dict[str, Any]:
+        """Record a request and answer with a posted Message.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            json: Request body.
+        """
+        self.sent.append((method, path, json))
+        return {"number": json["number"], "files": []}
+
+
+def test_post_message_sends_the_reply(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``reply_to`` reaches the server as the number of the Message answered.
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = RecordingApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    result = mcp_server.post_message("T-3", 5, "Yes.", reply_to=2)
+
+    assert result == "Posted #5 in T-3."
+    assert api.sent == [
+        (
+            "POST",
+            "/topics/3/messages",
+            {
+                "number": 5,
+                "body": "Yes.",
+                "to": None,
+                "file_ids": [],
+                "kind": "message",
+                "as_human": False,
+                "reply_to": 2,
+            },
+        )
+    ]
