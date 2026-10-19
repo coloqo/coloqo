@@ -89,7 +89,7 @@ function useNarrow() {
 
 const GROUP_GAP_MS = 10 * 60 * 1000
 
-/** A Message continues the previous one's group: same author, close in time, same addressee. */
+/** A Message continues the previous one's group: same author, close in time, same addressee and holding. */
 function continues(message: Message, previous: Message | undefined): boolean {
   return (
     previous !== undefined &&
@@ -99,6 +99,7 @@ function continues(message: Message, previous: Message | undefined): boolean {
     previous.assistant === message.assistant &&
     previous.to === message.to &&
     previous.to_assistant === message.to_assistant &&
+    previous.by_holder === message.by_holder &&
     new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < GROUP_GAP_MS
   )
 }
@@ -197,13 +198,7 @@ function MessageItem({
     <li id={`m-${message.number}`} className={`group relative flex scroll-mt-4 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
       <div className="shrink-0" style={{ width: size }}>
         {!grouped && (
-          <AuthorAvatar
-            person={message.author}
-            assistant={message.assistant !== null}
-            holder={held}
-            size={size}
-            title={held === 'now' ? t('message.holdsNow') : held === 'then' ? t('message.heldThen') : undefined}
-          />
+          <AuthorAvatar person={message.author} assistant={message.assistant !== null} size={size} />
         )}
       </div>
       <div
@@ -218,6 +213,20 @@ function MessageItem({
             {addressee && (
               <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-500 dark:text-stone-400'}`}>
                 {toMe && <Bell className="size-3.5 self-center" />}→ {toMe ? t('message.toYou') : addressee}
+              </span>
+            )}
+            {held && (
+              <span
+                className={`ml-auto inline-flex items-center gap-1 self-center pl-2 text-xs font-medium ${
+                  held === 'now' ? 'text-amber-700 dark:text-amber-400' : 'text-stone-400 dark:text-stone-500'
+                }`}
+                title={held === 'now' ? t('message.holdsNow') : t('message.heldThen')}
+              >
+                <svg viewBox="0 0 12 12" aria-hidden="true" className="size-3">
+                  <path d="M3 1.5v9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M3.6 2h5.6L7.8 4.1l1.4 2.1H3.6z" fill="currentColor" />
+                </svg>
+                {held === 'now' ? t('message.holds') : t('message.held')}
               </span>
             )}
           </div>

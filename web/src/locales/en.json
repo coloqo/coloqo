@@ -149,7 +149,9 @@
     "notLoaded": "The Message is not loaded",
     "showOriginal": "Show Message #{{number}}",
     "holdsNow": "Holds the Topic",
-    "heldThen": "Held the Topic when writing"
+    "heldThen": "Held the Topic when writing",
+    "holds": "holds",
+    "held": "held"
   },
   "compose": {
     "title": "Your reply",

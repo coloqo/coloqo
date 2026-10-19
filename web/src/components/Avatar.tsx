@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 
 // The faces of a Topic's feed (decision 0019): a person by their initials, an Assistant and a
-// Worker by one icon each, with the person they act for in the corner and a flag on whoever
-// held the Topic.
+// Worker by one icon each, with the person they act for in the corner.
 
 const PALETTE = ['#7c5cbf', '#2f8f6b', '#c0573a', '#3b6fb6', '#a3489a', '#5f7d2a', '#b07a12', '#2b8a9a']
 
@@ -68,48 +67,18 @@ export function WorkerIcon({ size }: { size: number }) {
   )
 }
 
-/**
- * The face of a Message's author: the person alone, or an Assistant with the person it writes
- * for in the corner. ``holder`` flags an Assistant that held the Topic when it wrote: amber
- * while it still holds it, grey once it does not.
- */
-export function AuthorAvatar({
-  person,
-  assistant,
-  holder,
-  size,
-  title,
-}: {
-  person: string | null
-  assistant: boolean
-  holder: 'now' | 'then' | null
-  size: number
-  title?: string
-}) {
+/** The face of a Message's author: the person alone, or an Assistant with its person in the corner. */
+export function AuthorAvatar({ person, assistant, size }: { person: string | null; assistant: boolean; size: number }) {
   const badge = Math.round(size * 0.45)
-  const mark = Math.round(size * 0.36)
   let face: ReactNode
   if (assistant) face = <AssistantIcon size={size} />
   else face = <PersonAvatar name={person ?? '?'} size={size} />
   return (
-    <span className="relative inline-block shrink-0" style={{ width: size, height: size }} title={title}>
+    <span className="relative inline-block shrink-0" style={{ width: size, height: size }}>
       {face}
       {assistant && person && (
         <span className="absolute -right-1 -bottom-1 flex rounded-full ring-2 ring-[var(--feed-ring)]">
           <PersonAvatar name={person} size={badge} />
-        </span>
-      )}
-      {holder && (
-        <span
-          className={`absolute -top-1 -left-1 grid place-items-center rounded-full ring-2 ring-[var(--feed-ring)] ${
-            holder === 'now' ? 'bg-amber-500' : 'bg-stone-400 dark:bg-stone-500'
-          }`}
-          style={{ width: mark, height: mark }}
-        >
-          <svg viewBox="0 0 12 12" aria-hidden="true" style={{ width: mark * 0.62, height: mark * 0.62 }}>
-            <path d="M3 1.5v9" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
-            <path d="M3.6 2h5.6L7.8 4.1l1.4 2.1H3.6z" fill="#fff" />
-          </svg>
         </span>
       )}
     </span>
