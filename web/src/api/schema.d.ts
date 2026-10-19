@@ -408,13 +408,16 @@ export interface paths {
          * Download File
          * @description Download a file of one of the caller's Teams.
          *
-         *     Served as an attachment of an opaque type: the browser never renders it as a page.
+         *     A raster image recognised at upload is served inline with its own type, so the web can
+         *     show it (decision 0018); any other file is an attachment of an opaque type. Either way
+         *     the browser never renders it as a page.
          *
          *     Args:
          *         request: The incoming request.
          *         file_id: The file.
          *         actor: The caller.
          *         db: Database session.
+         *         download: Serve an image as an attachment too, to save it under its name.
          *
          *     Raises:
          *         HTTPException: 404 when there is no such file for the caller.
@@ -823,6 +826,7 @@ export interface paths {
          * @description Return a Topic with its Messages after a number.
          *
          *     Args:
+         *         request: The incoming request.
          *         topic_id: The Topic.
          *         actor: The caller.
          *         db: Database session.
@@ -1170,6 +1174,8 @@ export interface components {
          *         size: Size in bytes.
          *         sha256: Checksum.
          *         content_type: Media type given by the uploader.
+         *         preview: The web shows it inline: a raster image recognised by its content, no larger
+         *             than the instance allows (decision 0018).
          *         uploaded_by: Pseudonym of the uploader.
          *         message_number: The Message it is attached to, if any.
          *         created_at: Upload time.
@@ -1188,6 +1194,8 @@ export interface components {
             message_number: number | null;
             /** Name */
             name: string;
+            /** Preview */
+            preview: boolean;
             /** Sha256 */
             sha256: string;
             /** Size */
@@ -2150,7 +2158,9 @@ export interface operations {
     };
     download_file_api_files__file_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                download?: boolean;
+            };
             header?: {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: number | null;

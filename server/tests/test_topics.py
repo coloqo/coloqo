@@ -5,8 +5,12 @@ from dataclasses import dataclass
 
 import httpx
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 
+from coloqo_server.db import MIGRATIONS_DIR, migrate
+from coloqo_server.settings import Settings
 from tests.conftest import Plugin
 
 
@@ -339,6 +343,117 @@ def test_file_upload_attach_download(setup: Setup) -> None:
     assert download.content == b"select 1;\n"
     assert "attachment" in download.headers["content-disposition"]
     assert download.headers["content-type"] == "application/octet-stream"
+    assert "sandbox" in download.headers["content-security-policy"]
+    assert not file["preview"]
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + bytes(24)
+
+
+def _upload(client: TestClient, topic_id: int, name: str, content: bytes, kind: str) -> dict:
+    """Upload a file into a Topic.
+
+    Args:
+        client: The uploader.
+        topic_id: The Topic.
+        name: File name.
+        content: The content.
+        kind: The media type the uploader declares.
+    """
+    response = client.post(
+        f"/api/topics/{topic_id}/files",
+        content=content,
+        headers={"X-File-Name": name, "Content-Type": kind},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_image_is_shown_inline(setup: Setup) -> None:
+    """A PNG declared as opaque bytes, as the plugin uploads it, is served inline as an image.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+    file = _upload(setup.alice_api.client, tid, "shot.png", PNG, "application/octet-stream")
+
+    shown = setup.bob.get(f"/api/files/{file['id']}")
+    saved = setup.bob.get(f"/api/files/{file['id']}", params={"download": 1})
+
+    assert file["preview"]
+    assert shown.headers["content-type"] == "image/png"
+    assert shown.headers["content-disposition"].startswith("inline")
+    assert "sandbox" in shown.headers["content-security-policy"]
+    assert shown.content == PNG
+    assert saved.headers["content-type"] == "application/octet-stream"
+    assert saved.headers["content-disposition"].startswith("attachment")
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "kind"),
+    [
+        ("chart.svg", b'<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>', "image/svg+xml"),
+        ("fake.png", b"<html><script>alert(1)</script></html>", "image/png"),
+    ],
+)
+def test_non_raster_file_is_only_downloaded(
+    setup: Setup, name: str, content: bytes, kind: str
+) -> None:
+    """An SVG, or a page declared as a PNG, is not shown: its content is not a raster image.
+
+    Args:
+        setup: The Team.
+        name: File name.
+        content: The content.
+        kind: The media type the uploader declares.
+    """
+    tid = _open(setup)["id"]
+    file = _upload(setup.alice, tid, name, content, kind)
+
+    download = setup.bob.get(f"/api/files/{file['id']}")
+
+    assert not file["preview"]
+    assert download.headers["content-type"] == "application/octet-stream"
+    assert download.headers["content-disposition"].startswith("attachment")
+
+
+def test_large_image_is_not_previewed(setup: Setup) -> None:
+    """An image over the preview limit is listed as an ordinary file but still served inline.
+
+    Args:
+        setup: The Team; the test settings preview images up to 512 bytes.
+    """
+    tid = _open(setup)["id"]
+    file = _upload(setup.alice, tid, "big.png", PNG + bytes(600), "image/png")
+
+    topic = setup.bob.get(f"/api/topics/{tid}").json()
+
+    assert not file["preview"]
+    assert not topic["files"][0]["preview"]
+    assert setup.bob.get(f"/api/files/{file['id']}").headers["content-type"] == "image/png"
+
+
+def test_migration_recognises_earlier_images(setup: Setup, settings: Settings) -> None:
+    """Files uploaded before the image type was kept get it from their content on disk.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    tid = _open(setup)["id"]
+    image = _upload(setup.alice_api.client, tid, "shot.png", PNG, "application/octet-stream")
+    text = _upload(setup.alice_api.client, tid, "notes.txt", b"notes", "text/plain")
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+    command.downgrade(config, "0002")
+
+    migrate(settings.database_url, settings.files_dir)
+    files = {f["id"]: f for f in setup.bob.get(f"/api/topics/{tid}").json()["files"]}
+
+    assert files[image["id"]]["preview"]
+    assert not files[text["id"]]["preview"]
 
 
 def test_file_limits(setup: Setup) -> None:

@@ -380,6 +380,8 @@ class File(Base):
         size: Size in bytes.
         sha256: Checksum of the content.
         content_type: Media type given by the uploader.
+        image_type: Media type of a raster image recognised by its content, which the web
+            shows inline (decision 0018); ``None`` for any other file.
         uploaded_by: The User on whose behalf it was uploaded.
         uploaded_by_assistant_id: The Assistant that uploaded it, if not the human.
         created_at: Upload time.
@@ -394,6 +396,7 @@ class File(Base):
     size: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(String(64))
     content_type: Mapped[str] = mapped_column(String(100))
+    image_type: Mapped[str | None] = mapped_column(String(20))
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     uploaded_by_assistant_id: Mapped[int | None] = mapped_column(
         ForeignKey("assistants.id", ondelete="SET NULL")

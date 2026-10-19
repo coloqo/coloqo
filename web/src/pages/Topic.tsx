@@ -7,6 +7,8 @@ import {
   ApiError,
   api,
   call,
+  downloadUrl,
+  fileUrl,
   uploadFile,
   type FileInfo,
   type Me,
@@ -21,6 +23,7 @@ import { Markdown } from '../components/Markdown'
 import { Time } from '../components/Time'
 import { StatusBadge } from '../components/Topics'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Loading, Notice, Textarea } from '../components/ui'
+import { MessageImages } from '../components/Images'
 import { errorText, fileSize, issueLink } from '../lib/format'
 
 /** Whether the page is in front of the person, so that reading can be recorded. */
@@ -60,7 +63,7 @@ function FileLink({ file }: { file: FileInfo }) {
   const { i18n } = useTranslation()
   return (
     <a
-      href={`/api/files/${file.id}`}
+      href={downloadUrl(file)}
       download={file.name}
       className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-stone-200 px-2 py-1 text-sm hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
     >
@@ -86,6 +89,8 @@ function MessageItem({
   const toMe = message.to !== null && message.to === me.pseudonym
   const addressee = message.to_assistant ?? message.to
   const replyTo = message.assistant ?? message.author
+  const images = message.files.filter((file) => file.preview)
+  const others = message.files.filter((file) => !file.preview)
   return (
     <li
       id={`m-${message.number}`}
@@ -125,9 +130,10 @@ function MessageItem({
         </span>
       </div>
       <Markdown text={message.body} />
-      {message.files.length > 0 && (
+      {images.length > 0 && <MessageImages images={images} />}
+      {others.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {message.files.map((file) => (
+          {others.map((file) => (
             <FileLink key={file.id} file={file} />
           ))}
         </div>
@@ -242,8 +248,9 @@ function Compose({
             {attached.map((file) => (
               <li
                 key={file.id}
-                className="inline-flex items-center gap-1 rounded-md bg-stone-100 py-0.5 pr-0.5 pl-2 text-sm dark:bg-stone-800"
+                className={`inline-flex items-center gap-1 rounded-md bg-stone-100 py-0.5 pr-0.5 text-sm dark:bg-stone-800 ${file.preview ? 'pl-0.5' : 'pl-2'}`}
               >
+                {file.preview && <img src={fileUrl(file)} alt="" className="size-10 rounded object-cover" />}
                 <span className="max-w-48 truncate">{file.name}</span>
                 <button
                   type="button"

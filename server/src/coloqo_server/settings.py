@@ -40,6 +40,8 @@ class Settings(BaseSettings):
         files_dir: Where uploaded files are kept (decision 0008).
         max_file_bytes: Largest file a Topic accepts.
         team_storage_bytes: Total size of files a Team can keep.
+        preview_max_bytes: Largest image the web shows inline; a larger one is listed as an
+            ordinary file, since there are no thumbnails yet (decision 0018).
         event_retention_days: How long the event log is kept (decision 0008).
     """
 
@@ -56,4 +58,5 @@ class Settings(BaseSettings):
     files_dir: Path = Path("var/files")
     max_file_bytes: int = 100 * 1024 * 1024
     team_storage_bytes: int = 5 * 1024 * 1024 * 1024
+    preview_max_bytes: int = 10 * 1024 * 1024
     event_retention_days: int = 7

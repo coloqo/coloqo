@@ -66,6 +66,8 @@ class FileOut(BaseModel):
         size: Size in bytes.
         sha256: Checksum.
         content_type: Media type given by the uploader.
+        preview: The web shows it inline: a raster image recognised by its content, no larger
+            than the instance allows (decision 0018).
         uploaded_by: Pseudonym of the uploader.
         message_number: The Message it is attached to, if any.
         created_at: Upload time.
@@ -76,6 +78,7 @@ class FileOut(BaseModel):
     size: int
     sha256: str
     content_type: str
+    preview: bool
     uploaded_by: str | None
     message_number: int | None
     created_at: datetime
@@ -315,12 +318,13 @@ async def _topic_outs(db: AsyncSession, topics: list[Topic], user_id: int) -> li
     return result
 
 
-async def _file_outs(db: AsyncSession, files: list[File]) -> list[FileOut]:
+async def _file_outs(db: AsyncSession, files: list[File], preview_max_bytes: int) -> list[FileOut]:
     """Build the view of files.
 
     Args:
         db: Database session.
         files: The files.
+        preview_max_bytes: Largest image shown inline.
     """
     users, _ = await _names(db, {f.uploaded_by for f in files}, set())
     numbers = {
@@ -336,6 +340,7 @@ async def _file_outs(db: AsyncSession, files: list[File]) -> list[FileOut]:
             size=f.size,
             sha256=f.sha256,
             content_type=f.content_type,
+            preview=f.image_type is not None and f.size <= preview_max_bytes,
             uploaded_by=users.get(f.uploaded_by),
             message_number=numbers.get(f.message_id or 0),
             created_at=f.created_at,
@@ -741,11 +746,12 @@ async def create_topic(
     )
     await db.commit()
     request.app.state.bus.wake(recipients | more)
-    return await read_topic(topic.id, actor, db)
+    return await read_topic(request, topic.id, actor, db)
 
 
 @router.get("/topics/{topic_id}")
 async def read_topic(
+    request: Request,
     topic_id: int,
     actor: ActorDep,
     db: DB,
@@ -755,6 +761,7 @@ async def read_topic(
     """Return a Topic with its Messages after a number.
 
     Args:
+        request: The incoming request.
         topic_id: The Topic.
         actor: The caller.
         db: Database session.
@@ -776,7 +783,7 @@ async def read_topic(
     file_rows = list(
         await db.scalars(select(File).where(File.topic_id == topic.id).order_by(File.id))
     )
-    files = await _file_outs(db, file_rows)
+    files = await _file_outs(db, file_rows, request.app.state.settings.preview_max_bytes)
     (summary,) = await _topic_outs(db, [topic], actor.user.id)
     return TopicDetail(
         **summary.model_dump(),
@@ -814,7 +821,7 @@ async def post_message(
             )
         )
         file_rows = list(await db.scalars(select(File).where(File.topic_id == topic_id)))
-        files = await _file_outs(db, file_rows)
+        files = await _file_outs(db, file_rows, request.app.state.settings.preview_max_bytes)
         unread = await _message_outs(db, unread_rows[:UNREAD_LIMIT], files, file_rows)
         too_many = len(unread_rows) > UNREAD_LIMIT
         next_number = topic.last_number + 1
@@ -845,7 +852,7 @@ async def post_message(
     await db.commit()
     request.app.state.bus.wake(recipients)
     file_rows = list(await db.scalars(select(File).where(File.message_id == message.id)))
-    files = await _file_outs(db, file_rows)
+    files = await _file_outs(db, file_rows, request.app.state.settings.preview_max_bytes)
     (out,) = await _message_outs(db, [message], files, file_rows)
     return out
 

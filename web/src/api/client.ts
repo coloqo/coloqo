@@ -96,6 +96,12 @@ export async function uploadFile(topicId: number, file: File): Promise<FileInfo>
   return body as FileInfo
 }
 
+/** Where a file is served: an image inline, any other file as an attachment (decision 0018). */
+export const fileUrl = (file: FileInfo) => `/api/files/${file.id}`
+
+/** Where a file is served as an attachment, an image too. */
+export const downloadUrl = (file: FileInfo) => `/api/files/${file.id}?download=1`
+
 /** Where a logged-out person goes to log in with a provider and come back. */
 export function loginUrl(provider: string, next: string): string {
   return `/api/auth/${encodeURIComponent(provider)}/start?next=${encodeURIComponent(next)}`

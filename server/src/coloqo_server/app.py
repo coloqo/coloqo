@@ -87,7 +87,7 @@ def create_app(
         Args:
             app: The application.
         """
-        await asyncio.to_thread(migrate, settings.database_url)
+        await asyncio.to_thread(migrate, settings.database_url, settings.files_dir)
         task = asyncio.create_task(cleanup(database, settings))
         yield
         task.cancel()
