@@ -19,7 +19,15 @@ from coloqo_server.models import (
     TopicStatus,
     User,
 )
-from coloqo_server.security import DB, ActorDep, HumanDep, new_token, now, token_hash
+from coloqo_server.security import (
+    DB,
+    ActorDep,
+    HumanDep,
+    new_token,
+    now,
+    require_reader,
+    token_hash,
+)
 
 router = APIRouter(tags=["teams"])
 
@@ -255,7 +263,11 @@ async def list_teams(actor: ActorDep, db: DB) -> list[TeamOut]:
     Args:
         actor: The caller.
         db: Database session.
+
+    Raises:
+        HTTPException: 403 for a plugin request without an Assistant.
     """
+    require_reader(actor)
     rows = await db.execute(
         select(Team, Member.role)
         .join(Member, Member.team_id == Team.id)
@@ -284,7 +296,7 @@ async def create_team(body: TeamIn, actor: HumanDep, db: DB) -> TeamOut:
 
 @router.get("/teams/{team_id}")
 async def get_team(team_id: int, actor: ActorDep, db: DB) -> TeamDetail:
-    """Return a Team with its Members, their Assistants and its Areas.
+    """Return a Team with its Members, their Assistants linked to it and its Areas.
 
     Args:
         team_id: The Team.
@@ -292,8 +304,10 @@ async def get_team(team_id: int, actor: ActorDep, db: DB) -> TeamDetail:
         db: Database session.
 
     Raises:
-        HTTPException: 404 when the caller is not in the Team.
+        HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
+            without an Assistant.
     """
+    require_reader(actor)
     team, own = await membership(db, team_id, actor.user.id)
     member_rows = (
         await db.execute(
@@ -306,7 +320,10 @@ async def get_team(team_id: int, actor: ActorDep, db: DB) -> TeamDetail:
     assistants = (
         await db.scalars(
             select(Assistant)
-            .where(Assistant.user_id.in_([user.id for _, user in member_rows]))
+            .where(
+                Assistant.user_id.in_([user.id for _, user in member_rows]),
+                Assistant.team_id == team_id,
+            )
             .order_by(Assistant.name)
         )
     ).all()
@@ -451,8 +468,10 @@ async def list_areas(team_id: int, actor: ActorDep, db: DB) -> list[AreaOut]:
         db: Database session.
 
     Raises:
-        HTTPException: 404 when the caller is not in the Team.
+        HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
+            without an Assistant.
     """
+    require_reader(actor)
     await membership(db, team_id, actor.user.id)
     return await _areas(db, team_id)
 

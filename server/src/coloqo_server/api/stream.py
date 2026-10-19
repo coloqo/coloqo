@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
 from coloqo_server.models import Event
-from coloqo_server.security import ActorDep
+from coloqo_server.security import ActorDep, pushed_teams, require_reader
 
 router = APIRouter(tags=["events"])
 
@@ -45,16 +45,23 @@ async def events(
 
     Without ``after`` or ``Last-Event-ID`` the stream starts with new events only. The first
     frame is ``ready`` with the current last id; ``heartbeat`` frames repeat it every 15 s.
+    An Assistant gets only the events of the Team its project is linked to; an unlinked one
+    gets the service frames alone (decision 0020).
 
     Args:
         request: The incoming request.
         actor: The caller.
         after: Send events with a greater id.
         last_event_id: The same, as browsers send it on reconnect.
+
+    Raises:
+        HTTPException: 403 for a plugin request without an Assistant.
     """
+    require_reader(actor)
     database = request.app.state.database
     bus = request.app.state.bus
     user_id = actor.user.id
+    scope = pushed_teams(actor)
 
     async def frames() -> AsyncIterator[str]:
         """Yield frames until the client goes away."""
@@ -81,8 +88,10 @@ async def events(
                         )
                     )
                 for row in rows:
-                    yield _frame(row.kind, row.data, row.id)
                     cursor = row.id
+                    if scope is not None and row.data.get("team_id") not in scope:
+                        continue
+                    yield _frame(row.kind, row.data, row.id)
                 if rows:
                     continue
                 started = asyncio.get_running_loop().time()

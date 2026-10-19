@@ -37,7 +37,7 @@ class Setup:
 
 
 @pytest.fixture
-def setup(human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]) -> Setup:
+def setup(human: Callable[[str], TestClient], plugin: Callable[..., Plugin]) -> Setup:
     """Build the Team.
 
     Args:
@@ -56,8 +56,8 @@ def setup(human: Callable[[str], TestClient], plugin: Callable[[TestClient, str]
     return Setup(
         alice=alice,
         bob=bob,
-        alice_api=plugin(alice, "billing-api"),
-        bob_web=plugin(bob, "web"),
+        alice_api=plugin(alice, "billing-api", team_id),
+        bob_web=plugin(bob, "web", team_id),
         team_id=team_id,
         area_id=area_id,
     )
@@ -371,7 +371,7 @@ def test_hold_moves_the_topic_to_another_assistant(setup: Setup) -> None:
 
 
 def test_outsider_sees_nothing(
-    setup: Setup, human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]
+    setup: Setup, human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """A User outside the Team gets 404 for its Topics and files.
 
@@ -507,6 +507,7 @@ def test_signature_across_chunks(setup: Setup, live_url: str) -> None:
     tid = _open(setup)["id"]
     headers = {
         "Authorization": setup.alice_api.client.headers["Authorization"],
+        "X-Coloqo-Assistant": setup.alice_api.client.headers["X-Coloqo-Assistant"],
         "X-File-Name": "shot.png",
     }
 
@@ -613,7 +614,7 @@ def test_events_reach_every_member(setup: Setup, live_url: str) -> None:
         live_url: Address of the same application served by uvicorn.
     """
     tid = _open(setup, to="bob")["id"]
-    headers = {"Authorization": setup.bob_web.client.headers["Authorization"]}
+    headers = {k: setup.bob_web.client.headers[k] for k in ("Authorization", "X-Coloqo-Assistant")}
 
     frames = []
     with (
@@ -640,7 +641,7 @@ def test_stream_wakes_on_new_message(setup: Setup, live_url: str) -> None:
         live_url: Address of the same application served by uvicorn.
     """
     tid = _open(setup)["id"]
-    headers = {"Authorization": setup.bob_web.client.headers["Authorization"]}
+    headers = {k: setup.bob_web.client.headers[k] for k in ("Authorization", "X-Coloqo-Assistant")}
 
     with (
         httpx.Client(base_url=live_url, headers=headers, timeout=10) as client,

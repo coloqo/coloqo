@@ -65,7 +65,7 @@ async def upload_file(
         OSError: The file cannot be written.
     """
     settings = request.app.state.settings
-    topic = await get_topic(db, topic_id, actor)
+    topic = await get_topic(db, topic_id, actor, write=True)
     name = os.path.basename(unquote(x_file_name).replace("\\", "/")).strip()[:255]
     if not name:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "The file needs a name")

@@ -171,7 +171,7 @@ def human(app: FastAPI) -> Iterator[Callable[[str], TestClient]]:
 
 
 @pytest.fixture
-def plugin(app: FastAPI) -> Iterator[Callable[[TestClient, str], Plugin]]:
+def plugin(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
     """Make plugin installations confirmed by a human, each registering an Assistant.
 
     Args:
@@ -179,12 +179,13 @@ def plugin(app: FastAPI) -> Iterator[Callable[[TestClient, str], Plugin]]:
     """
     clients: list[TestClient] = []
 
-    def install(web: TestClient, project: str) -> Plugin:
+    def install(web: TestClient, project: str, team_id: int | None = None) -> Plugin:
         """Log a plugin in through the device code, confirmed by ``web``'s human.
 
         Args:
             web: The human's web client.
             project: Project name of the Assistant.
+            team_id: The Team its project is linked to, as a ``.coloqo.json`` would name it.
         """
         client = TestClient(app, base_url=ORIGIN)
         client.__enter__()
@@ -198,6 +199,7 @@ def plugin(app: FastAPI) -> Iterator[Callable[[TestClient, str], Plugin]]:
             json={
                 "project_key": hashlib.sha256(project.encode()).hexdigest(),
                 "project_name": project,
+                "team_id": team_id,
             },
         ).json()
         client.headers["X-Coloqo-Assistant"] = str(registered["id"])

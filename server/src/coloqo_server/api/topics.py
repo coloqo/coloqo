@@ -16,6 +16,7 @@ from coloqo_server.models import (
     Area,
     Assistant,
     File,
+    Installation,
     Member,
     Message,
     MessageKind,
@@ -25,7 +26,16 @@ from coloqo_server.models import (
     TopicStatus,
     User,
 )
-from coloqo_server.security import DB, Actor, ActorDep, HumanDep, now
+from coloqo_server.security import (
+    DB,
+    Actor,
+    ActorDep,
+    HumanDep,
+    now,
+    pushed_teams,
+    require_reader,
+    require_writer,
+)
 
 router = APIRouter(tags=["topics"])
 
@@ -39,10 +49,13 @@ class AssistantIn(BaseModel):
     Attributes:
         project_key: SHA-256 of the project path; the path itself stays on the computer.
         project_name: Short project name for the Assistant's shown name.
+        team_id: The Team named by the project's ``.coloqo.json``; links an unlinked Assistant
+            whose person is a member of it, and never overrides a link (decision 0020).
     """
 
     project_key: str = Field(pattern=r"^[0-9a-f]{64}$")
     project_name: str = Field(min_length=1, max_length=60)
+    team_id: int | None = None
 
 
 class AssistantRegistered(BaseModel):
@@ -51,10 +64,44 @@ class AssistantRegistered(BaseModel):
     Attributes:
         id: Identifier the plugin sends in ``X-Coloqo-Assistant``.
         name: Shown name.
+        team_id: The Team its project is linked to; ``None`` while unlinked (decision 0020).
+        team: That Team's name.
     """
 
     id: int
     name: str
+    team_id: int | None = None
+    team: str | None = None
+
+
+class AssistantLink(BaseModel):
+    """The Team an Assistant's project is linked to, chosen by its person in the web.
+
+    Attributes:
+        team_id: The Team; ``None`` unlinks.
+    """
+
+    team_id: int | None
+
+
+class OwnAssistant(BaseModel):
+    """One of the person's Assistants, as their settings list it.
+
+    Attributes:
+        id: Identifier.
+        name: Shown name.
+        installation: Name of the computer it runs on.
+        team_id: The Team its project is linked to, if any.
+        team: That Team's name.
+        last_seen_at: The last request it made.
+    """
+
+    id: int
+    name: str
+    installation: str
+    team_id: int | None
+    team: str | None
+    last_seen_at: datetime | None
 
 
 class FileOut(BaseModel):
@@ -398,7 +445,9 @@ async def _message_outs(
     ]
 
 
-async def get_topic(db: AsyncSession, topic_id: int, actor: Actor, lock: bool = False) -> Topic:
+async def get_topic(
+    db: AsyncSession, topic_id: int, actor: Actor, lock: bool = False, write: bool = False
+) -> Topic:
     """Return a Topic of one of the caller's Teams.
 
     Args:
@@ -406,14 +455,25 @@ async def get_topic(db: AsyncSession, topic_id: int, actor: Actor, lock: bool = 
         topic_id: The Topic.
         actor: The caller.
         lock: Lock the row until the transaction ends, to number a new Message.
+        write: The caller is about to change the Topic: an Assistant must be linked to its
+            Team (decision 0020), and a deleted Topic is only a card.
 
     Raises:
-        HTTPException: 404 when there is no such Topic in the caller's Teams.
+        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the
+            caller may not write there; 410 to write into a deleted Topic.
     """
+    require_reader(actor)
     query = select(Topic).where(Topic.id == topic_id)
     topic = await db.scalar(query.with_for_update() if lock else query)
     if topic is None or await db.get(Member, (topic.team_id, actor.user.id)) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No such Topic {ref(topic_id)}")
+    if write:
+        await require_writer(db, actor, topic.team_id)
+        if topic.deleted_at is not None:
+            raise HTTPException(
+                status.HTTP_410_GONE,
+                f"{ref(topic_id)} was closed and its conversation deleted; open a new Topic",
+            )
     return topic
 
 
@@ -448,8 +508,13 @@ async def _addressee(
     for user in members:
         if user.pseudonym and user.pseudonym.lower() == name:
             return user.id, None
+    # Only Assistants whose project is linked to this Team take part in it (decision 0020).
     assistants = (
-        await db.scalars(select(Assistant).where(Assistant.user_id.in_([u.id for u in members])))
+        await db.scalars(
+            select(Assistant).where(
+                Assistant.user_id.in_([u.id for u in members]), Assistant.team_id == team_id
+            )
+        )
     ).all()
     for assistant in assistants:
         if assistant.name.lower() == name:
@@ -629,6 +694,10 @@ async def register_assistant(body: AssistantIn, actor: ActorDep, db: DB) -> Assi
         actor: The plugin.
         db: Database session.
 
+    A ``team_id`` from the project's ``.coloqo.json`` links the Assistant when it is not
+    linked yet and the person is a member of that Team; otherwise it is ignored, so a file
+    never overrides the person's choice (decision 0020).
+
     Raises:
         HTTPException: 403 for a web session: only the plugin registers Assistants.
     """
@@ -657,7 +726,110 @@ async def register_assistant(body: AssistantIn, actor: ActorDep, db: DB) -> Assi
         )
     )
     assert assistant is not None
-    return AssistantRegistered(id=assistant.id, name=assistant.name)
+    if (
+        body.team_id is not None
+        and assistant.team_id is None
+        and await db.get(Member, (body.team_id, actor.user.id)) is not None
+    ):
+        assistant.team_id = body.team_id
+        await db.commit()
+    team = await db.get(Team, assistant.team_id) if assistant.team_id else None
+    return AssistantRegistered(
+        id=assistant.id, name=assistant.name, team_id=assistant.team_id, team=team and team.name
+    )
+
+
+async def _own_assistants(db: AsyncSession, query) -> list[OwnAssistant]:
+    """Describe Assistants for their person: computer, project and Team.
+
+    Args:
+        db: Database session.
+        query: A select of Assistants.
+    """
+    rows = await db.execute(
+        query.add_columns(Installation.name, Team.name)
+        .join(Installation, Installation.id == Assistant.installation_id)
+        .outerjoin(Team, Team.id == Assistant.team_id)
+        .order_by(Assistant.name, Installation.name)
+    )
+    return [
+        OwnAssistant(
+            id=assistant.id,
+            name=assistant.name,
+            installation=installation,
+            team_id=assistant.team_id,
+            team=team,
+            last_seen_at=assistant.last_seen_at,
+        )
+        for assistant, installation, team in rows
+    ]
+
+
+@router.get("/assistants")
+async def list_own_assistants(actor: HumanDep, db: DB) -> list[OwnAssistant]:
+    """List the person's Assistants on computers not revoked, with the Teams they write in.
+
+    Args:
+        actor: The logged-in human.
+        db: Database session.
+    """
+    return await _own_assistants(
+        db,
+        select(Assistant).where(
+            Assistant.user_id == actor.user.id, Installation.revoked_at.is_(None)
+        ),
+    )
+
+
+@router.get("/assistants/{assistant_id}")
+async def get_own_assistant(assistant_id: int, actor: ActorDep, db: DB) -> OwnAssistant:
+    """Return one of the person's Assistants; the plugin waits here for a link to be chosen.
+
+    Args:
+        assistant_id: The Assistant.
+        actor: Its person in the web, or the installation it runs on.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when it is not the caller's.
+    """
+    query = select(Assistant).where(
+        Assistant.id == assistant_id, Assistant.user_id == actor.user.id
+    )
+    if actor.installation is not None:
+        query = query.where(Assistant.installation_id == actor.installation.id)
+    found = await _own_assistants(db, query)
+    if not found:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such Assistant")
+    return found[0]
+
+
+@router.put("/assistants/{assistant_id}/team")
+async def link_assistant(
+    assistant_id: int, body: AssistantLink, actor: HumanDep, db: DB
+) -> OwnAssistant:
+    """Link an Assistant's project to one of the person's Teams, or unlink it.
+
+    Only the person, from the web: the model in a session cannot move itself to another Team
+    (decision 0020).
+
+    Args:
+        assistant_id: The Assistant.
+        body: The Team, or ``None``.
+        actor: The logged-in human.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when the Assistant is not theirs or they are not in the Team.
+    """
+    assistant = await db.get(Assistant, assistant_id)
+    if assistant is None or assistant.user_id != actor.user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such Assistant")
+    if body.team_id is not None:
+        await membership(db, body.team_id, actor.user.id)
+    assistant.team_id = body.team_id
+    await db.commit()
+    return await get_own_assistant(assistant_id, actor, db)
 
 
 @router.get("/teams/{team_id}/topics")
@@ -682,8 +854,9 @@ async def list_topics(
     Raises:
         HTTPException: 404 when the caller is not in the Team.
     """
+    require_reader(actor)
     await membership(db, team_id, actor.user.id)
-    query = select(Topic).where(Topic.team_id == team_id)
+    query = select(Topic).where(Topic.team_id == team_id, Topic.deleted_at.is_(None))
     if area_id is not None:
         query = query.where(Topic.area_id == area_id)
     if status_filter is not None:
@@ -709,9 +882,11 @@ async def create_topic(
         HTTPException: 404 when there is no such Area in the caller's Teams; 422 for an
             unknown addressee.
     """
+    require_reader(actor)
     area = await db.get(Area, area_id)
     if area is None or await db.get(Member, (area.team_id, actor.user.id)) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such Area")
+    await require_writer(db, actor, area.team_id)
     topic = Topic(
         team_id=area.team_id,
         area_id=area.id,
@@ -824,7 +999,7 @@ async def post_message(
             a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
             not an earlier Message of the Topic.
     """
-    topic = await get_topic(db, topic_id, actor, lock=True)
+    topic = await get_topic(db, topic_id, actor, lock=True, write=True)
     if body.number != topic.last_number + 1:
         unread_rows = list(
             await db.scalars(
@@ -892,7 +1067,7 @@ async def hold_topic(request: Request, topic_id: int, actor: ActorDep, db: DB) -
     """
     if actor.assistant is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Assistant holds a Topic")
-    topic = await get_topic(db, topic_id, actor, lock=True)
+    topic = await get_topic(db, topic_id, actor, lock=True, write=True)
     topic.holder_assistant_id = actor.assistant.id
     await _join(db, topic.id, {actor.user.id})
     await db.commit()
@@ -916,7 +1091,7 @@ async def settle_topic(
     Raises:
         HTTPException: 404 when there is no such Topic in the caller's Teams.
     """
-    topic = await get_topic(db, topic_id, actor, lock=True)
+    topic = await get_topic(db, topic_id, actor, lock=True, write=True)
     topic.status = body.status
     if body.outcome is not None:
         topic.outcome = body.outcome.strip()
@@ -955,6 +1130,11 @@ async def mark_read(topic_id: int, body: ReadIn, actor: ActorDep, db: DB) -> Top
         HTTPException: 404 when there is no such Topic in the caller's Teams.
     """
     topic = await get_topic(db, topic_id, actor)
+    scope = pushed_teams(actor)
+    if scope is not None and topic.team_id not in scope:
+        # Looked up for another project: the Team's Inbox stays as it was (decision 0020).
+        (out,) = await _topic_outs(db, [topic], actor.user.id)
+        return out
     number = min(body.number, topic.last_number)
     await db.execute(
         insert(Participant)
@@ -976,23 +1156,33 @@ async def mark_read(topic_id: int, body: ReadIn, actor: ActorDep, db: DB) -> Top
 async def inbox(actor: ActorDep, db: DB) -> list[TopicOut]:
     """List Topics the caller takes part in that have unread Messages (decision 0006).
 
-    The Inbox is shared by all of a User's Assistants.
+    The Inbox is shared by all of a User's Assistants; an Assistant sees the part of it in the
+    Team its project is linked to, and an unlinked one sees nothing (decision 0020).
 
     Args:
         actor: The caller.
         db: Database session.
+
+    Raises:
+        HTTPException: 403 for a plugin request without an Assistant.
     """
+    require_reader(actor)
+    query = (
+        select(Topic)
+        .join(Participant, Participant.topic_id == Topic.id)
+        .where(
+            Participant.user_id == actor.user.id,
+            Participant.last_read < Topic.last_number,
+            or_(Topic.status == TopicStatus.Open, Participant.addressed),
+            Topic.deleted_at.is_(None),
+        )
+    )
+    scope = pushed_teams(actor)
+    if scope is not None:
+        query = query.where(Topic.team_id.in_(scope))
     topics = list(
         await db.scalars(
-            select(Topic)
-            .join(Participant, Participant.topic_id == Topic.id)
-            .where(
-                Participant.user_id == actor.user.id,
-                Participant.last_read < Topic.last_number,
-                or_(Topic.status == TopicStatus.Open, Participant.addressed),
-            )
-            .order_by(Participant.addressed.desc(), Topic.updated_at.desc())
-            .limit(100)
+            query.order_by(Participant.addressed.desc(), Topic.updated_at.desc()).limit(100)
         )
     )
     return await _topic_outs(db, topics, actor.user.id)
