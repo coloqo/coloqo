@@ -164,12 +164,13 @@ class Seeder:
         self.people[pseudonym] = client
         return client
 
-    def assistant(self, pseudonym: str, project: str) -> str:
+    def assistant(self, pseudonym: str, project: str, team_id: int) -> str:
         """Install a plugin for a person, confirmed by them, and register its Assistant.
 
         Args:
             pseudonym: Whose Assistant.
             project: Project folder the Assistant works in.
+            team_id: The Team the project's ``.coloqo.json`` names.
 
         Raises:
             httpx.HTTPStatusError: The server refused a step.
@@ -188,6 +189,7 @@ class Seeder:
             json={
                 "project_key": hashlib.sha256(f"{pseudonym}/{project}".encode()).hexdigest(),
                 "project_name": project,
+                "team_id": team_id,
             },
         )
         registered.raise_for_status()
@@ -275,6 +277,12 @@ def topic(
     for number, say in enumerate(replies, start=2):
         if say.hold:
             seeder.client(say.who).post(f"/api/topics/{topic_id}/hold").raise_for_status()
+        if say.kind == "stage":
+            stage = seeder.client(say.who).post(
+                f"/api/topics/{topic_id}/stage", json={"text": say.body}
+            )
+            stage.raise_for_status()
+            continue
         file_ids = [seeder.upload(say.who, topic_id, n, c) for n, c in say.files]
         response = seeder.client(say.who).post(
             f"/api/topics/{topic_id}/messages",
@@ -678,6 +686,7 @@ def planning_topic(s: Seeder, area_id: int, lead: str, dev: str) -> tuple[int, l
                 to=lead,
                 reply_to=15,
             ),
+            Say(dev, "Review rounds: indexer !40", 2, kind="stage"),
         ],
     )
 
@@ -712,11 +721,11 @@ def main() -> None:
         f"/api/teams/{team_id}/areas",
         json={"name": "Web app", "description": "The customer-facing web application"},
     ).json()["id"]
-    alice_web = s.assistant("alice", "web-app")
-    bob_api = s.assistant("bob", "billing-api")
-    carol_mobile = s.assistant("carol", "mobile")
-    alice_lead = s.assistant("alice", "team-lead")
-    dave_api = s.assistant("dave", "search-api")
+    alice_web = s.assistant("alice", "web-app", team_id)
+    bob_api = s.assistant("bob", "billing-api", team_id)
+    carol_mobile = s.assistant("carol", "mobile", team_id)
+    alice_lead = s.assistant("alice", "team-lead", team_id)
+    dave_api = s.assistant("dave", "search-api", team_id)
     development = alice.post(
         f"/api/teams/{team_id}/areas",
         json={"name": "Development", "description": "What to take next and how to build it"},
@@ -801,6 +810,7 @@ def main() -> None:
                 12,
                 to="alice",
             ),
+            Say(alice_web, "Implementation: the CSV export fix, ACME-42", 8, kind="stage"),
         ],
         issue="ACME-41",
     )
@@ -839,6 +849,19 @@ def main() -> None:
     )
 
     planning, planning_ages = planning_topic(s, development, alice_lead, dave_api)
+    alice.patch(
+        f"/api/topics/{settings_topic}",
+        json={
+            "status": "closed",
+            "outcome": "An anchor menu first (ACME-77); tabs only if needed.",
+        },
+    ).raise_for_status()
+    settings_ages.append(225)
+    for person, color in ((bob, (47, 143, 107)), (carol, (192, 87, 58))):
+        face = png(
+            320, 320, color, [(110, 90, 100, 120, (250, 240, 230)), (60, 230, 200, 90, color)]
+        )
+        person.put("/api/me/avatar", content=face).raise_for_status()
 
     database = make_url(args.database)
     with psycopg.connect(
@@ -864,6 +887,10 @@ def main() -> None:
                 "UPDATE files SET created_at = messages.created_at FROM messages "
                 "WHERE files.message_id = messages.id AND messages.topic_id = %s",
                 (topic_id,),
+            )
+            connection.execute(
+                "UPDATE topics SET closed_at = now() - %s WHERE id = %s AND closed_at IS NOT NULL",
+                (timedelta(minutes=ages[-1]), topic_id),
             )
             connection.execute(
                 "UPDATE topics SET created_at = now() - %s, updated_at = now() - %s WHERE id = %s",

@@ -91,7 +91,7 @@ export function Welcome() {
 }
 
 /** The only screen until the person has chosen how the Team sees them. */
-export function ChoosePseudonym() {
+export function ChoosePseudonym({ github }: { github: boolean }) {
   const { t } = useTranslation()
   return (
     <Frame>
@@ -99,7 +99,7 @@ export function ChoosePseudonym() {
       <h1 className="text-3xl font-semibold tracking-tight">{t('pseudonym.title')}</h1>
       <p className="leading-relaxed text-stone-700 dark:text-stone-300">{t('pseudonym.lead')}</p>
       <div className="max-w-sm">
-        <PseudonymForm />
+        <PseudonymForm offerGithubAvatar={github} />
       </div>
     </Frame>
   )

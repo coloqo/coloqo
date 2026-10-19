@@ -12,6 +12,7 @@ import { DevicePage } from './pages/Device'
 import { Home } from './pages/Home'
 import { InboxPage } from './pages/Inbox'
 import { JoinPage } from './pages/Join'
+import { LinkPage } from './pages/Link'
 import { SettingsPage } from './pages/Settings'
 import { TeamPage } from './pages/Team'
 import { TopicPage } from './pages/Topic'
@@ -42,6 +43,7 @@ function Shell({ me }: { me: Me }) {
         <Route path="/join/:token" element={<JoinPage />} />
         <Route path="/settings" element={<SettingsPage me={me} />} />
         <Route path="/connect" element={<ConnectPage me={me} />} />
+        <Route path="/assistants/:assistantId/link" element={<LinkPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
@@ -74,6 +76,6 @@ export default function App() {
     )
   }
   if (!me.data) return <Welcome />
-  if (!me.data.pseudonym) return <ChoosePseudonym />
+  if (!me.data.pseudonym) return <ChoosePseudonym github={me.data.github ?? false} />
   return <Shell me={me.data} />
 }

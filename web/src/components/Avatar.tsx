@@ -18,8 +18,20 @@ function initials(name: string): string {
   return letters.toUpperCase()
 }
 
-/** A person: initials on a color of their name. */
-export function PersonAvatar({ name, size }: { name: string; size: number }) {
+/** A person: their avatar when they set one, otherwise initials on a color of their name. */
+export function PersonAvatar({ name, size, src }: { name: string; size: number; src?: string | null }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        className="inline-block shrink-0 rounded-full bg-stone-200 object-cover dark:bg-stone-700"
+        style={{ width: size, height: size }}
+      />
+    )
+  }
   return (
     <span
       aria-hidden="true"
@@ -68,17 +80,27 @@ export function WorkerIcon({ size }: { size: number }) {
 }
 
 /** The face of a Message's author: the person alone, or an Assistant with its person in the corner. */
-export function AuthorAvatar({ person, assistant, size }: { person: string | null; assistant: boolean; size: number }) {
+export function AuthorAvatar({
+  person,
+  assistant,
+  size,
+  src,
+}: {
+  person: string | null
+  assistant: boolean
+  size: number
+  src?: string | null
+}) {
   const badge = Math.round(size * 0.45)
   let face: ReactNode
   if (assistant) face = <AssistantIcon size={size} />
-  else face = <PersonAvatar name={person ?? '?'} size={size} />
+  else face = <PersonAvatar name={person ?? '?'} size={size} src={src} />
   return (
     <span className="relative inline-block shrink-0" style={{ width: size, height: size }}>
       {face}
       {assistant && person && (
         <span className="absolute -right-1 -bottom-1 flex rounded-full ring-2 ring-[var(--feed-ring)]">
-          <PersonAvatar name={person} size={badge} />
+          <PersonAvatar name={person} size={badge} src={src} />
         </span>
       )}
     </span>
