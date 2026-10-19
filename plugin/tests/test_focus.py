@@ -6,9 +6,9 @@ from typing import ClassVar
 import pytest
 
 from coloqo import focus, hooks
-from coloqo.api import Project, link_file_team
+from coloqo.api import Api, Project, link_file_team
 from coloqo.focus import Focus
-from coloqo.watch import describe
+from coloqo.watch import deliver, describe
 
 ME, MINE, OTHER = 1, 10, 20
 
@@ -219,3 +219,48 @@ def test_session_start_briefs_a_linked_project_only(
     assert "focus: mine" in linked
     assert quiet.strip() == "Coloqo: this project is not linked."
     assert FakeApi.asked == ["/briefing"]
+
+
+def test_watch_prints_only_what_the_focus_lets_through(config: Path) -> None:
+    """The watch reads the session's focus for each event.
+
+    Args:
+        config: The configuration directory.
+    """
+    to_me = _message(to_user_id=ME)
+
+    before = deliver("message", to_me, ME, MINE)
+    focus.save(Focus("quiet"))
+    after = deliver("message", to_me, ME, MINE)
+
+    assert before is not None
+    assert after is None
+
+
+def test_register_sends_the_link_files_team(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Registration carries the Team the project's ``.coloqo.json`` names, and keeps the answer.
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    sent: list[dict] = []
+
+    def request(self: Api, method: str, path: str, json: dict) -> dict:
+        """Record the registration and answer like the server.
+
+        Args:
+            self: The client.
+            method: HTTP method.
+            path: API path.
+            json: Request body.
+        """
+        sent.append(json)
+        return {"id": 5, "name": "alice · api", "team_id": 7, "team": "Acme"}
+
+    monkeypatch.setattr(Api, "request", request)
+    api = Api(token="t")
+
+    api.register(Project(key="k" * 64, name="api", team_id=7))
+
+    assert sent == [{"project_key": "k" * 64, "project_name": "api", "team_id": 7}]
+    assert (api.assistant_id, api.team_id, api.team) == (5, 7, "Acme")

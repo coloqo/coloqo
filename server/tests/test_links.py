@@ -180,12 +180,14 @@ def test_person_links_in_the_web_not_the_plugin(two: Two, plugin: Callable[..., 
 
     by_plugin = assistant.client.put(path, json={"team_id": two.acme})
     by_bob = two.bob.put(path, json={"team_id": two.acme})
+    after_bob = two.alice.get(f"/api/assistants/{assistant.assistant_id}").json()["team_id"]
     linked = two.alice.put(path, json={"team_id": two.globex})
     listed = two.alice.get("/api/assistants").json()
     unlinked = two.alice.put(path, json={"team_id": None})
 
     assert by_plugin.status_code == 403
     assert by_bob.status_code == 404
+    assert after_bob is None
     assert linked.json()["team"] == "Globex"
     assert [(a["name"], a["team"]) for a in listed] == [("alice · notes", "Globex")]
     assert unlinked.json()["team_id"] is None
