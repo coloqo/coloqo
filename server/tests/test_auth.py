@@ -109,6 +109,8 @@ def test_device_login_gives_a_token_once(
         "via": "plugin",
         "assistant": "alice · billing-api",
         "providers": ["github"],
+        "avatar": None,
+        "github": False,
     }
 
 

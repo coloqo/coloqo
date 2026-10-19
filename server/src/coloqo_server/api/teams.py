@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from coloqo_server.api.avatars import avatar_url
 from coloqo_server.models import (
     Area,
     Assistant,
@@ -95,13 +96,15 @@ class MemberOut(BaseModel):
         user_id: User id.
         pseudonym: The name the Team sees.
         role: Owner or member.
-        assistants: The Member's Assistants.
+        assistants: The Member's Assistants linked to this Team.
+        avatar: Where their avatar is served; ``None`` shows their initials.
     """
 
     user_id: int
     pseudonym: str | None
     role: Role
     assistants: list[AssistantOut]
+    avatar: str | None = None
 
 
 class AreaIn(BaseModel):
@@ -332,6 +335,7 @@ async def get_team(team_id: int, actor: ActorDep, db: DB) -> TeamDetail:
             user_id=user.id,
             pseudonym=user.pseudonym,
             role=member.role,
+            avatar=avatar_url(user),
             assistants=[
                 AssistantOut(id=a.id, name=a.name, last_seen_at=a.last_seen_at)
                 for a in assistants

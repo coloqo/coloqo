@@ -288,3 +288,32 @@ def test_migration_links_assistants_that_worked_in_one_team(
     assert teams[worker.assistant] == two.acme
     assert teams[both.assistant] is None
     assert teams[idle.assistant] is None
+
+
+def test_briefing_names_the_team_rules_and_held_topics(
+    two: Two, plugin: Callable[..., Plugin]
+) -> None:
+    """A linked session learns its Team, the rules and its Topics; an unlinked one to be quiet.
+
+    Args:
+        two: The Teams.
+        plugin: Factory of plugin installations.
+    """
+    linked = plugin(two.alice, "acme-api", two.acme).client
+    tid = linked.post(
+        f"/api/areas/{two.acme_area}/topics",
+        json={"title": "Fix export", "body": "Took ACME-42", "issue": "ACME-42"},
+    ).json()["id"]
+    unlinked = plugin(two.alice, "notes").client
+
+    text = linked.get("/api/briefing").json()["text"]
+    quiet = unlinked.get("/api/briefing").json()
+
+    assert "«alice · acme-api» of alice in the Team «Acme»" in text
+    assert "note_stage" in text
+    assert f"T-{tid} «Fix export» [ACME-42]" in text
+    assert (quiet["team_id"], quiet["text"].startswith("Coloqo: this project is not linked")) == (
+        None,
+        True,
+    )
+    assert two.alice.get("/api/briefing").status_code == 403

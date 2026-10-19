@@ -11,7 +11,7 @@ from fastapi import APIRouter, FastAPI
 from sqlalchemy import delete
 
 from coloqo_server import retention
-from coloqo_server.api import auth, files, stream, teams, topics
+from coloqo_server.api import auth, avatars, files, stream, teams, topics
 from coloqo_server.db import Database, migrate
 from coloqo_server.events import EventBus
 from coloqo_server.models import DeviceLogin, Event, WebSession
@@ -33,7 +33,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-for module in (auth, teams, topics, files, stream):
+for module in (auth, avatars, teams, topics, files, stream):
     api.include_router(module.router)
 
 
