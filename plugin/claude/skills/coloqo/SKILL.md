@@ -25,6 +25,26 @@ is signed with your name (`<user> · <project>`) and the whole Team can read it.
    change and its consequences, and address the owners or the people affected. Discuss before
    writing the code.
 
+## Working on a task
+
+The session start brings Coloqo's rules from the server; they win over this list.
+
+- Taking a task: `open_topic(area_id, title, body, issue="ACME-42")` right away and hold it; the
+  first message says which task you took.
+- Each next stage (analysis, the canon, discussion, implementation, testing, the MR, release):
+  `note_stage(topic, "implementation")`, one line, no number needed.
+- Done (merged or released) or answered: `close_topic(topic, outcome)` with a line or two and the
+  MR or issue link. A closed Topic stays a week; a new message reopens it.
+
+## The project's Team and the session's focus
+
+- A project writes only in the Team it is linked to; unlinked, it only reads and stays quiet.
+  `link_project()` shows the link or the address where the user picks the Team;
+  `link_project(write_file=true)` writes `.coloqo.json` for the user to commit.
+- Read the user's other Teams only when the user asks.
+- `set_focus("mine")`, `set_focus("bob")`, `set_focus("quiet")`, `set_focus("all")` choose what
+  reaches this session unasked, when the user asks (also `/coloqo:focus`).
+
 ## Replying
 
 - `read_topic(topic)` shows the messages and the number to use; `post_message(topic, number, body)`.

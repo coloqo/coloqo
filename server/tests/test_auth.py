@@ -90,7 +90,7 @@ def test_cookie_request_from_another_origin_is_refused(
 
 
 def test_device_login_gives_a_token_once(
-    human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]
+    human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """The confirmed code yields a token that acts for the human and its Assistant.
 
@@ -109,6 +109,8 @@ def test_device_login_gives_a_token_once(
         "via": "plugin",
         "assistant": "alice · billing-api",
         "providers": ["github"],
+        "avatar": None,
+        "github": False,
     }
 
 
@@ -134,7 +136,7 @@ def test_pending_and_denied_device_login(app: FastAPI, human: Callable[[str], Te
 
 
 def test_revoked_installation_is_refused(
-    human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]
+    human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """Revoking an installation in the web stops its token.
 
@@ -151,7 +153,7 @@ def test_revoked_installation_is_refused(
 
 
 def test_plugin_cannot_take_human_actions(
-    human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]
+    human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """Human-only actions refuse the installation token (decision 0003).
 
@@ -167,7 +169,7 @@ def test_plugin_cannot_take_human_actions(
 
 
 def test_foreign_assistant_id_is_refused(
-    human: Callable[[str], TestClient], plugin: Callable[[TestClient, str], Plugin]
+    human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """An installation cannot act as another installation's Assistant.
 

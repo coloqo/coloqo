@@ -12,7 +12,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.models import Assistant, Installation, User, WebSession
+from coloqo_server.models import Assistant, Installation, Team, User, WebSession
 
 SESSION_COOKIE = "__Host-coloqo_session"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -202,3 +202,82 @@ ActorDep = Annotated[Actor, Depends(get_member_actor)]
 AnyActorDep = Annotated[Actor, Depends(get_actor)]
 HumanDep = Annotated[Actor, Depends(get_human_member)]
 AnyHumanDep = Annotated[Actor, Depends(get_human)]
+
+
+LINK_HINT = (
+    "Link it: run `uvx coloqo link` and confirm in the browser, or commit a `.coloqo.json` "
+    "naming the Team (decision 0020)."
+)
+
+
+def require_reader(actor: Actor) -> None:
+    """Refuse Team data to an installation token that names no Assistant.
+
+    Reading crosses the person's Teams, for the person or any of their Assistants (decision
+    0020); a bare installation token is only for registering Assistants.
+
+    Args:
+        actor: The caller.
+
+    Raises:
+        HTTPException: 403 for a plugin request without an Assistant.
+    """
+    if actor.installation is not None and actor.assistant is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Name the Assistant in X-Coloqo-Assistant to read Teams"
+        )
+
+
+async def require_writer(db: AsyncSession, actor: Actor, team_id: int) -> None:
+    """Refuse writing into a Team other than the one the caller's project is linked to.
+
+    A human in the web writes in any of their Teams; an Assistant only in its linked Team.
+
+    Args:
+        db: Database session.
+        actor: The caller, already known to be a member of the Team.
+        team_id: The Team written to.
+
+    Raises:
+        HTTPException: 403 ``not_linked`` for an unlinked Assistant, ``other_team`` for one
+            linked to another Team, or for a plugin request without an Assistant.
+    """
+    require_reader(actor)
+    assistant = actor.assistant
+    if assistant is None or assistant.team_id == team_id:
+        return
+    if assistant.team_id is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "not_linked",
+                "message": "This project is not linked to a Team: its Assistant may read, "
+                f"not write. {LINK_HINT}",
+            },
+        )
+    linked = await db.get(Team, assistant.team_id)
+    target = await db.get(Team, team_id)
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        {
+            "code": "other_team",
+            "message": f"This project is linked to «{linked.name if linked else '?'}»; it "
+            f"writes only there. Write in «{target.name if target else '?'}» from the web, "
+            "or relink the project in the web settings.",
+        },
+    )
+
+
+def pushed_teams(actor: Actor) -> set[int] | None:
+    """Return the Teams whose news may reach the caller unasked: the Inbox, the event stream.
+
+    Args:
+        actor: The caller.
+
+    Returns:
+        ``None`` for the web, where every Team of the person counts; the linked Team for an
+        Assistant; an empty set for an unlinked one, which is told nothing (decision 0020).
+    """
+    if actor.assistant is None:
+        return None
+    return {actor.assistant.team_id} if actor.assistant.team_id else set()

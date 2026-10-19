@@ -171,7 +171,7 @@ def human(app: FastAPI) -> Iterator[Callable[[str], TestClient]]:
 
 
 @pytest.fixture
-def plugin(app: FastAPI) -> Iterator[Callable[[TestClient, str], Plugin]]:
+def plugin(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
     """Make plugin installations confirmed by a human, each registering an Assistant.
 
     Args:
@@ -179,12 +179,13 @@ def plugin(app: FastAPI) -> Iterator[Callable[[TestClient, str], Plugin]]:
     """
     clients: list[TestClient] = []
 
-    def install(web: TestClient, project: str) -> Plugin:
+    def install(web: TestClient, project: str, team_id: int | None = None) -> Plugin:
         """Log a plugin in through the device code, confirmed by ``web``'s human.
 
         Args:
             web: The human's web client.
             project: Project name of the Assistant.
+            team_id: The Team its project is linked to, as a ``.coloqo.json`` would name it.
         """
         client = TestClient(app, base_url=ORIGIN)
         client.__enter__()
@@ -198,6 +199,7 @@ def plugin(app: FastAPI) -> Iterator[Callable[[TestClient, str], Plugin]]:
             json={
                 "project_key": hashlib.sha256(project.encode()).hexdigest(),
                 "project_name": project,
+                "team_id": team_id,
             },
         ).json()
         client.headers["X-Coloqo-Assistant"] = str(registered["id"])
@@ -231,3 +233,51 @@ def live_url(app: FastAPI, settings: Settings) -> Iterator[str]:
     yield f"http://127.0.0.1:{port}"
     server.should_exit = True
     thread.join(10)
+
+
+@dataclass
+class Setup:
+    """A Team of alice (owner) and bob, an Area, and an Assistant each.
+
+    Attributes:
+        alice: Alice's web client.
+        bob: Bob's web client.
+        alice_api: Alice's Assistant.
+        bob_web: Bob's Assistant.
+        team_id: The Team.
+        area_id: The Area.
+    """
+
+    alice: TestClient
+    bob: TestClient
+    alice_api: Plugin
+    bob_web: Plugin
+    team_id: int
+    area_id: int
+
+
+@pytest.fixture
+def setup(human: Callable[[str], TestClient], plugin: Callable[..., Plugin]) -> Setup:
+    """Build the Team.
+
+    Args:
+        human: Factory of logged-in web clients.
+        plugin: Factory of plugin installations.
+    """
+    alice = human("alice")
+    bob = human("bob")
+    team_id = alice.post("/api/teams", json={"name": "Acme"}).json()["id"]
+    url = alice.post(f"/api/teams/{team_id}/invites").json()["url"]
+    token = url.rsplit("/", 1)[1]
+    assert bob.post(f"/api/invites/{token}/accept").json()["role"] == "member"
+    area_id = alice.post(
+        f"/api/teams/{team_id}/areas", json={"name": "Contracts", "description": "API contracts"}
+    ).json()["id"]
+    return Setup(
+        alice=alice,
+        bob=bob,
+        alice_api=plugin(alice, "billing-api", team_id),
+        bob_web=plugin(bob, "web", team_id),
+        team_id=team_id,
+        area_id=area_id,
+    )

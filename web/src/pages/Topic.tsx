@@ -169,6 +169,7 @@ function MessageItem({
   grouped,
   narrow,
   onReply,
+  avatars,
 }: {
   message: Message
   original: Message | undefined
@@ -177,6 +178,7 @@ function MessageItem({
   grouped: boolean
   narrow: boolean
   onReply: (message: Message) => void
+  avatars: Map<string, string | null | undefined>
 }) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'ru'
@@ -198,7 +200,12 @@ function MessageItem({
     <li id={`m-${message.number}`} className={`group relative flex scroll-mt-4 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
       <div className="shrink-0" style={{ width: size }}>
         {!grouped && (
-          <AuthorAvatar person={message.author} assistant={message.assistant !== null} size={size} />
+          <AuthorAvatar
+            person={message.author}
+            assistant={message.assistant !== null}
+            size={size}
+            src={message.author ? avatars.get(message.author) : null}
+          />
         )}
       </div>
       <div
@@ -273,6 +280,32 @@ function DayDivider({ value }: { value: string }) {
   return (
     <li className="mt-3 flex justify-center">
       <span className="rounded-full bg-stone-200/80 px-3 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">{day}</span>
+    </li>
+  )
+}
+
+/** A stage or a closing: a service line in the middle of the feed, apart from the bubbles (0021). */
+function ServiceLine({ message }: { message: Message }) {
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage ?? 'ru'
+  const who = message.system ? 'Coloqo' : (message.assistant ?? message.author ?? t('team.noName'))
+  const closed = message.kind === 'closed'
+  return (
+    <li id={`m-${message.number}`} className="mt-3 flex scroll-mt-4 justify-center">
+      <span
+        className={`inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-1.5 rounded-full px-3 py-1 text-center text-xs ${
+          closed
+            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200'
+            : 'bg-stone-200/80 text-stone-700 dark:bg-stone-800 dark:text-stone-300'
+        }`}
+        title={absoluteTime(message.created_at, lang, true)}
+      >
+        <span aria-hidden="true">{closed ? '✓' : '⚙'}</span>
+        <span className="font-medium">{who}</span>
+        <span>{closed ? t('message.closedTopic') : '—'}</span>
+        {message.body && <span className="min-w-0 break-words">{message.body}</span>}
+        <span className="text-stone-500 tabular-nums dark:text-stone-400">{clock(message.created_at, lang)}</span>
+      </span>
     </li>
   )
 }
@@ -562,7 +595,7 @@ function Files({ files }: { files: FileInfo[] }) {
 }
 
 function TopicHeader({ topic }: { topic: TopicDetail }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const link = topic.issue ? issueLink(topic.issue) : null
   const waiting = topic.status === 'open' && topic.turns_since_human >= topic.turn_limit
   return (
@@ -610,6 +643,13 @@ function TopicHeader({ topic }: { topic: TopicDetail }) {
         </div>
       </dl>
       {waiting && <Notice>{t('topic.waitsForHumanLong')}</Notice>}
+      {topic.deleted_at ? (
+        <Notice>{t('topic.deleted', { date: absoluteTime(topic.deleted_at, i18n.resolvedLanguage ?? 'ru') })}</Notice>
+      ) : (
+        topic.deletes_at && (
+          <Notice>{t('topic.archived', { date: absoluteTime(topic.deletes_at, i18n.resolvedLanguage ?? 'ru') })}</Notice>
+        )
+      )}
       {topic.status === 'closed' && (
         <div className="rounded-md border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900/60">
           <p className="mb-1 text-xs font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400">
@@ -635,6 +675,7 @@ export function TopicPage({ me }: { me: Me }) {
   const scrolled = useRef(false)
   const marking = useRef(0)
   const narrow = useNarrow()
+  const team = useTeam(topic.data?.team_id ?? 0)
 
   const data = topic.data
   const lastNumber = data?.last_number ?? 0
@@ -675,6 +716,7 @@ export function TopicPage({ me }: { me: Me }) {
   }
 
   const byNumber = new Map(data.messages.map((m) => [m.number, m]))
+  const avatars = new Map((team.data?.members ?? []).map((m) => [m.pseudonym ?? '', m.avatar]))
   // The line "New messages" stands before the first one someone else wrote since the page opened.
   const firstNew =
     newFrom === null
@@ -688,6 +730,15 @@ export function TopicPage({ me }: { me: Me }) {
     const box = document.getElementById('compose-body')
     box?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     box?.focus({ preventScroll: true })
+  }
+
+  if (data.deleted_at) {
+    // Only the card is left: the conversation and its files were deleted (decision 0021).
+    return (
+      <Page>
+        <TopicHeader topic={data} />
+      </Page>
+    )
   }
 
   return (
@@ -709,15 +760,20 @@ export function TopicPage({ me }: { me: Me }) {
                   <Fragment key={message.number}>
                     {newDay && <DayDivider value={message.created_at} />}
                     {divider && <NewDivider />}
-                    <MessageItem
-                      message={message}
-                      me={me}
-                      holder={data.holder_assistant_id}
-                      grouped={!divider && !newDay && continues(message, previous)}
-                      narrow={narrow}
-                      original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}
-                      onReply={reply}
-                    />
+                    {message.kind === 'stage' || message.kind === 'closed' ? (
+                      <ServiceLine message={message} />
+                    ) : (
+                      <MessageItem
+                        message={message}
+                        me={me}
+                        holder={data.holder_assistant_id}
+                        grouped={!divider && !newDay && continues(message, previous)}
+                        narrow={narrow}
+                        original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}
+                        onReply={reply}
+                        avatars={avatars}
+                      />
+                    )}
                   </Fragment>
                 )
               })}

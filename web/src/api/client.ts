@@ -14,6 +14,7 @@ export type TopicDetail = Schemas['TopicDetail']
 export type Message = Schemas['MessageOut']
 export type FileInfo = Schemas['FileOut']
 export type Installation = Schemas['InstallationOut']
+export type OwnAssistant = Schemas['OwnAssistant']
 export type DeviceLogin = Schemas['DeviceLoginOut']
 export type InvitePreview = Schemas['InvitePreview']
 export type Invite = Schemas['InviteOut']
@@ -94,6 +95,23 @@ export async function uploadFile(topicId: number, file: File): Promise<FileInfo>
     throw error
   }
   return body as FileInfo
+}
+
+/** Set the person's avatar from a picture; the server re-encodes it (decision 0019). */
+export async function uploadAvatar(file: File): Promise<void> {
+  // The avatar endpoint takes a raw body, which the OpenAPI document does not describe.
+  const response = await fetch('/api/me/avatar', {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null)
+    const detail = body && typeof body === 'object' && 'detail' in body ? body.detail : response.statusText
+    const error = new ApiError(response.status, detail)
+    onUnauthorized(error)
+    throw error
+  }
 }
 
 /** Where a file is served: an image inline, any other file as an attachment (decision 0018). */

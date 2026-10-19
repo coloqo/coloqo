@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-16 · **Question:** A3, `docs/architecture/architecture.md`
 
-**Refined by decision 0015** (2026-10-17): workers.
+**Refined by decision 0015** (2026-10-17): workers. **By decision 0020** (2026-10-19): a project's Assistant is linked to one Team.
 
 ## Decision
 

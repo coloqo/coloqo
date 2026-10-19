@@ -50,7 +50,8 @@ class TopicStatus(enum.StrEnum):
 
     Attributes:
         Open: Under discussion.
-        Closed: Settled by a human, with an outcome note and link if there is one.
+        Closed: Settled by its holder or a human, with an outcome (decision 0021); kept in the
+            archive for a while, then deleted down to its card.
     """
 
     Open = "open"
@@ -63,10 +64,14 @@ class MessageKind(enum.StrEnum):
     Attributes:
         Message: A turn: written to another Member, their Assistant or everyone.
         Progress: The holding Assistant's note on its own work; not a turn.
+        Stage: The holder moved to the next stage of its task, one line (decision 0021).
+        Closed: The Topic was closed; the body is the outcome (decision 0021).
     """
 
     Message = "message"
     Progress = "progress"
+    Stage = "stage"
+    Closed = "closed"
 
 
 class User(Base):
@@ -75,6 +80,8 @@ class User(Base):
     Attributes:
         id: Identifier.
         pseudonym: The name the person chose; how the Team sees them. ``None`` until chosen.
+        avatar_version: Grows with each avatar the person sets; ``None`` without one, when
+            their initials are shown (decision 0019).
         created_at: When the account appeared.
     """
 
@@ -82,6 +89,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     pseudonym: Mapped[str | None] = mapped_column(String(32), unique=True)
+    avatar_version: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -189,6 +197,8 @@ class Assistant(Base):
         installation_id: The computer it runs on.
         project_key: Hash of the project path; the path itself is not sent.
         name: Shown to the Team, ``alice · billing-api``.
+        team_id: The Team its project is linked to (decision 0020); ``None`` while unlinked,
+            when it may read but neither write nor be told anything.
         created_at: First registration.
         last_seen_at: The last request it made.
     """
@@ -201,6 +211,7 @@ class Assistant(Base):
     installation_id: Mapped[int] = mapped_column(ForeignKey("installations.id", ondelete="CASCADE"))
     project_key: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(100))
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -212,6 +223,8 @@ class Team(Base):
         id: Identifier.
         name: Shown name.
         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
+        archive_days: Days a closed Topic stays before deletion; ``None`` takes the instance's
+            setting (decision 0021).
         created_at: Creation time.
     """
 
@@ -220,6 +233,7 @@ class Team(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     turn_limit: Mapped[int] = mapped_column(Integer, default=10)
+    archive_days: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -302,13 +316,17 @@ class Topic(Base):
         title: One line: the question.
         issue: Tracker issue key or link, if the Topic is for one.
         status: Open or closed.
-        outcome: The human's note on how it was settled, with a link.
+        outcome: How it was settled, with a link to the MR or issue.
         created_by: The User who opened it.
         holder_assistant_id: The Assistant that holds it (decision 0006).
         last_number: Number of the newest Message; the next one gets ``last_number + 1``.
         turns_since_human: Assistants' turns since the last human Message (decision 0007).
         created_at: Creation time.
         updated_at: Time of the newest Message.
+        closed_at: When it was closed; ``None`` while open. The archive time runs from it.
+        idle_warned_at: When its people were told it would close for inactivity; cleared by a
+            new Message.
+        deleted_at: When its Messages and files were deleted; the row stays as its card.
     """
 
     __tablename__ = "topics"
@@ -330,6 +348,9 @@ class Topic(Base):
     turns_since_human: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    idle_warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Message(Base):
@@ -347,6 +368,8 @@ class Message(Base):
         relayed: An Assistant posted its human's own words (``as_human``).
         reply_to: Number of the earlier Message of the same Topic it answers, if any.
         by_holder: Its Assistant held the Topic when it was written.
+        system: Written by Coloqo itself, e.g. closing a Topic for inactivity; the author is
+            then the Topic's opener, only to keep the row whole.
         body: Markdown text, shown without HTML.
         created_at: When it was written.
     """
@@ -369,6 +392,7 @@ class Message(Base):
     relayed: Mapped[bool] = mapped_column(default=False, server_default="false")
     reply_to: Mapped[int | None] = mapped_column(Integer)
     by_holder: Mapped[bool] = mapped_column(default=False, server_default="false")
+    system: Mapped[bool] = mapped_column(default=False, server_default="false")
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

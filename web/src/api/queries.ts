@@ -34,6 +34,7 @@ export function useTeam(teamId: number) {
   return useQuery({
     queryKey: ['team', teamId],
     queryFn: () => call(api.GET('/api/teams/{team_id}', { params: { path: { team_id: teamId } } })),
+    enabled: teamId > 0,
   })
 }
 
@@ -68,6 +69,18 @@ export function useTopic(topicId: number) {
 
 export function useInbox() {
   return useQuery({ queryKey: ['inbox'], queryFn: () => call(api.GET('/api/inbox')) })
+}
+
+export function useOwnAssistants() {
+  return useQuery({ queryKey: ['assistants'], queryFn: () => call(api.GET('/api/assistants')) })
+}
+
+export function useOwnAssistant(assistantId: number) {
+  return useQuery({
+    queryKey: ['assistant', assistantId],
+    queryFn: () =>
+      call(api.GET('/api/assistants/{assistant_id}', { params: { path: { assistant_id: assistantId } } })),
+  })
 }
 
 export function useInstallations() {

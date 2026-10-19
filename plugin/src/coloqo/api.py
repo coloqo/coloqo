@@ -1,6 +1,7 @@
 """The Coloqo API as the plugin uses it (decision 0002)."""
 
 import hashlib
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -44,6 +45,41 @@ class NotLoggedIn(ColoqoError):
     """This computer has no valid installation token."""
 
 
+LINK_FILE = ".coloqo.json"
+"""The file a repository commits to link its projects to a Team (decision 0020)."""
+
+
+def find_link_file(directory: Path) -> Path | None:
+    """Return the ``.coloqo.json`` of a project: in it or a parent, up to the repository's root.
+
+    Args:
+        directory: The project directory.
+    """
+    for folder in (directory, *directory.parents):
+        candidate = folder / LINK_FILE
+        if candidate.is_file():
+            return candidate
+        if (folder / ".git").exists():
+            return None
+    return None
+
+
+def link_file_team(directory: Path) -> int | None:
+    """Return the Team a project's ``.coloqo.json`` names; ``None`` without a usable file.
+
+    Args:
+        directory: The project directory.
+    """
+    found = find_link_file(directory)
+    if found is None:
+        return None
+    try:
+        team = json.loads(found.read_text(encoding="utf-8")).get("team_id")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return team if isinstance(team, int) and not isinstance(team, bool) else None
+
+
 @dataclass
 class Project:
     """The project an Assistant works in.
@@ -51,10 +87,12 @@ class Project:
     Attributes:
         key: SHA-256 of the project's absolute path; the path itself is not sent.
         name: The project folder's name, part of the Assistant's name.
+        team_id: The Team its ``.coloqo.json`` names, if the repository has one (decision 0020).
     """
 
     key: str
     name: str
+    team_id: int | None = None
 
     @staticmethod
     def directory(directory: str | None = None) -> Path:
@@ -79,7 +117,11 @@ class Project:
         """
         path = cls.directory(directory)
         name = path.name or "project"
-        return cls(key=hashlib.sha256(str(path).encode()).hexdigest(), name=name[:60])
+        return cls(
+            key=hashlib.sha256(str(path).encode()).hexdigest(),
+            name=name[:60],
+            team_id=link_file_team(path),
+        )
 
 
 class Api:
@@ -103,6 +145,8 @@ class Api:
         self.http = httpx.Client(base_url=self.url, headers=headers, timeout=timeout)
         self.assistant_id: int | None = None
         self.assistant_name: str | None = None
+        self.team_id: int | None = None
+        self.team: str | None = None
 
     def close(self) -> None:
         """Close the connection."""
@@ -145,10 +189,18 @@ class Api:
             ColoqoError: The server refused the request or could not be reached.
         """
         registered = self.request(
-            "POST", "/assistants", json={"project_key": project.key, "project_name": project.name}
+            "POST",
+            "/assistants",
+            json={
+                "project_key": project.key,
+                "project_name": project.name,
+                "team_id": project.team_id,
+            },
         )
         self.assistant_id = registered["id"]
         self.assistant_name = registered["name"]
+        self.team_id = registered.get("team_id")
+        self.team = registered.get("team")
         self.http.headers["X-Coloqo-Assistant"] = str(self.assistant_id)
         return registered["name"]
 

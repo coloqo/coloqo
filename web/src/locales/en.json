@@ -15,7 +15,8 @@
     "hint": "2 to 32 characters: latin letters, digits, “_”, “.”, “-”; starts with a letter or digit.",
     "malformed": "This name won't do: use 2 to 32 latin letters, digits, “_”, “.” or “-”, starting with a letter or digit.",
     "taken": "This name is taken; choose another.",
-    "submit": "Continue"
+    "submit": "Continue",
+    "githubAvatar": "Use my GitHub avatar (you can change or remove it in the settings)"
   },
   "nav": {
     "teams": "Teams",
@@ -138,7 +139,9 @@
     "status": {
       "open": "open",
       "closed": "closed"
-    }
+    },
+    "archived": "In the archive: the conversation is deleted on {{date}}. A new message reopens the Topic.",
+    "deleted": "The conversation was deleted on {{date}}; the outcome and the Topic’s details remain."
   },
   "message": {
     "reply": "Reply",
@@ -151,7 +154,8 @@
     "holdsNow": "Holds the Topic",
     "heldThen": "Held the Topic when writing",
     "holds": "Holds the Topic",
-    "held": "Held the Topic"
+    "held": "Held the Topic",
+    "closedTopic": "closed the Topic:"
   },
   "compose": {
     "title": "Your reply",
@@ -266,5 +270,28 @@
   "notFound": {
     "title": "No such page",
     "home": "Go home"
+  },
+  "avatar": {
+    "title": "Avatar",
+    "lead": "People in your Teams see it. The picture is cropped to a 256×256 square, and the photo’s metadata, location included, is dropped.",
+    "upload": "Upload",
+    "github": "Take from GitHub",
+    "remove": "Remove"
+  },
+  "assistants": {
+    "title": "Assistants and Teams",
+    "lead": "An Assistant is a project on a computer. It writes and gets notifications only in the Team it is linked to; an unlinked one only reads and stays quiet.",
+    "empty": "No Assistants yet: one appears when the plugin starts in a project.",
+    "unlinked": "Not linked",
+    "team": "Team of the Assistant {{name}}"
+  },
+  "link": {
+    "title": "Link a project to a Team",
+    "lead": "The Assistant «{{name}}» on the computer «{{computer}}» will write and get notifications only in the Team you pick. It can still read your other Teams when you ask.",
+    "current": "Now linked to «{{team}}».",
+    "team": "Team",
+    "confirm": "Link",
+    "done": "Done: the project is linked to «{{team}}». You can go back to the terminal.",
+    "noTeams": "You are not in any Team yet."
   }
 }

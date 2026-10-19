@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from coloqo_server.api.avatars import avatar_url
 from coloqo_server.models import DeviceLogin, Identity, Installation, User, WebSession
 from coloqo_server.providers import LoginProvider, ProviderError
 from coloqo_server.security import (
@@ -42,6 +43,8 @@ class Me(BaseModel):
         via: ``web`` for the browser, ``plugin`` for an installation token.
         assistant: Name of the calling Assistant, if the plugin named one.
         providers: Login providers the instance offers.
+        avatar: Where the person's avatar is served; ``None`` shows their initials.
+        github: The person logs in with GitHub, so their GitHub avatar can be taken.
     """
 
     id: int
@@ -49,6 +52,8 @@ class Me(BaseModel):
     via: str
     assistant: str | None = None
     providers: list[str]
+    avatar: str | None = None
+    github: bool = False
 
 
 class PseudonymIn(BaseModel):
@@ -369,19 +374,25 @@ async def logout(request: Request, actor: AnyHumanDep, db: DB) -> Response:
 
 
 @router.get("/me")
-async def me(request: Request, actor: AnyActorDep) -> Me:
+async def me(request: Request, actor: AnyActorDep, db: DB) -> Me:
     """Return who is calling.
 
     Args:
         request: The incoming request.
         actor: The caller.
+        db: Database session.
     """
+    github = await db.scalar(
+        select(Identity.id).where(Identity.user_id == actor.user.id, Identity.provider == "github")
+    )
     return Me(
         id=actor.user.id,
         pseudonym=actor.user.pseudonym,
         via="web" if actor.is_human else "plugin",
         assistant=actor.assistant.name if actor.assistant else None,
         providers=sorted(_providers(request)),
+        avatar=avatar_url(actor.user),
+        github=github is not None,
     )
 
 
@@ -427,7 +438,7 @@ async def set_pseudonym(request: Request, body: PseudonymIn, actor: AnyHumanDep,
         await db.commit()
     except IntegrityError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, "This name is taken") from error
-    return await me(request, actor)
+    return await me(request, actor, db)
 
 
 @router.post("/device/start")

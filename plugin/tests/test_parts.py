@@ -271,3 +271,40 @@ def test_post_message_sends_the_reply(monkeypatch: pytest.MonkeyPatch) -> None:
             },
         )
     ]
+
+
+class AnsweringApi(RecordingApi):
+    """A stand-in that answers like the server for stages and closing."""
+
+    def request(self, method: str, path: str, json: Any = None) -> dict[str, Any]:
+        """Record a request and answer with what the tool reads back.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            json: Request body.
+        """
+        self.sent.append((method, path, json))
+        return {"number": 6, "ref": "T-3", "title": "Fix", "deletes_at": "2026-10-27T10:00:00Z"}
+
+
+def test_stage_and_closing_send_what_the_server_expects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stage goes without a number; closing carries the outcome.
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = AnsweringApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    staged = mcp_server.note_stage("T-3", "Testing")
+    closed = mcp_server.close_topic("T-3", "Fixed in ACME-42, MR !17")
+
+    assert api.sent == [
+        ("POST", "/topics/3/stage", {"text": "Testing"}),
+        ("PATCH", "/topics/3", {"status": "closed", "outcome": "Fixed in ACME-42, MR !17"}),
+    ]
+    assert staged == "Stage noted as #6."
+    assert closed.endswith("deleted on 2026-10-27.")
