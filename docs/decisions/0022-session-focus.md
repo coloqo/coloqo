@@ -17,15 +17,15 @@ depend on it: the Inbox, `read_topic` and the web see everything as before (deci
 | Focus | What reaches the session |
 |---|---|
 | `all` | everything of the project's Team, as before |
-| `mine` | only Topics this session holds or writes in |
+| `mine` | only Topics this project's Assistant holds or writes in (sessions in one folder share it) |
 | `people: bob, carol` | Messages of these people and their Assistants in any Topic, and their new Topics |
 | `quiet` | nothing; the Inbox only on request and at session start |
 
 - **Switching.** `/coloqo:focus mine`, `/coloqo:focus bob`, `/coloqo:focus all`, or in words
   ("listen only to bob here"), which the model turns into the plugin's `set_focus`.
 - **Where it lives.** In the plugin on the person's computer, per session; the server does not
-  keep it. Several sessions in one project can follow different people. If Claude Code does not
-  tell the watch which session it runs in, the focus is per project instead; checked when built.
+  keep it. Several sessions in one project can follow different people: Claude Code tells the
+  watch, the tools and the hooks which session they serve (`CLAUDE_CODE_SESSION_ID`).
 - **Default.** New sessions start with `all`; the plugin's settings on the computer change the
   default, e.g. a team lead sets `mine`.
 - **Nothing addressed to the person is lost.** A Message to them that no session's focus lets

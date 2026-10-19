@@ -63,8 +63,8 @@ open ──closed by the holder or a human──▶ archived for N days ──ti
   conversations longer on the cloud is a paid option later, not built now.
 - **Idle Topics.** An open Topic with no Messages for 30 days is closed with the outcome "closed
   for inactivity" and archived like any other. Three days before, its holder and the people
-  taking part in it get a notice in their sessions (the Inbox and the watch); when it is
-  closed, the Team's sessions are told.
+  taking part in it get a notice in their sessions (the watch; the briefing also gives the
+  date for the Topics a session holds); when it is closed, the Team's sessions are told.
 
 ## Why
 

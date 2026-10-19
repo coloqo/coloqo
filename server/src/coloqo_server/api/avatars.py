@@ -2,12 +2,13 @@
 
 import asyncio
 import io
+import warnings
 from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
@@ -22,7 +23,9 @@ SIZE = 256
 MAX_UPLOAD = 10 * 1024 * 1024
 """Largest picture accepted for an avatar, before re-encoding."""
 
-Image.MAX_IMAGE_PIXELS = 40_000_000
+MAX_PIXELS = 25_000_000
+"""Largest picture decoded, in pixels: a phone photo fits; a flat 10 MB PNG of a huge size
+would take hundreds of megabytes once decoded."""
 
 AVATAR_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; sandbox",
@@ -60,24 +63,42 @@ def square_webp(data: bytes) -> bytes:
         data: The picture as uploaded or fetched.
 
     Raises:
-        HTTPException: 422 when it is not a picture Pillow can read, or is absurdly large.
+        HTTPException: 422 when it is not a picture Pillow can read, or is over 25 megapixels.
     """
     try:
-        with Image.open(io.BytesIO(data)) as picture:
-            upright = ImageOps.exif_transpose(picture)
-            has_alpha = upright.mode in ("RGBA", "LA", "PA") or "transparency" in upright.info
-            square = ImageOps.fit(
-                upright.convert("RGBA" if has_alpha else "RGB"),
-                (SIZE, SIZE),
-                Image.Resampling.LANCZOS,
-            )
-            out = io.BytesIO()
-            square.save(out, "WEBP", quality=85)
-            return out.getvalue()
-    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError) as error:
+        with warnings.catch_warnings():
+            # Pillow only warns between its limit and twice it; here that is a refusal too.
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            return _encode(data)
+    except Exception as error:
+        # A decoder fails in many ways on a crafted file; each of them is "not a picture".
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "This is not a picture that can be an avatar"
         ) from error
+
+
+def _encode(data: bytes) -> bytes:
+    """Decode, turn upright, crop and encode a picture; ``square_webp`` guards it.
+
+    Args:
+        data: The picture.
+
+    Raises:
+        PIL.Image.DecompressionBombWarning: The picture is over ``MAX_PIXELS``, as an error.
+        PIL.UnidentifiedImageError: It is not a picture.
+        OSError: It is broken.
+    """
+    with Image.open(io.BytesIO(data)) as picture:
+        if picture.width * picture.height > MAX_PIXELS:
+            raise Image.DecompressionBombWarning("The picture is too large")
+        upright = ImageOps.exif_transpose(picture)
+        has_alpha = upright.mode in ("RGBA", "LA", "PA") or "transparency" in upright.info
+        square = ImageOps.fit(
+            upright.convert("RGBA" if has_alpha else "RGB"), (SIZE, SIZE), Image.Resampling.LANCZOS
+        )
+        out = io.BytesIO()
+        square.save(out, "WEBP", quality=85)
+        return out.getvalue()
 
 
 async def _store(request: Request, db: DB, user: User, data: bytes) -> None:

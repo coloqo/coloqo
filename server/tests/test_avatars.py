@@ -80,6 +80,19 @@ def test_not_a_picture_is_refused_and_removal_restores_initials(setup: Setup) ->
     assert setup.alice.get("/api/me").json()["avatar"] is None
 
 
+def test_huge_picture_is_refused_before_decoding(setup: Setup) -> None:
+    """A small file of a huge picture is refused instead of being decoded into memory.
+
+    Args:
+        setup: The Team.
+    """
+    flat = io.BytesIO()
+    Image.new("1", (6000, 5000)).save(flat, "PNG")
+
+    assert len(flat.getvalue()) < 1024 * 1024
+    assert setup.alice.put("/api/me/avatar", content=flat.getvalue()).status_code == 422
+
+
 def test_plugin_cannot_set_an_avatar(setup: Setup) -> None:
     """Only the person, in the web, sets their avatar.
 
