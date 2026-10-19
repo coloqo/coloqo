@@ -10,6 +10,7 @@ from importlib.metadata import version
 from fastapi import APIRouter, FastAPI
 from sqlalchemy import delete
 
+from coloqo_server import retention
 from coloqo_server.api import auth, files, stream, teams, topics
 from coloqo_server.db import Database, migrate
 from coloqo_server.events import EventBus
@@ -36,12 +37,16 @@ for module in (auth, teams, topics, files, stream):
     api.include_router(module.router)
 
 
-async def cleanup(database: Database, settings: Settings) -> None:
-    """Drop old events, expired web sessions and plugin logins, once an hour.
+async def cleanup(database: Database, settings: Settings, bus: EventBus) -> None:
+    """Drop old events, expired web sessions and plugin logins; tend Topics; once an hour.
+
+    Topics: idle ones are warned and closed, archived ones lose their conversation (decision
+    0021).
 
     Args:
         database: The database.
         settings: Instance settings with the event retention.
+        bus: Wakes the streams of people told about Topics.
     """
     while True:
         try:
@@ -55,6 +60,7 @@ async def cleanup(database: Database, settings: Settings) -> None:
                 await db.execute(delete(WebSession).where(WebSession.expires_at < moment))
                 await db.execute(delete(DeviceLogin).where(DeviceLogin.expires_at < moment))
                 await db.commit()
+                bus.wake(await retention.tend(db, settings, moment))
         except Exception:
             log.exception("Cleanup failed")
         await asyncio.sleep(CLEANUP_SECONDS)
@@ -88,7 +94,7 @@ def create_app(
             app: The application.
         """
         await asyncio.to_thread(migrate, settings.database_url, settings.files_dir)
-        task = asyncio.create_task(cleanup(database, settings))
+        task = asyncio.create_task(cleanup(database, settings, app.state.bus))
         yield
         task.cancel()
         await database.dispose()

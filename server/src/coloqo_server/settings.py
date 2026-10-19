@@ -43,6 +43,10 @@ class Settings(BaseSettings):
         preview_max_bytes: Largest image the web shows inline; a larger one is listed as an
             ordinary file, since there are no thumbnails yet (decision 0018).
         event_retention_days: How long the event log is kept (decision 0008).
+        archive_days: How long a closed Topic stays before its conversation is deleted; a Team
+            may set its own (decision 0021).
+        idle_close_days: An open Topic without Messages this long is closed.
+        idle_warn_days: How long before that its people are told.
     """
 
     model_config = SettingsConfigDict(env_prefix="COLOQO_")
@@ -60,3 +64,6 @@ class Settings(BaseSettings):
     team_storage_bytes: int = 5 * 1024 * 1024 * 1024
     preview_max_bytes: int = 10 * 1024 * 1024
     event_retention_days: int = 7
+    archive_days: int = 7
+    idle_close_days: int = 30
+    idle_warn_days: int = 3

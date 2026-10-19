@@ -233,3 +233,51 @@ def live_url(app: FastAPI, settings: Settings) -> Iterator[str]:
     yield f"http://127.0.0.1:{port}"
     server.should_exit = True
     thread.join(10)
+
+
+@dataclass
+class Setup:
+    """A Team of alice (owner) and bob, an Area, and an Assistant each.
+
+    Attributes:
+        alice: Alice's web client.
+        bob: Bob's web client.
+        alice_api: Alice's Assistant.
+        bob_web: Bob's Assistant.
+        team_id: The Team.
+        area_id: The Area.
+    """
+
+    alice: TestClient
+    bob: TestClient
+    alice_api: Plugin
+    bob_web: Plugin
+    team_id: int
+    area_id: int
+
+
+@pytest.fixture
+def setup(human: Callable[[str], TestClient], plugin: Callable[..., Plugin]) -> Setup:
+    """Build the Team.
+
+    Args:
+        human: Factory of logged-in web clients.
+        plugin: Factory of plugin installations.
+    """
+    alice = human("alice")
+    bob = human("bob")
+    team_id = alice.post("/api/teams", json={"name": "Acme"}).json()["id"]
+    url = alice.post(f"/api/teams/{team_id}/invites").json()["url"]
+    token = url.rsplit("/", 1)[1]
+    assert bob.post(f"/api/invites/{token}/accept").json()["role"] == "member"
+    area_id = alice.post(
+        f"/api/teams/{team_id}/areas", json={"name": "Contracts", "description": "API contracts"}
+    ).json()["id"]
+    return Setup(
+        alice=alice,
+        bob=bob,
+        alice_api=plugin(alice, "billing-api", team_id),
+        bob_web=plugin(bob, "web", team_id),
+        team_id=team_id,
+        area_id=area_id,
+    )

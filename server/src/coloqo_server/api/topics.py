@@ -1,11 +1,11 @@
 """Assistants, Topics, Messages and the Inbox (decisions 0003, 0006, 0007)."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,6 +146,7 @@ class MessageOut(BaseModel):
         relayed: The Assistant posted its human's own words.
         reply_to: Number of the Message it answers, if any.
         by_holder: Its Assistant held the Topic when it was written.
+        system: Written by Coloqo itself, e.g. closing a Topic for inactivity.
         body: Markdown text.
         files: Files attached to it.
         created_at: When it was written.
@@ -161,6 +162,7 @@ class MessageOut(BaseModel):
     relayed: bool
     reply_to: int | None
     by_holder: bool
+    system: bool
     body: str
     files: list[FileOut]
     created_at: datetime
@@ -189,6 +191,9 @@ class TopicOut(BaseModel):
         addressed: Some unread Message is addressed to the caller.
         created_at: Creation time.
         updated_at: Time of the newest Message.
+        closed_at: When it was closed; ``None`` while open.
+        deletes_at: When its conversation will be deleted, while it is in the archive.
+        deleted_at: When its conversation was deleted; the rest is its card (decision 0021).
     """
 
     id: int
@@ -210,6 +215,9 @@ class TopicOut(BaseModel):
     addressed: bool
     created_at: datetime
     updated_at: datetime
+    closed_at: datetime | None
+    deletes_at: datetime | None
+    deleted_at: datetime | None
 
 
 class TopicDetail(TopicOut):
@@ -246,7 +254,8 @@ class MessageIn(BaseModel):
     Attributes:
         number: The number the writer believes is next: the Topic's ``last_number + 1``.
         body: Markdown text.
-        kind: ``message`` — a turn; ``progress`` — the holder's note on its own work.
+        kind: ``message`` — a turn; ``progress`` — the holder's note on its own work. Stage
+            and closing lines have their own operations.
         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
         file_ids: Files uploaded to this Topic to attach.
         as_human: The Assistant relays its human's own words; resets the turn count.
@@ -261,13 +270,39 @@ class MessageIn(BaseModel):
     as_human: bool = False
     reply_to: int | None = Field(default=None, ge=1)
 
+    @field_validator("kind")
+    @classmethod
+    def _plain_kind(cls, kind: MessageKind) -> MessageKind:
+        """Refuse stage and closing lines here: they go through their own operations.
+
+        Args:
+            kind: The requested kind.
+
+        Raises:
+            ValueError: For ``stage`` or ``closed``.
+        """
+        if kind not in (MessageKind.Message, MessageKind.Progress):
+            raise ValueError("kind is message or progress; a stage goes to /stage")
+        return kind
+
+
+class StageIn(BaseModel):
+    """The holder moved to the next stage of its task (decision 0021).
+
+    Attributes:
+        text: One line, e.g. "implementation" or "MR !17 open".
+    """
+
+    text: str = Field(min_length=1, max_length=200)
+
 
 class TopicPatch(BaseModel):
-    """A human settling or reopening a Topic.
+    """Closing a Topic with an outcome, or a human reopening it.
 
     Attributes:
         status: New state.
-        outcome: How it was settled, with a link to the MR or issue; kept when omitted.
+        outcome: How it was settled, with a link to the MR or issue; kept when omitted. An
+            Assistant must give one.
     """
 
     status: TopicStatus
@@ -316,13 +351,16 @@ async def _names(
     return users, assistants
 
 
-async def _topic_outs(db: AsyncSession, topics: list[Topic], user_id: int) -> list[TopicOut]:
+async def _topic_outs(
+    db: AsyncSession, topics: list[Topic], user_id: int, archive_days: int
+) -> list[TopicOut]:
     """Build the list view of Topics for a User.
 
     Args:
         db: Database session.
         topics: The Topics.
         user_id: The caller, for unread counts.
+        archive_days: The instance's days in the archive, for Teams without their own.
     """
     if not topics:
         return []
@@ -331,8 +369,8 @@ async def _topic_outs(db: AsyncSession, topics: list[Topic], user_id: int) -> li
         area.id: area.name
         for area in await db.scalars(select(Area).where(Area.id.in_({t.area_id for t in topics})))
     }
-    limits = {
-        team.id: team.turn_limit
+    teams = {
+        team.id: team
         for team in await db.scalars(select(Team).where(Team.id.in_({t.team_id for t in topics})))
     }
     reads = {
@@ -348,6 +386,8 @@ async def _topic_outs(db: AsyncSession, topics: list[Topic], user_id: int) -> li
     for topic in topics:
         read = reads.get(topic.id)
         unread = topic.last_number - read.last_read if read else 0
+        team = teams.get(topic.team_id)
+        days = team.archive_days if team and team.archive_days else archive_days
         result.append(
             TopicOut(
                 id=topic.id,
@@ -364,11 +404,18 @@ async def _topic_outs(db: AsyncSession, topics: list[Topic], user_id: int) -> li
                 created_by=users.get(topic.created_by),
                 last_number=topic.last_number,
                 turns_since_human=topic.turns_since_human,
-                turn_limit=limits.get(topic.team_id, 10),
+                turn_limit=team.turn_limit if team else 10,
                 unread=max(unread, 0),
                 addressed=bool(read and read.addressed and unread > 0),
                 created_at=topic.created_at,
                 updated_at=topic.updated_at,
+                closed_at=topic.closed_at,
+                deletes_at=(
+                    topic.closed_at + timedelta(days=days)
+                    if topic.closed_at and not topic.deleted_at
+                    else None
+                ),
+                deleted_at=topic.deleted_at,
             )
         )
     return result
@@ -437,6 +484,7 @@ async def _message_outs(
             relayed=m.relayed,
             reply_to=m.reply_to,
             by_holder=m.by_holder,
+            system=m.system,
             body=m.body,
             files=by_message.get(m.id, []),
             created_at=m.created_at,
@@ -618,8 +666,11 @@ async def _post(
             )
     topic.last_number += 1
     topic.updated_at = now()
-    if topic.status == TopicStatus.Closed and kind == MessageKind.Message:
+    topic.idle_warned_at = None
+    if topic.status == TopicStatus.Closed and kind in (MessageKind.Message, MessageKind.Stage):
+        # A new turn or stage takes the Topic out of the archive (decision 0021).
         topic.status = TopicStatus.Open
+        topic.closed_at = None
     message = Message(
         topic_id=topic.id,
         number=topic.last_number,
@@ -834,6 +885,7 @@ async def link_assistant(
 
 @router.get("/teams/{team_id}/topics")
 async def list_topics(
+    request: Request,
     team_id: int,
     actor: ActorDep,
     db: DB,
@@ -841,9 +893,10 @@ async def list_topics(
     status_filter: Annotated[TopicStatus | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[TopicOut]:
-    """List a Team's Topics, newest activity first.
+    """List a Team's Topics, newest activity first; deleted ones are left out.
 
     Args:
+        request: The incoming request.
         team_id: The Team.
         actor: The caller.
         db: Database session.
@@ -862,7 +915,7 @@ async def list_topics(
     if status_filter is not None:
         query = query.where(Topic.status == status_filter)
     topics = list(await db.scalars(query.order_by(Topic.updated_at.desc()).limit(limit)))
-    return await _topic_outs(db, topics, actor.user.id)
+    return await _topic_outs(db, topics, actor.user.id, request.app.state.settings.archive_days)
 
 
 @router.post("/areas/{area_id}/topics", status_code=status.HTTP_201_CREATED)
@@ -972,7 +1025,9 @@ async def read_topic(
         await db.scalars(select(File).where(File.topic_id == topic.id).order_by(File.id))
     )
     files = await _file_outs(db, file_rows, request.app.state.settings.preview_max_bytes)
-    (summary,) = await _topic_outs(db, [topic], actor.user.id)
+    (summary,) = await _topic_outs(
+        db, [topic], actor.user.id, request.app.state.settings.archive_days
+    )
     return TopicDetail(
         **summary.model_dump(),
         messages=await _message_outs(db, messages, files, file_rows),
@@ -1071,32 +1126,107 @@ async def hold_topic(request: Request, topic_id: int, actor: ActorDep, db: DB) -
     topic.holder_assistant_id = actor.assistant.id
     await _join(db, topic.id, {actor.user.id})
     await db.commit()
-    (out,) = await _topic_outs(db, [topic], actor.user.id)
+    (out,) = await _topic_outs(db, [topic], actor.user.id, request.app.state.settings.archive_days)
+    return out
+
+
+@router.post("/topics/{topic_id}/stage", status_code=status.HTTP_201_CREATED)
+async def post_stage(
+    request: Request, topic_id: int, body: StageIn, actor: ActorDep, db: DB
+) -> MessageOut:
+    """Note that the holder moved to the next stage of its task, in one line (decision 0021).
+
+    Takes no number: a stage answers nothing, so it needs no check for unread Messages. It is
+    not a turn; it takes the Topic out of the archive, since work goes on.
+
+    Args:
+        request: The incoming request.
+        topic_id: The Topic.
+        body: The stage.
+        actor: The holding Assistant.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+            there; 409 ``not_holder`` unless the caller is the holding Assistant; 410 for a
+            deleted Topic.
+    """
+    topic = await get_topic(db, topic_id, actor, lock=True, write=True)
+    if actor.assistant is None or actor.assistant.id != topic.holder_assistant_id:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "not_holder",
+                "message": f"Only the Assistant holding {ref(topic_id)} notes its stages; "
+                "hold it first if the task is yours.",
+            },
+        )
+    message, recipients = await _post(
+        db, actor, topic, body.text.strip(), MessageKind.Stage, None, [], as_human=False
+    )
+    await db.commit()
+    request.app.state.bus.wake(recipients)
+    (out,) = await _message_outs(db, [message], [], [])
     return out
 
 
 @router.patch("/topics/{topic_id}")
 async def settle_topic(
-    request: Request, topic_id: int, body: TopicPatch, actor: HumanDep, db: DB
+    request: Request, topic_id: int, body: TopicPatch, actor: ActorDep, db: DB
 ) -> TopicOut:
-    """Close a Topic with an outcome, or reopen it; a human's decision (decision 0003).
+    """Close a Topic with an outcome, or reopen it (decision 0021).
+
+    The holding Assistant closes its Topic, and so does any human of the Team; only a human
+    reopens one this way, an Assistant does it by writing in it. Closing leaves a line in the
+    feed with the outcome, and the archive time starts.
 
     Args:
         request: The incoming request.
         topic_id: The Topic.
         body: New state and outcome.
-        actor: The logged-in human.
+        actor: The holding Assistant or a human of the Team.
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such Topic in the caller's Teams.
+        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the
+            caller may not write there or is an Assistant reopening; 409 ``not_holder`` for an
+            Assistant that does not hold it; 422 for an Assistant closing without an outcome;
+            410 for a deleted Topic.
     """
     topic = await get_topic(db, topic_id, actor, lock=True, write=True)
-    topic.status = body.status
+    if actor.assistant is not None or actor.installation is not None:
+        if body.status != TopicStatus.Closed:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "An Assistant reopens a Topic by writing in it"
+            )
+        if actor.assistant is None or actor.assistant.id != topic.holder_assistant_id:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "not_holder",
+                    "message": f"Only the Assistant holding {ref(topic_id)}, or a human, "
+                    "closes it; tell the holder it can be closed.",
+                },
+            )
+        if not (body.outcome or "").strip():
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "Close with an outcome: a line or two and the MR or issue link",
+            )
     if body.outcome is not None:
         topic.outcome = body.outcome.strip()
+    recipients: set[int] = set()
+    if body.status == TopicStatus.Closed and topic.status != TopicStatus.Closed:
+        _, recipients = await _post(
+            db, actor, topic, topic.outcome, MessageKind.Closed, None, [], as_human=False
+        )
+        topic.closed_at = now()
+    elif body.status == TopicStatus.Open:
+        topic.closed_at = None
+        topic.idle_warned_at = None
+    topic.status = body.status
     topic.updated_at = now()
-    recipients = add_events(
+    recipients |= add_events(
         db,
         await _team_user_ids(db, topic.team_id),
         "topic_status",
@@ -1106,21 +1236,26 @@ async def settle_topic(
             "title": topic.title,
             "team_id": topic.team_id,
             "status": topic.status.value,
-            "author": actor.user.pseudonym,
+            "author": actor.assistant.name if actor.assistant else actor.user.pseudonym,
             "holder_assistant_id": topic.holder_assistant_id,
+            "outcome": topic.outcome,
+            "automatic": False,
         },
     )
     await db.commit()
     request.app.state.bus.wake(recipients)
-    (out,) = await _topic_outs(db, [topic], actor.user.id)
+    (out,) = await _topic_outs(db, [topic], actor.user.id, request.app.state.settings.archive_days)
     return out
 
 
 @router.post("/topics/{topic_id}/read")
-async def mark_read(topic_id: int, body: ReadIn, actor: ActorDep, db: DB) -> TopicOut:
+async def mark_read(
+    request: Request, topic_id: int, body: ReadIn, actor: ActorDep, db: DB
+) -> TopicOut:
     """Record how far the caller has read a Topic; it leaves the Inbox when read through.
 
     Args:
+        request: The incoming request.
         topic_id: The Topic.
         body: Number of the newest Message read.
         actor: The caller.
@@ -1133,7 +1268,9 @@ async def mark_read(topic_id: int, body: ReadIn, actor: ActorDep, db: DB) -> Top
     scope = pushed_teams(actor)
     if scope is not None and topic.team_id not in scope:
         # Looked up for another project: the Team's Inbox stays as it was (decision 0020).
-        (out,) = await _topic_outs(db, [topic], actor.user.id)
+        (out,) = await _topic_outs(
+            db, [topic], actor.user.id, request.app.state.settings.archive_days
+        )
         return out
     number = min(body.number, topic.last_number)
     await db.execute(
@@ -1148,18 +1285,19 @@ async def mark_read(topic_id: int, body: ReadIn, actor: ActorDep, db: DB) -> Top
         )
     )
     await db.commit()
-    (out,) = await _topic_outs(db, [topic], actor.user.id)
+    (out,) = await _topic_outs(db, [topic], actor.user.id, request.app.state.settings.archive_days)
     return out
 
 
 @router.get("/inbox")
-async def inbox(actor: ActorDep, db: DB) -> list[TopicOut]:
+async def inbox(request: Request, actor: ActorDep, db: DB) -> list[TopicOut]:
     """List Topics the caller takes part in that have unread Messages (decision 0006).
 
     The Inbox is shared by all of a User's Assistants; an Assistant sees the part of it in the
     Team its project is linked to, and an unlinked one sees nothing (decision 0020).
 
     Args:
+        request: The incoming request.
         actor: The caller.
         db: Database session.
 
@@ -1185,4 +1323,4 @@ async def inbox(actor: ActorDep, db: DB) -> list[TopicOut]:
             query.order_by(Participant.addressed.desc(), Topic.updated_at.desc()).limit(100)
         )
     )
-    return await _topic_outs(db, topics, actor.user.id)
+    return await _topic_outs(db, topics, actor.user.id, request.app.state.settings.archive_days)

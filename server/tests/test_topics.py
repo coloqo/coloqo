@@ -2,7 +2,6 @@
 
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
 
 import httpx
 import pytest
@@ -12,55 +11,7 @@ from fastapi.testclient import TestClient
 
 from coloqo_server.db import MIGRATIONS_DIR, migrate
 from coloqo_server.settings import Settings
-from tests.conftest import Plugin
-
-
-@dataclass
-class Setup:
-    """A Team of alice (owner) and bob, an Area, and an Assistant each.
-
-    Attributes:
-        alice: Alice's web client.
-        bob: Bob's web client.
-        alice_api: Alice's Assistant.
-        bob_web: Bob's Assistant.
-        team_id: The Team.
-        area_id: The Area.
-    """
-
-    alice: TestClient
-    bob: TestClient
-    alice_api: Plugin
-    bob_web: Plugin
-    team_id: int
-    area_id: int
-
-
-@pytest.fixture
-def setup(human: Callable[[str], TestClient], plugin: Callable[..., Plugin]) -> Setup:
-    """Build the Team.
-
-    Args:
-        human: Factory of logged-in web clients.
-        plugin: Factory of plugin installations.
-    """
-    alice = human("alice")
-    bob = human("bob")
-    team_id = alice.post("/api/teams", json={"name": "Acme"}).json()["id"]
-    url = alice.post(f"/api/teams/{team_id}/invites").json()["url"]
-    token = url.rsplit("/", 1)[1]
-    assert bob.post(f"/api/invites/{token}/accept").json()["role"] == "member"
-    area_id = alice.post(
-        f"/api/teams/{team_id}/areas", json={"name": "Contracts", "description": "API contracts"}
-    ).json()["id"]
-    return Setup(
-        alice=alice,
-        bob=bob,
-        alice_api=plugin(alice, "billing-api", team_id),
-        bob_web=plugin(bob, "web", team_id),
-        team_id=team_id,
-        area_id=area_id,
-    )
+from tests.conftest import Plugin, Setup
 
 
 def _open(setup: Setup, to: str | None = None) -> dict:
@@ -341,8 +292,8 @@ def test_relayed_human_words_reset_the_turns(setup: Setup) -> None:
     assert bob.get(f"/api/topics/{tid}").json()["turns_since_human"] == 0
 
 
-def test_human_closes_and_assistant_message_reopens(setup: Setup) -> None:
-    """Only a human closes a Topic; a new turn in it reopens it.
+def test_holder_closes_and_a_new_turn_reopens(setup: Setup) -> None:
+    """The holder closes its Topic with an outcome, leaving a line; a new turn reopens it.
 
     Args:
         setup: The Team.
@@ -350,11 +301,74 @@ def test_human_closes_and_assistant_message_reopens(setup: Setup) -> None:
     tid = _open(setup)["id"]
     closing = {"status": "closed", "outcome": "Renamed in ACME-42"}
 
-    assert setup.alice_api.client.patch(f"/api/topics/{tid}", json=closing).status_code == 403
-    assert setup.alice.patch(f"/api/topics/{tid}", json=closing).json()["status"] == "closed"
-    setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "One more"})
+    by_other = setup.bob_web.client.patch(f"/api/topics/{tid}", json=closing)
+    no_outcome = setup.alice_api.client.patch(f"/api/topics/{tid}", json={"status": "closed"})
+    closed = setup.alice_api.client.patch(f"/api/topics/{tid}", json=closing).json()
+    reopen_by_patch = setup.alice_api.client.patch(f"/api/topics/{tid}", json={"status": "open"})
+    line = setup.alice.get(f"/api/topics/{tid}").json()["messages"][-1]
+    setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 3, "body": "One more"})
     reopened = setup.alice.get(f"/api/topics/{tid}").json()
-    assert (reopened["status"], reopened["outcome"]) == ("open", "Renamed in ACME-42")
+
+    assert by_other.json()["detail"]["code"] == "not_holder"
+    assert no_outcome.status_code == 422
+    assert (closed["status"], closed["closed_at"] is not None) == ("closed", True)
+    assert closed["deletes_at"] is not None
+    assert reopen_by_patch.status_code == 403
+    assert (line["kind"], line["body"], line["assistant"]) == (
+        "closed",
+        "Renamed in ACME-42",
+        "alice · billing-api",
+    )
+    assert (reopened["status"], reopened["outcome"], reopened["closed_at"]) == (
+        "open",
+        "Renamed in ACME-42",
+        None,
+    )
+
+
+def test_human_closes_and_reopens(setup: Setup) -> None:
+    """A human of the Team closes a Topic, without an outcome if they wish, and reopens it.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+
+    closed = setup.bob.patch(f"/api/topics/{tid}", json={"status": "closed"}).json()
+    reopened = setup.bob.patch(f"/api/topics/{tid}", json={"status": "open"}).json()
+
+    assert closed["status"] == "closed"
+    assert (reopened["status"], reopened["closed_at"], reopened["deletes_at"]) == (
+        "open",
+        None,
+        None,
+    )
+
+
+def test_stage_is_a_line_of_the_holder_without_a_number(setup: Setup) -> None:
+    """The holder notes a stage without a number; it is not a turn; others cannot.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+
+    stage = setup.alice_api.client.post(f"/api/topics/{tid}/stage", json={"text": "Testing"})
+    not_holder = setup.bob_web.client.post(f"/api/topics/{tid}/stage", json={"text": "Mine"})
+    as_message = setup.alice_api.client.post(
+        f"/api/topics/{tid}/messages", json={"number": 3, "body": "x", "kind": "stage"}
+    )
+    topic = setup.alice.get(f"/api/topics/{tid}").json()
+
+    assert stage.status_code == 201, stage.text
+    assert (stage.json()["number"], stage.json()["kind"], stage.json()["body"]) == (
+        2,
+        "stage",
+        "Testing",
+    )
+    assert not_holder.json()["detail"]["code"] == "not_holder"
+    assert as_message.status_code == 422
+    assert topic["turns_since_human"] == 0
 
 
 def test_hold_moves_the_topic_to_another_assistant(setup: Setup) -> None:
