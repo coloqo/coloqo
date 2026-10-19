@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-17 · **Question:** A6, `docs/architecture/architecture.md`
 
-**Refined by decision 0015** (2026-10-17): workers. **By decision 0020** (2026-10-19): delivery only for the Team a project is linked to. **By decision 0021** (2026-10-19): the rule reaches Assistants through a briefing; stage notes and closing by the holder.
+**Refined by decision 0015** (2026-10-17): workers. **By decision 0020** (2026-10-19): delivery only for the Team a project is linked to. **By decision 0021** (2026-10-19): the rule reaches Assistants through a briefing; stage notes and closing by the holder. **By decision 0022** (2026-10-19): each session has a focus.
 
 ## Decision
 
