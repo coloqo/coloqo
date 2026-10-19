@@ -133,50 +133,42 @@ function MessageItem({
   const others = message.files.filter((file) => !file.preview)
   const size = narrow ? 32 : 40
   const name = message.assistant ?? message.author ?? t('team.noName')
-  // On a pointer that hovers, the details of a grouped Message wait for the hover; on touch they show.
-  const onHover = '[@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+  const asks = asker !== null && message.author === asker
+  const bubble = progress
+    ? 'border border-dashed border-stone-300 text-stone-500 italic dark:border-stone-700 dark:text-stone-400'
+    : mine
+      ? 'bg-emerald-50 shadow-sm dark:bg-emerald-950/40'
+      : 'bg-white shadow-sm dark:bg-stone-800/80'
   return (
-    <li
-      id={`m-${message.number}`}
-      className={`group relative flex scroll-mt-4 gap-3 border-l-2 pr-4 pl-3.5 sm:pl-[14px] ${grouped ? 'pt-0.5 pb-1' : 'pt-3 pb-1'} ${
-        toMe ? 'border-amber-500' : 'border-transparent'
-      } ${
-        mine
-          ? 'bg-stone-100/80 [--feed-ring:#f3f2f0] dark:bg-stone-800/50 dark:[--feed-ring:#262321]'
-          : '[--feed-ring:#ffffff] dark:[--feed-ring:#1c1917]'
-      }`}
-    >
-      <div className="flex shrink-0 justify-center" style={{ width: size }}>
-        {grouped ? (
-          <time dateTime={message.created_at} title={absoluteTime(message.created_at, lang, true)} className={`pt-1 text-[11px] text-stone-400 tabular-nums ${onHover}`}>
-            {clock(message.created_at, lang)}
-          </time>
-        ) : (
+    <li id={`m-${message.number}`} className={`group relative flex scroll-mt-4 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
+      <div className="shrink-0" style={{ width: size }}>
+        {!grouped && (
           <AuthorAvatar
             person={message.author}
             assistant={message.assistant !== null}
-            asker={asker !== null && message.author === asker}
+            asker={asks}
             size={size}
-            title={asker !== null && message.author === asker ? t('message.asker') : undefined}
+            title={asks ? t('message.asker') : undefined}
           />
         )}
       </div>
-      <div className="min-w-0 flex-1">
+      <div
+        className={`relative max-w-[min(100%,46rem)] min-w-0 rounded-2xl px-3.5 pt-2 pb-1.5 ${grouped ? '' : 'rounded-tl-md'} ${bubble} ${
+          toMe ? 'ring-2 ring-amber-400 dark:ring-amber-500/70' : ''
+        }`}
+      >
         {!grouped && (
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-            <span className="font-semibold">{name}</span>
+          <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm not-italic">
+            <span className="font-semibold text-stone-900 dark:text-stone-100">{name}</span>
             {message.relayed && <Badge tone="blue">{t('message.relayed')}</Badge>}
             {addressee && (
               <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-500 dark:text-stone-400'}`}>
                 {toMe && <Bell className="size-3.5 self-center" />}→ {toMe ? t('message.toYou') : addressee}
               </span>
             )}
-            <span className="text-xs text-stone-500 dark:text-stone-400">
-              <Time value={message.created_at} absolute />
-            </span>
           </div>
         )}
-        <div className={progress ? 'text-sm text-stone-500 italic dark:text-stone-400' : undefined}>
+        <div className={progress ? 'text-sm' : undefined}>
           <Markdown text={message.body} />
         </div>
         {images.length > 0 && <MessageImages images={images} />}
@@ -187,13 +179,18 @@ function MessageItem({
             ))}
           </div>
         )}
+        <div className="-mt-0.5 flex justify-end">
+          <time dateTime={message.created_at} title={absoluteTime(message.created_at, lang, true)} className="text-[11px] text-stone-400 not-italic tabular-nums dark:text-stone-500">
+            {clock(message.created_at, lang)}
+          </time>
+        </div>
       </div>
-      <div className={`absolute top-1 right-3 flex items-center gap-1 rounded-md border border-stone-200 bg-white px-1 text-xs text-stone-500 shadow-sm dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 [@media(hover:none)]:hidden ${onHover}`}>
-        <span className="px-1 font-mono">#{message.number}</span>
+      <div className="flex shrink-0 items-start gap-1 pt-1 text-xs text-stone-500 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 dark:text-stone-400 [@media(hover:none)]:hidden">
+        <span className="font-mono">#{message.number}</span>
         {replyTo && replyTo !== me.pseudonym && (
           <button
             type="button"
-            className="rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+            className="rounded px-1.5 py-0.5 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200"
             onClick={() => onReply(replyTo)}
           >
             {t('message.reply')}
@@ -204,10 +201,20 @@ function MessageItem({
   )
 }
 
+function DayDivider({ value }: { value: string }) {
+  const { i18n } = useTranslation()
+  const day = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'ru', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value))
+  return (
+    <li className="mt-3 flex justify-center">
+      <span className="rounded-full bg-stone-200/80 px-3 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">{day}</span>
+    </li>
+  )
+}
+
 function NewDivider() {
   const { t } = useTranslation()
   return (
-    <li className="flex items-center gap-3 px-4 py-2 text-xs font-medium tracking-wide text-amber-700 uppercase dark:text-amber-400" aria-label={t('message.newDivider')}>
+    <li className="mt-3 flex items-center gap-3 py-1 text-xs font-medium tracking-wide text-amber-700 uppercase dark:text-amber-400" aria-label={t('message.newDivider')}>
       <span className="h-px flex-1 bg-amber-300 dark:bg-amber-800" />
       {t('message.newDivider')}
       <span className="h-px flex-1 bg-amber-300 dark:bg-amber-800" />
@@ -601,17 +608,20 @@ export function TopicPage({ me }: { me: Me }) {
             {data.messages.length < data.last_number && (
               <Notice>{t('topic.truncated', { count: data.messages.length })}</Notice>
             )}
-            <ol className="flex flex-col pb-3">
+            <ol className="flex flex-col rounded-b-lg bg-stone-100 px-3 pt-1 pb-4 [--feed-ring:#f5f5f4] sm:px-4 dark:bg-stone-950/70 dark:[--feed-ring:#0f0d0c]">
               {data.messages.map((message, index) => {
+                const previous = data.messages[index - 1]
+                const newDay = previous === undefined || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString()
                 const divider = index === firstNew
                 return (
                   <Fragment key={message.number}>
+                    {newDay && <DayDivider value={message.created_at} />}
                     {divider && <NewDivider />}
                     <MessageItem
                       message={message}
                       me={me}
                       asker={data.created_by}
-                      grouped={!divider && continues(message, data.messages[index - 1])}
+                      grouped={!divider && !newDay && continues(message, previous)}
                       narrow={narrow}
                       onReply={reply}
                     />
