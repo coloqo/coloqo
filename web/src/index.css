@@ -68,3 +68,22 @@
     @apply mr-1 align-middle;
   }
 }
+
+/* The Message a reply points to lights up for a moment when the quote is clicked. */
+@keyframes reply-flash {
+  from {
+    background-color: rgb(245 158 11 / 0.28);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.reply-flash {
+  border-radius: 1rem;
+  animation: reply-flash 1.6s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reply-flash {
+    animation-duration: 0.01s;
+  }
+}

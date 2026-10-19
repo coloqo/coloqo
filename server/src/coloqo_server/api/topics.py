@@ -92,9 +92,13 @@ class MessageOut(BaseModel):
         kind: A turn or a progress note.
         author: Pseudonym of the User on whose behalf it is written.
         assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.
+        assistant_id: Its id: names repeat when one person has the same project folder on two
+            computers.
         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
         to_assistant: Name of the addressed Assistant, if a specific one.
         relayed: The Assistant posted its human's own words.
+        reply_to: Number of the Message it answers, if any.
+        by_holder: Its Assistant held the Topic when it was written.
         body: Markdown text.
         files: Files attached to it.
         created_at: When it was written.
@@ -104,9 +108,12 @@ class MessageOut(BaseModel):
     kind: MessageKind
     author: str | None
     assistant: str | None
+    assistant_id: int | None
     to: str | None
     to_assistant: str | None
     relayed: bool
+    reply_to: int | None
+    by_holder: bool
     body: str
     files: list[FileOut]
     created_at: datetime
@@ -196,6 +203,7 @@ class MessageIn(BaseModel):
         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
         file_ids: Files uploaded to this Topic to attach.
         as_human: The Assistant relays its human's own words; resets the turn count.
+        reply_to: Number of an earlier Message of the Topic this one answers.
     """
 
     number: int = Field(ge=1)
@@ -204,6 +212,7 @@ class MessageIn(BaseModel):
     to: str | None = None
     file_ids: list[int] = Field(default_factory=list, max_length=20)
     as_human: bool = False
+    reply_to: int | None = Field(default=None, ge=1)
 
 
 class TopicPatch(BaseModel):
@@ -375,9 +384,12 @@ async def _message_outs(
             kind=m.kind,
             author=users.get(m.author_user_id),
             assistant=assistants.get(m.author_assistant_id or 0),
+            assistant_id=m.author_assistant_id,
             to=users.get(m.to_user_id or 0),
             to_assistant=assistants.get(m.to_assistant_id or 0),
             relayed=m.relayed,
+            reply_to=m.reply_to,
+            by_holder=m.by_holder,
             body=m.body,
             files=by_message.get(m.id, []),
             created_at=m.created_at,
@@ -552,6 +564,7 @@ async def _post(
         to_user_id=to_user_id,
         to_assistant_id=to_assistant_id,
         relayed=bool(as_human and actor.assistant is not None),
+        by_holder=actor.assistant is not None and actor.assistant.id == topic.holder_assistant_id,
         body=body,
     )
     db.add(message)
@@ -808,7 +821,8 @@ async def post_message(
     Raises:
         HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread
             Messages when the number is not next, or ``turn_limit`` when the Topic waits for
-            a human; 422 for an unknown addressee or foreign files.
+            a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
+            not an earlier Message of the Topic.
     """
     topic = await get_topic(db, topic_id, actor, lock=True)
     if body.number != topic.last_number + 1:
@@ -846,9 +860,15 @@ async def post_message(
                 }
             },
         )
+    if body.reply_to is not None and body.reply_to > topic.last_number:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"There is no Message #{body.reply_to} in {ref(topic_id)} to reply to",
+        )
     message, recipients = await _post(
         db, actor, topic, body.body, body.kind, body.to, body.file_ids, body.as_human
     )
+    message.reply_to = body.reply_to
     await db.commit()
     request.app.state.bus.wake(recipients)
     file_rows = list(await db.scalars(select(File).where(File.message_id == message.id)))

@@ -947,7 +947,8 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread
          *             Messages when the number is not next, or ``turn_limit`` when the Topic waits for
-         *             a human; 422 for an unknown addressee or foreign files.
+         *             a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
+         *             not an earlier Message of the Topic.
          */
         post: operations["post_message_api_topics__topic_id__messages_post"];
         delete?: never;
@@ -1321,6 +1322,7 @@ export interface components {
          *         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
          *         file_ids: Files uploaded to this Topic to attach.
          *         as_human: The Assistant relays its human's own words; resets the turn count.
+         *         reply_to: Number of an earlier Message of the Topic this one answers.
          */
         MessageIn: {
             /**
@@ -1336,6 +1338,8 @@ export interface components {
             kind?: components["schemas"]["MessageKind"];
             /** Number */
             number: number;
+            /** Reply To */
+            reply_to?: number | null;
             /** To */
             to?: string | null;
         };
@@ -1358,9 +1362,13 @@ export interface components {
          *         kind: A turn or a progress note.
          *         author: Pseudonym of the User on whose behalf it is written.
          *         assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.
+         *         assistant_id: Its id: names repeat when one person has the same project folder on two
+         *             computers.
          *         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
          *         to_assistant: Name of the addressed Assistant, if a specific one.
          *         relayed: The Assistant posted its human's own words.
+         *         reply_to: Number of the Message it answers, if any.
+         *         by_holder: Its Assistant held the Topic when it was written.
          *         body: Markdown text.
          *         files: Files attached to it.
          *         created_at: When it was written.
@@ -1368,10 +1376,14 @@ export interface components {
         MessageOut: {
             /** Assistant */
             assistant: string | null;
+            /** Assistant Id */
+            assistant_id: number | null;
             /** Author */
             author: string | null;
             /** Body */
             body: string;
+            /** By Holder */
+            by_holder: boolean;
             /**
              * Created At
              * Format: date-time
@@ -1384,6 +1396,8 @@ export interface components {
             number: number;
             /** Relayed */
             relayed: boolean;
+            /** Reply To */
+            reply_to: number | null;
             /** To */
             to: string | null;
             /** To Assistant */

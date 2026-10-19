@@ -524,7 +524,7 @@
         "type": "object"
       },
       "MessageIn": {
-        "description": "A new Message.\n\nAttributes:\n    number: The number the writer believes is next: the Topic's ``last_number + 1``.\n    body: Markdown text.\n    kind: ``message`` — a turn; ``progress`` — the holder's note on its own work.\n    to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.\n    file_ids: Files uploaded to this Topic to attach.\n    as_human: The Assistant relays its human's own words; resets the turn count.",
+        "description": "A new Message.\n\nAttributes:\n    number: The number the writer believes is next: the Topic's ``last_number + 1``.\n    body: Markdown text.\n    kind: ``message`` — a turn; ``progress`` — the holder's note on its own work.\n    to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.\n    file_ids: Files uploaded to this Topic to attach.\n    as_human: The Assistant relays its human's own words; resets the turn count.\n    reply_to: Number of an earlier Message of the Topic this one answers.",
         "properties": {
           "as_human": {
             "default": false,
@@ -553,6 +553,18 @@
             "minimum": 1.0,
             "title": "Number",
             "type": "integer"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
           },
           "to": {
             "anyOf": [
@@ -583,7 +595,7 @@
         "type": "string"
       },
       "MessageOut": {
-        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    relayed: The Assistant posted its human's own words.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
+        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    assistant_id: Its id: names repeat when one person has the same project folder on two\n        computers.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    relayed: The Assistant posted its human's own words.\n    reply_to: Number of the Message it answers, if any.\n    by_holder: Its Assistant held the Topic when it was written.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
         "properties": {
           "assistant": {
             "anyOf": [
@@ -595,6 +607,17 @@
               }
             ],
             "title": "Assistant"
+          },
+          "assistant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Id"
           },
           "author": {
             "anyOf": [
@@ -610,6 +633,10 @@
           "body": {
             "title": "Body",
             "type": "string"
+          },
+          "by_holder": {
+            "title": "By Holder",
+            "type": "boolean"
           },
           "created_at": {
             "format": "date-time",
@@ -633,6 +660,17 @@
           "relayed": {
             "title": "Relayed",
             "type": "boolean"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
           },
           "to": {
             "anyOf": [
@@ -662,9 +700,12 @@
           "kind",
           "author",
           "assistant",
+          "assistant_id",
           "to",
           "to_assistant",
           "relayed",
+          "reply_to",
+          "by_holder",
           "body",
           "files",
           "created_at"
@@ -1231,7 +1272,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3743,7 +3784,7 @@
     },
     "/api/topics/{topic_id}/messages": {
       "post": {
-        "description": "Write a Message with the number the writer believes is next (decision 0007).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread\n        Messages when the number is not next, or ``turn_limit`` when the Topic waits for\n        a human; 422 for an unknown addressee or foreign files.",
+        "description": "Write a Message with the number the writer believes is next (decision 0007).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread\n        Messages when the number is not next, or ``turn_limit`` when the Topic waits for\n        a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is\n        not an earlier Message of the Topic.",
         "operationId": "post_message_api_topics__topic_id__messages_post",
         "parameters": [
           {

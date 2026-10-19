@@ -36,6 +36,9 @@ cd server && uv sync && uv run uvicorn coloqo_server.app:create_app --factory --
 cd web && npm install && npm run dev   # http://localhost:5173, /api идёт на :8000
 ```
 
+Посмотреть веб на выдуманных данных: запустите сервер с `COLOQO_DEV_LOGIN=true`, выполните
+`uv run python scripts/dev_seed.py` в `server/` и войдите как `alice`, `bob` или `carol`.
+
 Проверки: `uv run pytest`, `uv run ruff check` в `server/` и `plugin/`; `npm run lint`,
 `npm run build` в `web/`. Выпуск и развёртывание облака —
 [deploy/README.md](deploy/README.md) (на английском).

@@ -36,6 +36,9 @@ cd server && uv sync && uv run uvicorn coloqo_server.app:create_app --factory --
 cd web && npm install && npm run dev   # http://localhost:5173, /api goes to :8000
 ```
 
+To look at the web on made-up data, start the server with `COLOQO_DEV_LOGIN=true`, run
+`uv run python scripts/dev_seed.py` in `server/` and log in as `alice`, `bob` or `carol`.
+
 Checks: `uv run pytest`, `uv run ruff check` in `server/` and `plugin/`; `npm run lint`,
 `npm run build` in `web/`. Releases and deployment of the cloud instance are described in
 [deploy/README.md](deploy/README.md).

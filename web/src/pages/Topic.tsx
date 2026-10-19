@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 
@@ -17,6 +17,7 @@ import {
 } from '../api/client'
 import { useTeam, useTopic } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
+import { AuthorAvatar } from '../components/Avatar'
 import { Bell } from '../components/Bell'
 import { Page } from '../components/Layout'
 import { Markdown } from '../components/Markdown'
@@ -24,7 +25,7 @@ import { Time } from '../components/Time'
 import { StatusBadge } from '../components/Topics'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Loading, Notice, Textarea } from '../components/ui'
 import { MessageImages } from '../components/Images'
-import { errorText, fileSize, issueLink } from '../lib/format'
+import { absoluteTime, errorText, fileSize, issueLink } from '../lib/format'
 
 /** Whether the page is in front of the person, so that reading can be recorded. */
 function usePageVisible() {
@@ -73,71 +74,216 @@ function FileLink({ file }: { file: FileInfo }) {
   )
 }
 
+/** Whether the screen is phone-sized; the feed's faces shrink there. */
+function useNarrow() {
+  const query = '(max-width: 639px)'
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const list = window.matchMedia(query)
+    const change = () => setNarrow(list.matches)
+    list.addEventListener('change', change)
+    return () => list.removeEventListener('change', change)
+  }, [])
+  return narrow
+}
+
+const GROUP_GAP_MS = 10 * 60 * 1000
+
+/** A Message continues the previous one's group: same author, close in time, same addressee and holding. */
+function continues(message: Message, previous: Message | undefined): boolean {
+  return (
+    previous !== undefined &&
+    message.kind === 'message' &&
+    previous.kind === 'message' &&
+    previous.author === message.author &&
+    previous.assistant_id === message.assistant_id &&
+    previous.to === message.to &&
+    previous.to_assistant === message.to_assistant &&
+    previous.by_holder === message.by_holder &&
+    new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < GROUP_GAP_MS
+  )
+}
+
+function clock(value: string, lang: string): string {
+  return new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+}
+
+/** The first line of a Message's text, without Markdown marks: what a reply quotes. */
+function snippet(body: string): string {
+  const line = body
+    .split('\n')
+    .map((text) => text.trim())
+    .find((text) => text && !text.startsWith('```'))
+  return (line ?? '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[`*_>#|]/g, '')
+    .trim()
+}
+
+/** Show the Message a reply answers: scroll to it and light it up for a moment. */
+function jumpTo(number: number) {
+  const element = document.getElementById(`m-${number}`)
+  if (!element) return
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  element.classList.remove('reply-flash')
+  void element.offsetWidth
+  element.classList.add('reply-flash')
+}
+
+function Quote({ message, number, onClick }: { message: Message | undefined; number: number; onClick?: () => void }) {
+  const { t } = useTranslation()
+  const content = (
+    <>
+      <span className="block truncate font-medium text-amber-800 dark:text-amber-300">
+        {message ? (message.assistant ?? message.author ?? t('team.noName')) : `#${number}`}
+      </span>
+      <span className="block truncate text-stone-600 dark:text-stone-300">
+        {message ? snippet(message.body) || t('message.attachment') : t('message.notLoaded')}
+      </span>
+    </>
+  )
+  const style = 'block w-full min-w-0 rounded-md border-l-[3px] border-amber-500 bg-stone-500/10 px-2 py-1 text-left text-[13px] leading-snug not-italic'
+  return onClick ? (
+    <button type="button" className={`${style} hover:bg-stone-500/15`} onClick={onClick} aria-label={t('message.showOriginal', { number })}>
+      {content}
+    </button>
+  ) : (
+    <div className={style}>{content}</div>
+  )
+}
+
+function ReplyArrow() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3.5 fill-none stroke-current" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.5 3.5 2.5 7.5l4 4" />
+      <path d="M2.5 7.5h6.5a4.5 4.5 0 0 1 4.5 4.5v.5" />
+    </svg>
+  )
+}
+
 function MessageItem({
   message,
+  original,
   me,
-  unread,
+  holder,
+  grouped,
+  narrow,
   onReply,
 }: {
   message: Message
+  original: Message | undefined
   me: Me
-  unread: boolean
-  onReply: (to: string) => void
+  holder: number | null
+  grouped: boolean
+  narrow: boolean
+  onReply: (message: Message) => void
 }) {
-  const { t } = useTranslation()
-  const human = message.assistant === null
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage ?? 'ru'
+  const mine = message.author === me.pseudonym
   const toMe = message.to !== null && message.to === me.pseudonym
   const addressee = message.to_assistant ?? message.to
-  const replyTo = message.assistant ?? message.author
+  const progress = message.kind === 'progress'
   const images = message.files.filter((file) => file.preview)
   const others = message.files.filter((file) => !file.preview)
+  const size = narrow ? 32 : 40
+  const name = message.assistant ?? message.author ?? t('team.noName')
+  const held = message.by_holder ? (message.assistant_id !== null && message.assistant_id === holder ? 'now' : 'then') : null
+  const bubble = progress
+    ? 'border border-dashed border-stone-300 text-stone-500 italic dark:border-stone-700 dark:text-stone-400'
+    : mine
+      ? 'bg-emerald-50 shadow-sm dark:bg-emerald-950/40'
+      : 'bg-white shadow-sm dark:bg-stone-800/80'
   return (
-    <li
-      id={`m-${message.number}`}
-      className={`scroll-mt-4 border-l-2 px-4 py-3 ${
-        toMe ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : 'border-transparent'
-      }`}
-    >
-      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="font-mono text-xs text-stone-500 dark:text-stone-400">#{message.number}</span>
-        {human ? (
-          <>
-            <span className="font-semibold">{message.author ?? t('team.noName')}</span>
-            <Badge tone="blue">{t('message.human')}</Badge>
-          </>
-        ) : (
-          <span className="font-semibold">{message.assistant}</span>
+    <li id={`m-${message.number}`} className={`group relative flex scroll-mt-4 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
+      <div className="shrink-0" style={{ width: size }}>
+        {!grouped && (
+          <AuthorAvatar person={message.author} assistant={message.assistant !== null} size={size} />
         )}
-        {message.relayed && <Badge tone="blue">{t('message.relayed')}</Badge>}
-        {message.kind === 'progress' && <Badge>{t('message.progress')}</Badge>}
-        {addressee && (
-          <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-600 dark:text-stone-400'}`}>
-            {toMe && <Bell className="size-3.5" />}→ {addressee}
-          </span>
-        )}
-        {unread && <Badge tone="amber">{t('message.new')}</Badge>}
-        <span className="ml-auto flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-          <Time value={message.created_at} absolute />
-          {replyTo && replyTo !== me.pseudonym && (
-            <button
-              type="button"
-              className="rounded px-1.5 py-0.5 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-              onClick={() => onReply(replyTo)}
-            >
-              {t('message.reply')}
-            </button>
-          )}
-        </span>
       </div>
-      <Markdown text={message.body} />
-      {images.length > 0 && <MessageImages images={images} />}
-      {others.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {others.map((file) => (
-            <FileLink key={file.id} file={file} />
-          ))}
+      <div
+        className={`relative max-w-[min(100%,46rem)] min-w-0 rounded-2xl px-3.5 pt-2 pb-1.5 ${grouped ? '' : 'rounded-tl-md'} ${bubble} ${
+          toMe ? 'ring-2 ring-amber-400 dark:ring-amber-500/70' : ''
+        }`}
+      >
+        {!grouped && (
+          <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm not-italic">
+            <span className="font-semibold text-stone-900 dark:text-stone-100">{name}</span>
+            {message.relayed && <Badge tone="blue">{t('message.relayed')}</Badge>}
+            {addressee && (
+              <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-500 dark:text-stone-400'}`}>
+                {toMe && <Bell className="size-3.5 self-center" />}→ {toMe ? t('message.toYou') : addressee}
+              </span>
+            )}
+            {held && (
+              <span
+                className={`ml-auto inline-flex items-center gap-1 self-center pl-2 text-xs font-medium ${
+                  held === 'now' ? 'text-amber-700 dark:text-amber-400' : 'text-stone-400 dark:text-stone-500'
+                }`}
+                title={held === 'now' ? t('message.holdsNow') : t('message.heldThen')}
+              >
+                <svg viewBox="0 0 12 12" aria-hidden="true" className="size-3">
+                  <path d="M3 1.5v9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M3.6 2h5.6L7.8 4.1l1.4 2.1H3.6z" fill="currentColor" />
+                </svg>
+                {held === 'now' ? t('message.holds') : t('message.held')}
+              </span>
+            )}
+          </div>
+        )}
+        {message.reply_to !== null && (
+          <div className="mt-0.5 mb-1.5">
+            <Quote message={original} number={message.reply_to} onClick={() => jumpTo(message.reply_to!)} />
+          </div>
+        )}
+        <div className={progress ? 'text-sm' : undefined}>
+          <Markdown text={message.body} />
         </div>
-      )}
+        {images.length > 0 && <MessageImages images={images} />}
+        {others.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {others.map((file) => (
+              <FileLink key={file.id} file={file} />
+            ))}
+          </div>
+        )}
+        <div className="-mr-1 flex items-center justify-end gap-2 text-[11px] text-stone-400 not-italic tabular-nums dark:text-stone-500">
+          {/* On a pointer that hovers, Reply waits for the hover; on touch it is always there. */}
+          <button
+            type="button"
+            className="-my-1 inline-flex items-center gap-1 rounded px-1.5 py-1 text-stone-500 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-stone-500/10 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-100 [@media(hover:hover)]:opacity-0"
+            onClick={() => onReply(message)}
+          >
+            <ReplyArrow />
+            {t('message.reply')}
+          </button>
+          <span className="font-mono">#{message.number}</span>
+          <time dateTime={message.created_at} title={absoluteTime(message.created_at, lang, true)}>
+            {clock(message.created_at, lang)}
+          </time>
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function DayDivider({ value }: { value: string }) {
+  const { i18n } = useTranslation()
+  const day = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'ru', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value))
+  return (
+    <li className="mt-3 flex justify-center">
+      <span className="rounded-full bg-stone-200/80 px-3 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">{day}</span>
+    </li>
+  )
+}
+
+function NewDivider() {
+  const { t } = useTranslation()
+  return (
+    <li className="mt-3 flex items-center gap-3 py-1 text-xs font-medium tracking-wide text-amber-700 uppercase dark:text-amber-400" aria-label={t('message.newDivider')}>
+      <span className="h-px flex-1 bg-amber-300 dark:bg-amber-800" />
+      {t('message.newDivider')}
+      <span className="h-px flex-1 bg-amber-300 dark:bg-amber-800" />
     </li>
   )
 }
@@ -146,10 +292,14 @@ function Compose({
   topic,
   to,
   setTo,
+  replying,
+  setReplying,
 }: {
   topic: TopicDetail
   to: string
   setTo: (value: string) => void
+  replying: Message | null
+  setReplying: (message: Message | null) => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -177,6 +327,7 @@ function Compose({
             body,
             to: to || null,
             file_ids: attached.map((file) => file.id),
+            reply_to: replying?.number ?? null,
           },
         }),
       ),
@@ -185,6 +336,7 @@ function Compose({
       setAttached([])
       setConflict(false)
       setTo('')
+      setReplying(null)
       refresh()
     },
     onError: (error) => {
@@ -227,6 +379,22 @@ function Compose({
       >
         {conflict && <Notice>{t('compose.numberTaken')}</Notice>}
         {topic.status === 'closed' && <Notice>{t('compose.reopens')}</Notice>}
+        {replying && (
+          <div className="-mb-1 flex items-center gap-2">
+            <span className="shrink-0 text-stone-500 dark:text-stone-400"><ReplyArrow /></span>
+            <div className="min-w-0 flex-1">
+              <Quote message={replying} number={replying.number} onClick={() => jumpTo(replying.number)} />
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded px-2 py-1 text-stone-500 hover:bg-stone-200 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-stone-100"
+              onClick={() => setReplying(null)}
+              aria-label={t('compose.cancelReply')}
+            >
+              ×
+            </button>
+          </div>
+        )}
         <Textarea
           id="compose-body"
           value={body}
@@ -461,10 +629,12 @@ export function TopicPage({ me }: { me: Me }) {
   const queryClient = useQueryClient()
   const visible = usePageVisible()
   const [to, setTo] = useState('')
+  const [replying, setReplying] = useState<Message | null>(null)
   // Messages unread when the page opened, and those arriving while it is open, stay marked "new".
   const [newFrom, setNewFrom] = useState<number | null>(null)
   const scrolled = useRef(false)
   const marking = useRef(0)
+  const narrow = useNarrow()
 
   const data = topic.data
   const lastNumber = data?.last_number ?? 0
@@ -504,8 +674,17 @@ export function TopicPage({ me }: { me: Me }) {
     )
   }
 
-  const reply = (name: string) => {
-    setTo(name)
+  const byNumber = new Map(data.messages.map((m) => [m.number, m]))
+  // The line "New messages" stands before the first one someone else wrote since the page opened.
+  const firstNew =
+    newFrom === null
+      ? -1
+      : data.messages.findIndex((m) => m.number >= newFrom && !(m.assistant === null && m.author === me.pseudonym))
+
+  const reply = (message: Message) => {
+    setReplying(message)
+    const author = message.assistant ?? message.author
+    if (author && author !== me.pseudonym) setTo(author)
     const box = document.getElementById('compose-body')
     box?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     box?.focus({ preventScroll: true })
@@ -521,23 +700,30 @@ export function TopicPage({ me }: { me: Me }) {
             {data.messages.length < data.last_number && (
               <Notice>{t('topic.truncated', { count: data.messages.length })}</Notice>
             )}
-            <ol className="divide-y divide-stone-200 dark:divide-stone-800">
-              {data.messages.map((message) => (
-                <MessageItem
-                  key={message.number}
-                  message={message}
-                  me={me}
-                  unread={
-                    newFrom !== null &&
-                    message.number >= newFrom &&
-                    !(message.assistant === null && message.author === me.pseudonym)
-                  }
-                  onReply={reply}
-                />
-              ))}
+            <ol className="flex flex-col rounded-b-lg bg-stone-100 px-3 pt-1 pb-4 [--feed-ring:#f5f5f4] sm:px-4 dark:bg-stone-950/70 dark:[--feed-ring:#0f0d0c]">
+              {data.messages.map((message, index) => {
+                const previous = data.messages[index - 1]
+                const newDay = previous === undefined || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString()
+                const divider = index === firstNew
+                return (
+                  <Fragment key={message.number}>
+                    {newDay && <DayDivider value={message.created_at} />}
+                    {divider && <NewDivider />}
+                    <MessageItem
+                      message={message}
+                      me={me}
+                      holder={data.holder_assistant_id}
+                      grouped={!divider && !newDay && continues(message, previous)}
+                      narrow={narrow}
+                      original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}
+                      onReply={reply}
+                    />
+                  </Fragment>
+                )
+              })}
             </ol>
           </Card>
-          <Compose topic={data} to={to} setTo={setTo} />
+          <Compose topic={data} to={to} setTo={setTo} replying={replying} setReplying={setReplying} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <Settle topic={data} />

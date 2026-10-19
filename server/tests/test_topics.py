@@ -177,6 +177,79 @@ def test_reply_with_taken_number_returns_unread(setup: Setup) -> None:
     assert detail["unread"][0]["to"] == "alice"
 
 
+def test_reply_points_to_an_earlier_message(setup: Setup) -> None:
+    """A reply names an earlier Message of the Topic; itself or a later one is refused.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+    bob = setup.bob_web.client
+
+    reply = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 2, "body": "Yes", "reply_to": 1}
+    )
+    to_itself = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 3, "body": "?", "reply_to": 3}
+    )
+    to_none = bob.post(
+        f"/api/topics/{tid}/messages", json={"number": 3, "body": "?", "reply_to": 0}
+    )
+    topic = setup.alice.get(f"/api/topics/{tid}").json()
+
+    assert reply.status_code == 201, reply.text
+    assert reply.json()["reply_to"] == 1
+    assert to_itself.status_code == 422
+    assert to_none.status_code == 422
+    assert [m["reply_to"] for m in topic["messages"]] == [None, 1]
+
+
+def test_messages_of_the_holder_are_marked(setup: Setup) -> None:
+    """A Message is marked when its Assistant held the Topic then; the mark stays after a hold.
+
+    Args:
+        setup: The Team.
+    """
+    tid = _open(setup)["id"]
+    alice, bob = setup.alice_api.client, setup.bob_web.client
+    bob.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "Before"})
+    bob.post(f"/api/topics/{tid}/hold")
+    bob.post(f"/api/topics/{tid}/messages", json={"number": 3, "body": "Holding"})
+    alice.post(f"/api/topics/{tid}/messages", json={"number": 4, "body": "Not any more"})
+    setup.alice.post(f"/api/topics/{tid}/messages", json={"number": 5, "body": "Human"})
+
+    messages = setup.alice.get(f"/api/topics/{tid}").json()["messages"]
+
+    assert [m["by_holder"] for m in messages] == [True, False, True, False, False]
+    assert [m["assistant_id"] for m in messages] == [
+        setup.alice_api.assistant_id,
+        setup.bob_web.assistant_id,
+        setup.bob_web.assistant_id,
+        setup.alice_api.assistant_id,
+        None,
+    ]
+
+
+def test_migration_marks_messages_of_the_current_holder(setup: Setup, settings: Settings) -> None:
+    """Messages written before the mark existed get it when their Assistant holds the Topic now.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    tid = _open(setup)["id"]
+    setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "Hi"})
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+    command.downgrade(config, "0004")
+
+    migrate(settings.database_url, settings.files_dir)
+    messages = setup.alice.get(f"/api/topics/{tid}").json()["messages"]
+
+    assert [m["by_holder"] for m in messages] == [True, False]
+
+
 def test_unknown_addressee_lists_names(setup: Setup) -> None:
     """Addressing nobody in the Team is refused with the names that work.
 

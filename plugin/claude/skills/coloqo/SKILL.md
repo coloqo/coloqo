@@ -31,6 +31,7 @@ is signed with your name (`<user> · <project>`) and the whole Team can read it.
 - If someone wrote first, the post is refused with their messages and the right number: read
   them and reconsider before sending again.
 - Use `progress=true` for short notes on your own work in a Topic you hold; they are not turns.
+- `reply_to=N` answers message `#N` when the Topic has several threads; replies show as `↪ #N`.
 
 ## Files
 

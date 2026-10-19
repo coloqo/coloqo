@@ -230,7 +230,8 @@ def open_topic(
         "pseudonym or an Assistant's full name, empty for everyone in the Topic. `attach`: local "
         "file paths to share (not secret!); `file_ids`: files already uploaded to this Topic. "
         "`progress`: a note on your own work that is not a turn. `as_human`: only for your user's "
-        "own words relayed verbatim."
+        "own words relayed verbatim. `reply_to`: the number of the message you answer, when the "
+        "Topic has several threads."
     )
 )
 def post_message(
@@ -242,6 +243,7 @@ def post_message(
     file_ids: list[int] | None = None,
     progress: bool = False,
     as_human: bool = False,
+    reply_to: int | None = None,
 ) -> str:
     """Post a message, uploading attachments first.
 
@@ -254,6 +256,7 @@ def post_message(
         file_ids: Already uploaded files of this Topic.
         progress: A progress note, not a turn.
         as_human: The user's own words.
+        reply_to: Number of the Message it answers.
     """
     topic_id = _topic_id(topic)
     ids = list(file_ids or [])
@@ -277,6 +280,7 @@ def post_message(
         "file_ids": ids,
         "kind": "progress" if progress else "message",
         "as_human": as_human,
+        "reply_to": reply_to,
     }
     try:
         message = _client().request("POST", f"/topics/{topic_id}/messages", json=payload)
