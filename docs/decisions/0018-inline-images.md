@@ -23,7 +23,8 @@ asked to see attached images right in the Message; previews of documents are a l
   carry none, so it does not replace this one.
 - **In a Message** the images come under the text, before the other files, reduced to the
   column's width and about 320 px in height, loaded lazily, with the name, the size and a
-  download link under each. An image larger than a setting (`preview_max_bytes`, 10 MB by
+  download link under each. An image of an extreme shape is cropped to its start instead of
+  shrunk to a strip: a tall one (a full-page screenshot) to its top, a wide one to its left. An image larger than a setting (`preview_max_bytes`, 10 MB by
   default) is shown as an ordinary file: without server thumbnails the browser would load it
   whole. An image attached to a Message being written shows a small preview.
 - **A click opens the image over the page** in a modal `<dialog>`: the image fits the screen

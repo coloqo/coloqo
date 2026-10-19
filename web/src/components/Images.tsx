@@ -6,38 +6,63 @@ import { fileSize } from '../lib/format'
 
 /** Images attached to a Message, reduced; a click opens them over the page (decision 0018). */
 export function MessageImages({ images }: { images: FileInfo[] }) {
-  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState<number | null>(null)
   return (
     <>
       <div className="mt-2 flex flex-wrap gap-3">
         {images.map((file, index) => (
-          <figure key={file.id} className="flex max-w-full flex-col gap-1">
-            <button
-              type="button"
-              className="group overflow-hidden rounded-md border border-stone-200 bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:border-stone-700 dark:bg-stone-800"
-              onClick={() => setOpen(index)}
-              aria-label={t('images.open', { name: file.name })}
-            >
-              <img
-                src={fileUrl(file)}
-                alt={file.name}
-                loading="lazy"
-                className="block max-h-80 max-w-full object-contain transition-opacity group-hover:opacity-90"
-              />
-            </button>
-            <figcaption className="flex min-w-0 items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-              <span className="truncate">{file.name}</span>
-              <span className="shrink-0">· {fileSize(file.size, i18n.resolvedLanguage ?? 'ru')} ·</span>
-              <a href={downloadUrl(file)} download={file.name} className="shrink-0 text-amber-700 hover:underline dark:text-amber-400">
-                {t('images.download')}
-              </a>
-            </figcaption>
-          </figure>
+          <Thumbnail key={file.id} file={file} onOpen={() => setOpen(index)} />
         ))}
       </div>
       {open !== null && <ImageViewer images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
     </>
+  )
+}
+
+type Frame = { tall: boolean; width: number; height: number }
+
+/**
+ * Crop an image of an extreme shape to its start: reduced whole, a full-page screenshot would
+ * be a strip a few dozen pixels wide.
+ */
+function frameOf(width: number, height: number): Frame | null {
+  if (height > width * 2) return { tall: true, width: Math.min(width, 240), height: Math.min(height, 320) }
+  if (width > height * 4) return { tall: false, width, height: Math.min(height, 160) }
+  return null
+}
+
+function Thumbnail({ file, onOpen }: { file: FileInfo; onOpen: () => void }) {
+  const { t, i18n } = useTranslation()
+  const [frame, setFrame] = useState<Frame | null>(null)
+  const wide = frame !== null && !frame.tall
+  // A wide frame takes the column, up to the image's own width; the others keep their own.
+  return (
+    <figure className="flex max-w-full flex-col gap-1" style={wide ? { width: `min(${frame.width}px, 100%)` } : undefined}>
+      <button
+        type="button"
+        className={`group ${wide ? 'self-stretch' : 'self-start'} overflow-hidden rounded-md border border-stone-200 bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:border-stone-700 dark:bg-stone-800`}
+        onClick={onOpen}
+        aria-label={t('images.open', { name: file.name })}
+      >
+        <img
+          src={fileUrl(file)}
+          alt={file.name}
+          loading="lazy"
+          onLoad={(event) => setFrame(frameOf(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight))}
+          style={frame ? { width: frame.tall ? frame.width : undefined, height: frame.height } : undefined}
+          className={`block max-w-full transition-opacity group-hover:opacity-90 ${
+            frame ? (frame.tall ? 'object-cover object-top' : 'w-full object-cover object-left') : 'max-h-80 object-contain'
+          }`}
+        />
+      </button>
+      <figcaption className="flex min-w-0 items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+        <span className="truncate">{file.name}</span>
+        <span className="shrink-0">· {fileSize(file.size, i18n.resolvedLanguage ?? 'ru')} ·</span>
+        <a href={downloadUrl(file)} download={file.name} className="shrink-0 text-amber-700 hover:underline dark:text-amber-400">
+          {t('images.download')}
+        </a>
+      </figcaption>
+    </figure>
   )
 }
 

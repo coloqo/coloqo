@@ -7,10 +7,11 @@ app.coloqo.team {
 	encode @web zstd gzip
 
 	header {
+		# Applied to the response from the server, so `?` below can see what the server set.
+		defer
 		Strict-Transport-Security "max-age=31536000"
 		# No third-party code on the app's pages (decision 0013). `?` keeps a policy the server
-		# set itself: files carry a stricter one (decision 0018). Removing a header below defers
-		# these until the response, so without `?` this one would replace the server's.
+		# set itself: files carry a stricter one (decision 0018).
 		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin

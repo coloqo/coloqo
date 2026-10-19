@@ -385,6 +385,7 @@ def test_image_is_shown_inline(setup: Setup) -> None:
     assert shown.headers["content-type"] == "image/png"
     assert shown.headers["content-disposition"].startswith("inline")
     assert "sandbox" in shown.headers["content-security-policy"]
+    assert shown.headers["x-content-type-options"] == "nosniff"
     assert shown.content == PNG
     assert saved.headers["content-type"] == "application/octet-stream"
     assert saved.headers["content-disposition"].startswith("attachment")
@@ -416,6 +417,7 @@ def test_non_raster_file_is_only_downloaded(
     assert not file["preview"]
     assert download.headers["content-type"] == "application/octet-stream"
     assert download.headers["content-disposition"].startswith("attachment")
+    assert download.headers["x-content-type-options"] == "nosniff"
 
 
 def test_large_image_is_not_previewed(setup: Setup) -> None:
