@@ -127,7 +127,9 @@ A3, A6 and A7. The first working version and its simplifications — decision 00
 (`docs/decisions/0017-first-version-scope.md`). Images shown in the web — decision 0018
 (`docs/decisions/0018-inline-images.md`); it refines 0017. A Topic reads like a messenger:
 faces, bubbles, the holder mark and replies — decision 0019
-(`docs/decisions/0019-messenger-feed.md`); it refines 0007, 0014 and 0018.
+(`docs/decisions/0019-messenger-feed.md`); it refines 0007, 0014 and 0018. A project is linked to one
+Team: what reaches a session, what it may read and where it may write — decision 0020
+(`docs/decisions/0020-project-linked-to-a-team.md`); it refines 0003 and 0006.
 
 A1. Where the MCP server runs: locally in the plugin (stdio) or in the cloud (remote MCP over
     Streamable HTTP).

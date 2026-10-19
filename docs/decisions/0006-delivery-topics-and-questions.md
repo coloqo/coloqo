@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-17 · **Question:** A6, `docs/architecture/architecture.md`
 
-**Refined by decision 0015** (2026-10-17): workers.
+**Refined by decision 0015** (2026-10-17): workers. **By decision 0020** (2026-10-19): delivery only for the Team a project is linked to.
 
 ## Decision
 
