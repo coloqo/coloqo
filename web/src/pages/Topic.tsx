@@ -96,7 +96,7 @@ function continues(message: Message, previous: Message | undefined): boolean {
     message.kind === 'message' &&
     previous.kind === 'message' &&
     previous.author === message.author &&
-    previous.assistant === message.assistant &&
+    previous.assistant_id === message.assistant_id &&
     previous.to === message.to &&
     previous.to_assistant === message.to_assistant &&
     previous.by_holder === message.by_holder &&
@@ -173,7 +173,7 @@ function MessageItem({
   message: Message
   original: Message | undefined
   me: Me
-  holder: string | null
+  holder: number | null
   grouped: boolean
   narrow: boolean
   onReply: (message: Message) => void
@@ -188,7 +188,7 @@ function MessageItem({
   const others = message.files.filter((file) => !file.preview)
   const size = narrow ? 32 : 40
   const name = message.assistant ?? message.author ?? t('team.noName')
-  const held = message.by_holder ? (message.assistant !== null && message.assistant === holder ? 'now' : 'then') : null
+  const held = message.by_holder ? (message.assistant_id !== null && message.assistant_id === holder ? 'now' : 'then') : null
   const bubble = progress
     ? 'border border-dashed border-stone-300 text-stone-500 italic dark:border-stone-700 dark:text-stone-400'
     : mine
@@ -712,7 +712,7 @@ export function TopicPage({ me }: { me: Me }) {
                     <MessageItem
                       message={message}
                       me={me}
-                      holder={data.holder}
+                      holder={data.holder_assistant_id}
                       grouped={!divider && !newDay && continues(message, previous)}
                       narrow={narrow}
                       original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}

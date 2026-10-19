@@ -92,6 +92,8 @@ class MessageOut(BaseModel):
         kind: A turn or a progress note.
         author: Pseudonym of the User on whose behalf it is written.
         assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.
+        assistant_id: Its id: names repeat when one person has the same project folder on two
+            computers.
         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
         to_assistant: Name of the addressed Assistant, if a specific one.
         relayed: The Assistant posted its human's own words.
@@ -106,6 +108,7 @@ class MessageOut(BaseModel):
     kind: MessageKind
     author: str | None
     assistant: str | None
+    assistant_id: int | None
     to: str | None
     to_assistant: str | None
     relayed: bool
@@ -381,6 +384,7 @@ async def _message_outs(
             kind=m.kind,
             author=users.get(m.author_user_id),
             assistant=assistants.get(m.author_assistant_id or 0),
+            assistant_id=m.author_assistant_id,
             to=users.get(m.to_user_id or 0),
             to_assistant=assistants.get(m.to_assistant_id or 0),
             relayed=m.relayed,

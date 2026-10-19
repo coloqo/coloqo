@@ -221,6 +221,13 @@ def test_messages_of_the_holder_are_marked(setup: Setup) -> None:
     messages = setup.alice.get(f"/api/topics/{tid}").json()["messages"]
 
     assert [m["by_holder"] for m in messages] == [True, False, True, False, False]
+    assert [m["assistant_id"] for m in messages] == [
+        setup.alice_api.assistant_id,
+        setup.bob_web.assistant_id,
+        setup.bob_web.assistant_id,
+        setup.alice_api.assistant_id,
+        None,
+    ]
 
 
 def test_migration_marks_messages_of_the_current_holder(setup: Setup, settings: Settings) -> None:

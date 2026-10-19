@@ -595,7 +595,7 @@
         "type": "string"
       },
       "MessageOut": {
-        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    relayed: The Assistant posted its human's own words.\n    reply_to: Number of the Message it answers, if any.\n    by_holder: Its Assistant held the Topic when it was written.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
+        "description": "A Message in a Topic.\n\nAttributes:\n    number: Position in the Topic.\n    kind: A turn or a progress note.\n    author: Pseudonym of the User on whose behalf it is written.\n    assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.\n    assistant_id: Its id: names repeat when one person has the same project folder on two\n        computers.\n    to: Pseudonym of the addressee; ``None`` for everyone in the Topic.\n    to_assistant: Name of the addressed Assistant, if a specific one.\n    relayed: The Assistant posted its human's own words.\n    reply_to: Number of the Message it answers, if any.\n    by_holder: Its Assistant held the Topic when it was written.\n    body: Markdown text.\n    files: Files attached to it.\n    created_at: When it was written.",
         "properties": {
           "assistant": {
             "anyOf": [
@@ -607,6 +607,17 @@
               }
             ],
             "title": "Assistant"
+          },
+          "assistant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Id"
           },
           "author": {
             "anyOf": [
@@ -689,6 +700,7 @@
           "kind",
           "author",
           "assistant",
+          "assistant_id",
           "to",
           "to_assistant",
           "relayed",

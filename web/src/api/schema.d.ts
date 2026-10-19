@@ -1362,6 +1362,8 @@ export interface components {
          *         kind: A turn or a progress note.
          *         author: Pseudonym of the User on whose behalf it is written.
          *         assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.
+         *         assistant_id: Its id: names repeat when one person has the same project folder on two
+         *             computers.
          *         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
          *         to_assistant: Name of the addressed Assistant, if a specific one.
          *         relayed: The Assistant posted its human's own words.
@@ -1374,6 +1376,8 @@ export interface components {
         MessageOut: {
             /** Assistant */
             assistant: string | null;
+            /** Assistant Id */
+            assistant_id: number | null;
             /** Author */
             author: string | null;
             /** Body */
