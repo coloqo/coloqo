@@ -1644,7 +1644,7 @@
     },
     "/api/areas/{area_id}/topics": {
       "post": {
-        "description": "Open a Topic in an Area with its first Message; the calling Assistant holds it.\n\nArgs:\n    request: The incoming request.\n    area_id: The Area.\n    body: Title and first Message.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Area in the caller's Teams; 422 for an\n        unknown addressee.",
+        "description": "Open a Topic in an Area with its first Message; the calling Assistant holds it.\n\nArgs:\n    request: The incoming request.\n    area_id: The Area.\n    body: Title and first Message.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Area in the caller's Teams; 403 when the\n        caller may not write there (decision 0020); 422 for an unknown addressee.",
         "operationId": "create_topic_api_areas__area_id__topics_post",
         "parameters": [
           {
@@ -2830,7 +2830,7 @@
     },
     "/api/files/{file_id}": {
       "get": {
-        "description": "Download a file of one of the caller's Teams.\n\nA raster image recognised at upload is served inline with its own type, so the web can\nshow it (decision 0018); any other file is an attachment of an opaque type. Either way\nthe browser never renders it as a page.\n\nArgs:\n    request: The incoming request.\n    file_id: The file.\n    actor: The caller.\n    db: Database session.\n    download: Serve an image as an attachment too, to save it under its name.\n\nRaises:\n    HTTPException: 404 when there is no such file for the caller.",
+        "description": "Download a file of one of the caller's Teams.\n\nA raster image recognised at upload is served inline with its own type, so the web can\nshow it (decision 0018); any other file is an attachment of an opaque type. Either way\nthe browser never renders it as a page.\n\nArgs:\n    request: The incoming request.\n    file_id: The file.\n    actor: The caller.\n    db: Database session.\n    download: Serve an image as an attachment too, to save it under its name.\n\nRaises:\n    HTTPException: 404 when there is no such file for the caller; 403 for a plugin\n        request without an Assistant.",
         "operationId": "download_file_api_files__file_id__get",
         "parameters": [
           {
@@ -4150,7 +4150,7 @@
     },
     "/api/teams/{team_id}/topics": {
       "get": {
-        "description": "List a Team's Topics, newest activity first; deleted ones are left out.\n\nArgs:\n    request: The incoming request.\n    team_id: The Team.\n    actor: The caller.\n    db: Database session.\n    area_id: Only this Area.\n    status_filter: Only open or only closed.\n    limit: At most this many.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team.",
+        "description": "List a Team's Topics, newest activity first; deleted ones are left out.\n\nArgs:\n    request: The incoming request.\n    team_id: The Team.\n    actor: The caller.\n    db: Database session.\n    area_id: Only this Area.\n    status_filter: Only open or only closed.\n    limit: At most this many.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 for a plugin request\n        without an Assistant.",
         "operationId": "list_topics_api_teams__team_id__topics_get",
         "parameters": [
           {
@@ -4273,7 +4273,7 @@
     },
     "/api/topics/{topic_id}": {
       "get": {
-        "description": "Return a Topic with its Messages after a number.\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    actor: The caller.\n    db: Database session.\n    after: Only Messages with a greater number.\n    limit: At most this many Messages, the oldest of them.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams.",
+        "description": "Return a Topic with its Messages after a number.\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    actor: The caller.\n    db: Database session.\n    after: Only Messages with a greater number.\n    limit: At most this many Messages, the oldest of them.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a\n        plugin request without an Assistant.",
         "operationId": "read_topic_api_topics__topic_id__get",
         "parameters": [
           {
@@ -4454,7 +4454,7 @@
     },
     "/api/topics/{topic_id}/files": {
       "post": {
-        "description": "Upload a file into a Topic; the request body is the content.\n\nAttach it to a Message by its id. Files are not secret: everyone in the Team can read\nthem (decision 0005 covers secrets).\n\nArgs:\n    request: The incoming request with the content as its body.\n    topic_id: The Topic.\n    actor: The caller.\n    db: Database session.\n    x_file_name: File name, percent-encoded.\n    content_type: Media type of the content.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 422 for an empty name; 413 when the\n        file or the Team's storage is over the limit.\n    OSError: The file cannot be written.",
+        "description": "Upload a file into a Topic; the request body is the content.\n\nAttach it to a Message by its id. Files are not secret: everyone in the Team can read\nthem (decision 0005 covers secrets).\n\nArgs:\n    request: The incoming request with the content as its body.\n    topic_id: The Topic.\n    actor: The caller.\n    db: Database session.\n    x_file_name: File name, percent-encoded.\n    content_type: Media type of the content.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when\n        the file or the Team's storage is over the limit.\n    OSError: The file cannot be written.",
         "operationId": "upload_file_api_topics__topic_id__files_post",
         "parameters": [
           {
@@ -4548,7 +4548,7 @@
     },
     "/api/topics/{topic_id}/hold": {
       "post": {
-        "description": "Make the calling Assistant the Topic's holder (decision 0006).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 without an Assistant.",
+        "description": "Make the calling Assistant the Topic's holder (decision 0006).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when\n        it may not write there (decision 0020); 410 for a deleted Topic.",
         "operationId": "hold_topic_api_topics__topic_id__hold_post",
         "parameters": [
           {
@@ -4623,7 +4623,7 @@
     },
     "/api/topics/{topic_id}/messages": {
       "post": {
-        "description": "Write a Message with the number the writer believes is next (decision 0007).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread\n        Messages when the number is not next, or ``turn_limit`` when the Topic waits for\n        a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is\n        not an earlier Message of the Topic.",
+        "description": "Write a Message with the number the writer believes is next (decision 0007).\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the\n        unread Messages when the number is not next, or ``turn_limit`` when the Topic\n        waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is\n        not an earlier Message of the Topic.",
         "operationId": "post_message_api_topics__topic_id__messages_post",
         "parameters": [
           {
@@ -4708,7 +4708,7 @@
     },
     "/api/topics/{topic_id}/read": {
       "post": {
-        "description": "Record how far the caller has read a Topic; it leaves the Inbox when read through.\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: Number of the newest Message read.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams.",
+        "description": "Record how far the caller has read a Topic; it leaves the Inbox when read through.\n\nArgs:\n    request: The incoming request.\n    topic_id: The Topic.\n    body: Number of the newest Message read.\n    actor: The caller.\n    db: Database session.\n\nAn Assistant reading another Team's Topic marks nothing: that Team's Inbox stays as it was.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a\n        plugin request without an Assistant.",
         "operationId": "mark_read_api_topics__topic_id__read_post",
         "parameters": [
           {

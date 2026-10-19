@@ -55,8 +55,8 @@ export interface paths {
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such Area in the caller's Teams; 422 for an
-         *             unknown addressee.
+         *         HTTPException: 404 when there is no such Area in the caller's Teams; 403 when the
+         *             caller may not write there (decision 0020); 422 for an unknown addressee.
          */
         post: operations["create_topic_api_areas__area_id__topics_post"];
         delete?: never;
@@ -557,7 +557,8 @@ export interface paths {
          *         download: Serve an image as an attachment too, to save it under its name.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such file for the caller.
+         *         HTTPException: 404 when there is no such file for the caller; 403 for a plugin
+         *             request without an Assistant.
          */
         get: operations["download_file_api_files__file_id__get"];
         put?: never;
@@ -1020,7 +1021,8 @@ export interface paths {
          *         limit: At most this many.
          *
          *     Raises:
-         *         HTTPException: 404 when the caller is not in the Team.
+         *         HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
+         *             without an Assistant.
          */
         get: operations["list_topics_api_teams__team_id__topics_get"];
         put?: never;
@@ -1051,7 +1053,8 @@ export interface paths {
          *         limit: At most this many Messages, the oldest of them.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such Topic in the caller's Teams.
+         *         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
+         *             plugin request without an Assistant.
          */
         get: operations["read_topic_api_topics__topic_id__get"];
         put?: never;
@@ -1108,8 +1111,9 @@ export interface paths {
          *         content_type: Media type of the content.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such Topic; 422 for an empty name; 413 when the
-         *             file or the Team's storage is over the limit.
+         *         HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+         *             there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when
+         *             the file or the Team's storage is over the limit.
          *         OSError: The file cannot be written.
          */
         post: operations["upload_file_api_topics__topic_id__files_post"];
@@ -1139,7 +1143,8 @@ export interface paths {
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such Topic; 403 without an Assistant.
+         *         HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when
+         *             it may not write there (decision 0020); 410 for a deleted Topic.
          */
         post: operations["hold_topic_api_topics__topic_id__hold_post"];
         delete?: never;
@@ -1169,9 +1174,10 @@ export interface paths {
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread
-         *             Messages when the number is not next, or ``turn_limit`` when the Topic waits for
-         *             a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
+         *         HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+         *             there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the
+         *             unread Messages when the number is not next, or ``turn_limit`` when the Topic
+         *             waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
          *             not an earlier Message of the Topic.
          */
         post: operations["post_message_api_topics__topic_id__messages_post"];
@@ -1201,8 +1207,11 @@ export interface paths {
          *         actor: The caller.
          *         db: Database session.
          *
+         *     An Assistant reading another Team's Topic marks nothing: that Team's Inbox stays as it was.
+         *
          *     Raises:
-         *         HTTPException: 404 when there is no such Topic in the caller's Teams.
+         *         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
+         *             plugin request without an Assistant.
          */
         post: operations["mark_read_api_topics__topic_id__read_post"];
         delete?: never;

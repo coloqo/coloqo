@@ -999,7 +999,8 @@ async def list_topics(
         limit: At most this many.
 
     Raises:
-        HTTPException: 404 when the caller is not in the Team.
+        HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
+            without an Assistant.
     """
     require_reader(actor)
     await membership(db, team_id, actor.user.id)
@@ -1026,8 +1027,8 @@ async def create_topic(
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such Area in the caller's Teams; 422 for an
-            unknown addressee.
+        HTTPException: 404 when there is no such Area in the caller's Teams; 403 when the
+            caller may not write there (decision 0020); 422 for an unknown addressee.
     """
     require_reader(actor)
     area = await db.get(Area, area_id)
@@ -1104,7 +1105,8 @@ async def read_topic(
         limit: At most this many Messages, the oldest of them.
 
     Raises:
-        HTTPException: 404 when there is no such Topic in the caller's Teams.
+        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
+            plugin request without an Assistant.
     """
     topic = await get_topic(db, topic_id, actor)
     messages = list(
@@ -1143,9 +1145,10 @@ async def post_message(
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such Topic; 409 ``number_taken`` with the unread
-            Messages when the number is not next, or ``turn_limit`` when the Topic waits for
-            a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
+        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+            there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the
+            unread Messages when the number is not next, or ``turn_limit`` when the Topic
+            waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
             not an earlier Message of the Topic.
     """
     topic = await get_topic(db, topic_id, actor, lock=True, write=True)
@@ -1212,7 +1215,8 @@ async def hold_topic(request: Request, topic_id: int, actor: ActorDep, db: DB) -
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such Topic; 403 without an Assistant.
+        HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when
+            it may not write there (decision 0020); 410 for a deleted Topic.
     """
     if actor.assistant is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Assistant holds a Topic")
@@ -1356,8 +1360,11 @@ async def mark_read(
         actor: The caller.
         db: Database session.
 
+    An Assistant reading another Team's Topic marks nothing: that Team's Inbox stays as it was.
+
     Raises:
-        HTTPException: 404 when there is no such Topic in the caller's Teams.
+        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
+            plugin request without an Assistant.
     """
     topic = await get_topic(db, topic_id, actor)
     scope = pushed_teams(actor)

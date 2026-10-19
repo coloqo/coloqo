@@ -60,8 +60,9 @@ async def upload_file(
         content_type: Media type of the content.
 
     Raises:
-        HTTPException: 404 when there is no such Topic; 422 for an empty name; 413 when the
-            file or the Team's storage is over the limit.
+        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+            there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when
+            the file or the Team's storage is over the limit.
         OSError: The file cannot be written.
     """
     settings = request.app.state.settings
@@ -162,7 +163,8 @@ async def download_file(
         download: Serve an image as an attachment too, to save it under its name.
 
     Raises:
-        HTTPException: 404 when there is no such file for the caller.
+        HTTPException: 404 when there is no such file for the caller; 403 for a plugin
+            request without an Assistant.
     """
     file = await db.get(File, file_id)
     if file is None:
