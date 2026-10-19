@@ -58,6 +58,8 @@ Logs: `journalctl -u coloqo` and `journalctl -u caddy`.
 ## Updates
 
 - Debian and Caddy: `unattended-upgrades`, automatically.
+- `Caddyfile`: `deploy.sh` does not touch it. Copy the new one to `/etc/caddy/Caddyfile` and
+  run `sudo systemctl reload caddy`.
 - Python: `sudo env UV_PYTHON_INSTALL_DIR=/opt/coloqo/python uv python upgrade 3.14`, then
   `sudo systemctl restart coloqo`.
 - uv: change `UV_VERSION` and `UV_SHA256` in `setup.sh` and run it again.

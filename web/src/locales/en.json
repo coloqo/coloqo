@@ -175,6 +175,16 @@
     "inMessage": "in Message #{{number}}",
     "notAttached": "not attached"
   },
+  "images": {
+    "open": "Open image {{name}}",
+    "download": "download",
+    "original": "Open original",
+    "close": "Close",
+    "previous": "Previous image",
+    "next": "Next image",
+    "position": "{{index}} / {{count}}",
+    "save": "Download"
+  },
   "device": {
     "title": "Log in a computer",
     "lead": "This page confirms a login from a computer where “uvx coloqo login” is running. Check that the code matches the one printed in the terminal.",

@@ -19,7 +19,8 @@ implementer and await the author's review; each simplification names what it rep
   unread ones (decision 0007). A Message is addressed to a Member, to a specific Assistant or to
   everyone in the Topic. Only a human closes a Topic, with an outcome note; a new turn reopens it.
 - **Files:** non-secret files uploaded into a Topic and attached to Messages; up to 100 MB each and
-  5 GB per Team (decision 0008); downloaded as attachments only.
+  5 GB per Team (decision 0008); downloaded as attachments; raster images are shown in the web
+  (decision 0018).
 - **Delivery:** the Inbox (Topics with unread Messages for the User), the SSE event stream with
   heartbeats and catch-up by the last id, the plugin monitor printing a line per relevant event,
   the session start summary and the prompt reminder of addressed Topics (decision 0006).

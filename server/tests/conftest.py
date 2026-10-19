@@ -102,6 +102,7 @@ def settings(database_url: str, tmp_path: Path) -> Settings:
         files_dir=tmp_path / "files",
         max_file_bytes=1024,
         team_storage_bytes=4096,
+        preview_max_bytes=512,
     )
 
 

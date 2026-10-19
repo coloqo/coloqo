@@ -30,13 +30,14 @@ class Database:
         await self.engine.dispose()
 
 
-def migrate(url: str) -> None:
+def migrate(url: str, files_dir: Path) -> None:
     """Bring the database schema to the newest migration.
 
     Runs at server start (decision 0013): one instance, so no other process races it.
 
     Args:
         url: SQLAlchemy URL of the database.
+        files_dir: The instance's file directory, for migrations that read the files.
 
     Raises:
         sqlalchemy.exc.OperationalError: The database cannot be reached.
@@ -45,4 +46,5 @@ def migrate(url: str) -> None:
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS_DIR))
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    config.attributes["files_dir"] = Path(files_dir)
     command.upgrade(config, "head")

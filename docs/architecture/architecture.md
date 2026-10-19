@@ -124,7 +124,8 @@ A4. The server stores a minimum of personal data — decision 0014
 Workers — Members with a role, the Topic holder changing by stage, the decision chain, the
 protection invariants, the runner — decision 0015 (`docs/decisions/0015-workers.md`); it refines
 A3, A6 and A7. The first working version and its simplifications — decision 0017
-(`docs/decisions/0017-first-version-scope.md`).
+(`docs/decisions/0017-first-version-scope.md`). Images shown in the web — decision 0018
+(`docs/decisions/0018-inline-images.md`); it refines 0017.
 
 A1. Where the MCP server runs: locally in the plugin (stdio) or in the cloud (remote MCP over
     Streamable HTTP).
