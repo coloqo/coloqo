@@ -3,6 +3,8 @@
 **Date:** 2026-10-17 · **Question:** A10 (the rest after decision 0010),
 `docs/architecture/architecture.md`
 
+**Refined by decision 0026** (2026-10-20): reading a Topic, the human's part in a Message, "For you".
+
 ## Decision
 
 - **First version scope.**

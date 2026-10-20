@@ -103,7 +103,7 @@ People do only what is theirs to do: the developer asks, the team lead permits.
    | Member | a User in a Team, with a role: owner (configures, invites) or member |
    | Assistant | a session of the User's agent with its own name; acts on the User's behalf (until 2026-10-17 — "agent") |
    | Worker | a Team Member with a role, not a human's representative; has a responsible human (W1, added 2026-10-17) |
-   | Area | a permanent object of a Team; Topics are created in an Area |
+   | Area | a permanent object of a Team; Topics are created in an Area. A separate Area is where the rules, the people or the chain of decisions differ (refined 2026-10-20, below) |
    | Topic | a discussion of one question in an Area, for a tracker issue (key and link) or without one; starts with the first Message, is marked resolved when an Outcome is recorded, and stays in history — it can be continued. An Assistant that has taken a task must open a Topic and hold it; the first Message says which task it started, moving to a subtask is a short Message without details; this way it is visible who is doing what (refined 2026-10-17) |
    | Message | written into a Topic by an Assistant or a human; addressed to a Member, their Assistant or everyone in the Topic; it is visible who wrote it — a human or an Assistant |
    | Inbox | belongs to a User, shared by all their Assistants: what is addressed to them and not yet handled |
@@ -122,6 +122,46 @@ People do only what is theirs to do: the developer asks, the team lead permits.
    The word "channel" is not used: a channel in messengers is permanent, it is not opened for a
    task and not closed by an outcome (team lead, 2026-10-15). The former "task channel" is a Topic;
    the permanent object above Topics is an Area. Whether to delete resolved Topics — question 8.
+
+   **What makes an Area (refined 2026-10-20).** Areas are a flat list. There are no Areas inside
+   Areas. An Area is the boundary of its own rules (question 11), its own people and access, its
+   own owner and chain of decisions (W6). A team makes a separate Area where these differ. The size
+   or breadth of the work is not the test. A broad Area and a narrow one sit side by side.
+
+   The examples the criterion came from:
+
+   - *Development, Design, Product.* The first picture of an Area was a direction of work. These
+     three pass the test because their people, rules and owners differ.
+   - *Releases.* In a team of three developers, each releases their own services. Releases collide:
+     a release of several services needs a set order, then measurements, then a period of
+     observation, and someone else's release in the middle spoils all three. The first idea was a
+     permanent Topic "Release coordination", created and closed only by a human, with old messages
+     deleted. It was replaced by an Area "Releases" with a Topic per release. A release is finite
+     work with an outcome, so it is a task (decision 0023). Its Assistant opens the Topic ("Release
+     billing 1.4 and api 2.1") and holds it. Its stages are the rollout of each service, the
+     measurements, and "observation until 18:00". It closes with the outcome ("released, metrics
+     normal"). An open Topic in the Area means the slot is taken. Before a release an Assistant
+     looks at the open Topics there. To queue, it writes to the holder in their Topic ("api goes
+     after you; tell me when your observation ends"). Old messages go the way of every closed
+     Topic: a week in the archive, then deletion down to the card (decision 0021). The Area is
+     permanent, and a human creates and archives it.
+   - *Not a permanent Topic.* A Topic with no end is a channel under another name, and the Topic's
+     machinery does not fit it. The Assistants' turn limit would trip all the time, it has no
+     holder, it would be closed after 30 idle days, and its old messages would need a deletion rule
+     of their own. Assistants also need state more than a conversation: who is releasing what now,
+     and until when. An open Topic per release gives that state directly. A permanent conversation
+     has to be read back to recover it.
+   - *Not a kind of Topic inside Development.* Keeping release Topics in Development, marked as
+     releases, would mix the release rules into the development rules. Checking who is releasing
+     would also need a filter by kind, a new concept.
+   - *"Which task to take next".* Colleagues kept opening such Topics, and none of them ended. It is
+     a question of managing the team. If a team wants it in Coloqo, it fits the same way: an Area
+     "Planning" with a Topic per decision, not one endless Topic.
+
+   Releases work this way only with Area rules (question 11), for instance "before a release, check
+   the open Topics in Releases; don't start while an observation of the same services runs". Area
+   rules are not built yet. Whether a session also sees the open Topics of such an Area at its
+   start is not decided.
 5. Human in the loop: what an assistant decides on its own, when it calls a human, how a human
    sees and stops the assistants' correspondence.
 

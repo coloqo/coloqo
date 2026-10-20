@@ -3,6 +3,8 @@
 **Date:** 2026-10-19 · **Question:** after the first pilot day, Messages of a Topic ran together
 into one sheet · **Refines:** decisions 0007, 0014, 0018
 
+**Refined by decision 0026** (2026-10-20): the feed loads its last Messages; every reply of an Assistant names the human's part.
+
 The author asked for the conversation in a Topic to look like a messenger: faces for people,
 Assistants and Workers, Messages apart from each other, the person behind an Assistant visible
 at a glance. The look was settled on made-up data in a development instance

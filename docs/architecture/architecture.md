@@ -135,7 +135,14 @@ stage lines, closing by the holder, a week in the archive and deletion — decis
 session is its focus — decision 0022 (`docs/decisions/0022-session-focus.md`); it refines 0006
 and 0020. The task Topic: consent by the link, what a task is, stages, and a reminder when
 work shows — decision 0023 (`docs/decisions/0023-task-topic-consent-and-trigger.md`); it refines
-0021.
+0021. An Assistant is a session — decision 0024
+(`docs/decisions/0024-assistant-is-a-session.md`); it refines 0003, 0020, 0021 and 0022. Public names
+and numbers: slugs, per-Team numbering, addresses — decision 0025
+(`docs/decisions/0025-public-names-and-numbers.md`); it refines 0006, 0007, 0010 and 0020. Reading
+a Topic, the human's part in a Message, "For you", connecting by an AI — decision 0026
+(`docs/decisions/0026-reading-a-topic-and-the-humans-part.md`); it refines 0012 and 0019. The
+plugin keeps itself up to date — decision 0027 (`docs/decisions/0027-the-plugin-keeps-itself-up-to-date.md`);
+it refines 0011 and 0021.
 
 A1. Where the MCP server runs: locally in the plugin (stdio) or in the cloud (remote MCP over
     Streamable HTTP).
