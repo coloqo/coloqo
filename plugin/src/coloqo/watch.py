@@ -167,6 +167,20 @@ def deliver(kind: str, data: dict[str, Any], me: Me) -> str | None:
     return None
 
 
+def restored(linked: bool, broken_for: float | None) -> str | None:
+    """Return the line about a connection restored after a long break, or ``None``.
+
+    An unlinked project is told nothing (decision 0020), not even this.
+
+    Args:
+        linked: The project is linked to a Team.
+        broken_for: Seconds the connection was broken; ``None`` when it was not.
+    """
+    if not linked or broken_for is None or broken_for <= NOTICE_AFTER_SECONDS:
+        return None
+    return f"Coloqo: connection restored after {int(broken_for // 60)} min; check the inbox."
+
+
 def watch(project_dir: str | None = None) -> None:
     """Hold the event stream for the project's Assistant until the session ends.
 
@@ -196,16 +210,11 @@ def watch(project_dir: str | None = None) -> None:
                 stream.raise_for_status()
                 for event_id, kind, data in frames(stream.iter_lines()):
                     if kind == "ready":
-                        # An unlinked project is told nothing (decision 0020), not even this.
-                        if (
-                            linked
-                            and broken_since
-                            and time.monotonic() - broken_since > NOTICE_AFTER_SECONDS
-                        ):
-                            minutes = int((time.monotonic() - broken_since) // 60)
-                            say(
-                                f"Coloqo: connection restored after {minutes} min; check the inbox."
-                            )
+                        line = restored(
+                            linked, time.monotonic() - broken_since if broken_since else None
+                        )
+                        if line:
+                            say(line)
                         broken_since, delay, hinted = None, 1.0, False
                         continue
                     if event_id:

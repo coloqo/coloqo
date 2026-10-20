@@ -187,3 +187,22 @@ def test_a_new_plugin_does_not_get_the_former_paths_mixed_in(
     assert me["id"] is None
     assert briefing["team"] == setup.team
     assert "older than 0.5.0" not in briefing["text"]
+
+
+def test_the_plugin_s_version_decides_the_shape_without_an_assistant(setup: Setup) -> None:
+    """A request naming no Assistant is told apart by the plugin's version alone.
+
+    Args:
+        setup: The Team.
+    """
+    token = setup.alice_api.client.headers["Authorization"]
+    client = setup.alice_api.client
+
+    old = client.get("/api/me", headers={"X-Coloqo-Assistant": "", "X-Coloqo-Plugin": "0.4.0"})
+    new = client.get("/api/me", headers={"X-Coloqo-Assistant": "", "X-Coloqo-Plugin": "0.5.0"})
+    none = client.get("/api/me", headers={"X-Coloqo-Assistant": "", "X-Coloqo-Plugin": ""})
+
+    assert token.startswith("Bearer ")
+    assert isinstance(old.json()["id"], int)
+    assert new.json()["id"] is None
+    assert isinstance(none.json()["id"], int)

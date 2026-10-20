@@ -11,7 +11,7 @@ import pytest
 from coloqo import config, mcp_server
 from coloqo.api import Project, _file_name
 from coloqo.render import file_ref, message_text, size, topic_ref, topic_text
-from coloqo.watch import Me, describe, frames
+from coloqo.watch import Me, describe, frames, restored
 
 ME = Me(pseudonym="alice", assistant="k-mine", project="p-mine")
 OTHER = "k-other"
@@ -428,3 +428,11 @@ def test_the_mcp_texts_carry_the_task_rules() -> None:
     assert "names the main one in `issue`" in mcp_server.INSTRUCTIONS
     assert "different kind of work" in tools["note_stage"]
     assert "a batch finished" in tools["close_topic"]
+
+
+def test_restored_connection_is_told_only_in_a_linked_project() -> None:
+    """A long break is told when the stream comes back, unless the project is unlinked."""
+    assert restored(True, 13 * 60) == "Coloqo: connection restored after 13 min; check the inbox."
+    assert restored(False, 13 * 60) is None
+    assert restored(True, 60) is None
+    assert restored(True, None) is None
