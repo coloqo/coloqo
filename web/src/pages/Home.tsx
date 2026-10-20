@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 
-import { api, call } from '../api/client'
+import { api, call, teamPath } from '../api/client'
 import { useInbox, useTeams } from '../api/queries'
 import { Page } from '../components/Layout'
 import { RoleBadge } from '../components/Topics'
@@ -16,10 +16,10 @@ function CreateTeam() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const create = useMutation({
-    mutationFn: (value: string) => call(api.POST('/api/teams', { body: { name: value } })),
+    mutationFn: (value: string) => call(api.POST('/api/team', { body: { name: value } })),
     onSuccess: (team) => {
       void queryClient.invalidateQueries({ queryKey: ['teams'] })
-      void navigate(`/teams/${team.id}`)
+      void navigate(teamPath(team.slug))
     },
   })
   return (
@@ -52,7 +52,8 @@ export function Home() {
   const { t } = useTranslation()
   const teams = useTeams()
   const inbox = useInbox()
-  const unreadTopics = inbox.data?.length ?? 0
+  const unreadByTeam = new Map<string, number>()
+  for (const topic of inbox.data ?? []) unreadByTeam.set(topic.team, (unreadByTeam.get(topic.team) ?? 0) + 1)
   const addressed = inbox.data?.filter((topic) => topic.addressed).length ?? 0
 
   return (
@@ -66,13 +67,23 @@ export function Home() {
           {teams.data && teams.data.length > 0 && (
             <ul className="divide-y divide-stone-200 dark:divide-stone-800">
               {teams.data.map((team) => (
-                <li key={team.id}>
+                <li key={team.slug}>
                   <Link
-                    to={`/teams/${team.id}`}
+                    to={teamPath(team.slug)}
                     className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-stone-50 dark:hover:bg-stone-800/50"
                   >
                     <span className="font-medium">{team.name}</span>
-                    <RoleBadge role={team.role} />
+                    <span className="flex items-center gap-2">
+                      {(unreadByTeam.get(team.slug) ?? 0) > 0 && (
+                        <span
+                          className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white dark:text-stone-950"
+                          title={t('home.unreadInTeam', { count: unreadByTeam.get(team.slug) })}
+                        >
+                          {unreadByTeam.get(team.slug)}
+                        </span>
+                      )}
+                      <RoleBadge role={team.role} />
+                    </span>
                   </Link>
                 </li>
               ))}
@@ -84,18 +95,13 @@ export function Home() {
         </Card>
         <div className="flex flex-col gap-5">
           <Card>
-            <CardHeader title={t('nav.inbox')} />
-            <Link to="/inbox" className="block px-4 py-4 hover:bg-stone-50 dark:hover:bg-stone-800/50">
-              {unreadTopics === 0 ? (
-                <span className="text-sm text-stone-500 dark:text-stone-400">{t('inbox.empty')}</span>
+            <CardHeader title={t('nav.forYou')} />
+            <Link to="/for-you" className="block px-4 py-4 hover:bg-stone-50 dark:hover:bg-stone-800/50">
+              {addressed === 0 ? (
+                <span className="text-sm text-stone-500 dark:text-stone-400">{t('forYou.empty')}</span>
               ) : (
-                <span className="flex flex-col gap-1">
-                  <span className="font-medium">{t('home.unreadTopics', { count: unreadTopics })}</span>
-                  {addressed > 0 && (
-                    <span className="text-sm text-amber-700 dark:text-amber-400">
-                      {t('home.addressedTopics', { count: addressed })}
-                    </span>
-                  )}
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  {t('home.addressedTopics', { count: addressed })}
                 </span>
               )}
             </Link>

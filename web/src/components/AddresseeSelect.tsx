@@ -24,10 +24,10 @@ export function AddresseeSelect({
     <Select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
       <option value="">{t('compose.toEveryone')}</option>
       {named.map((member) => (
-        <optgroup key={member.user_id} label={member.pseudonym ?? ''}>
+        <optgroup key={member.pseudonym} label={member.pseudonym ?? ''}>
           <option value={member.pseudonym ?? ''}>{t('compose.toMember', { name: member.pseudonym })}</option>
           {member.assistants.map((assistant) => (
-            <option key={assistant.id} value={assistant.name}>
+            <option key={assistant.key} value={assistant.name}>
               {assistant.name}
             </option>
           ))}

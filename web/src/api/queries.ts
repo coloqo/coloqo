@@ -27,43 +27,29 @@ export function useProviders() {
 }
 
 export function useTeams() {
-  return useQuery({ queryKey: ['teams'], queryFn: () => call(api.GET('/api/teams')) })
+  return useQuery({ queryKey: ['teams'], queryFn: () => call(api.GET('/api/team')) })
 }
 
-export function useTeam(teamId: number) {
+export function useTeam(team: string) {
   return useQuery({
-    queryKey: ['team', teamId],
-    queryFn: () => call(api.GET('/api/teams/{team_id}', { params: { path: { team_id: teamId } } })),
-    enabled: teamId > 0,
+    queryKey: ['team', team],
+    queryFn: () => call(api.GET('/api/team/{team}', { params: { path: { team } } })),
+    enabled: team !== '',
   })
 }
 
-export type TopicFilter = { areaId?: number; status?: 'open' | 'closed' }
+export type TopicFilter = { area?: string; status?: 'open' | 'closed' }
 
-export function useTopics(teamId: number, filter: TopicFilter) {
+export function useTopics(team: string, filter: TopicFilter) {
   return useQuery({
-    queryKey: ['topics', teamId, filter],
+    queryKey: ['topics', team, filter],
     queryFn: () =>
       call(
-        api.GET('/api/teams/{team_id}/topics', {
-          params: {
-            path: { team_id: teamId },
-            query: { area_id: filter.areaId, status: filter.status, limit: 200 },
-          },
+        api.GET('/api/team/{team}/topic', {
+          params: { path: { team }, query: { area: filter.area, status: filter.status, limit: 200 } },
         }),
       ),
-  })
-}
-
-export function useTopic(topicId: number) {
-  return useQuery({
-    queryKey: ['topic', topicId],
-    queryFn: () =>
-      call(
-        api.GET('/api/topics/{topic_id}', {
-          params: { path: { topic_id: topicId }, query: { after: 0, limit: 500 } },
-        }),
-      ),
+    enabled: team !== '',
   })
 }
 
@@ -71,18 +57,10 @@ export function useInbox() {
   return useQuery({ queryKey: ['inbox'], queryFn: () => call(api.GET('/api/inbox')) })
 }
 
-export function useOwnAssistants() {
-  return useQuery({ queryKey: ['assistants'], queryFn: () => call(api.GET('/api/assistants')) })
-}
-
-export function useOwnAssistant(assistantId: number) {
-  return useQuery({
-    queryKey: ['assistant', assistantId],
-    queryFn: () =>
-      call(api.GET('/api/assistants/{assistant_id}', { params: { path: { assistant_id: assistantId } } })),
-  })
+export function useProjects() {
+  return useQuery({ queryKey: ['projects'], queryFn: () => call(api.GET('/api/project')) })
 }
 
 export function useInstallations() {
-  return useQuery({ queryKey: ['installations'], queryFn: () => call(api.GET('/api/installations')) })
+  return useQuery({ queryKey: ['installations'], queryFn: () => call(api.GET('/api/installation')) })
 }

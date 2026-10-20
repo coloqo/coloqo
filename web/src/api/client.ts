@@ -14,7 +14,9 @@ export type TopicDetail = Schemas['TopicDetail']
 export type Message = Schemas['MessageOut']
 export type FileInfo = Schemas['FileOut']
 export type Installation = Schemas['InstallationOut']
-export type OwnAssistant = Schemas['OwnAssistant']
+export type Project = Schemas['ProjectOut']
+export type Assistant = Schemas['AssistantOut']
+export type LinkPage = Schemas['LinkPage']
 export type DeviceLogin = Schemas['DeviceLoginOut']
 export type InvitePreview = Schemas['InvitePreview']
 export type Invite = Schemas['InviteOut']
@@ -76,10 +78,10 @@ export async function call<D>(
 }
 
 /** Upload a file into a Topic; the body is the raw content. */
-export async function uploadFile(topicId: number, file: File): Promise<FileInfo> {
+export async function uploadFile(team: string, topic: number, file: File): Promise<FileInfo> {
   // The upload endpoint takes a raw body, which the OpenAPI document does not
   // describe, so it goes through plain fetch.
-  const response = await fetch(`/api/topics/${topicId}/files`, {
+  const response = await fetch(`/api/team/${encodeURIComponent(team)}/topic/${topic}/file`, {
     method: 'POST',
     headers: {
       'X-File-Name': encodeURIComponent(file.name),
@@ -114,11 +116,20 @@ export async function uploadAvatar(file: File): Promise<void> {
   }
 }
 
-/** Where a file is served: an image inline, any other file as an attachment (decision 0018). */
-export const fileUrl = (file: FileInfo) => `/api/files/${file.id}`
+/** Where a file is served: an image inline, any other file as an attachment (decisions 0018, 0025). */
+export const fileUrl = (team: string, file: FileInfo) => `/api/team/${encodeURIComponent(team)}/file/${file.number}`
 
 /** Where a file is served as an attachment, an image too. */
-export const downloadUrl = (file: FileInfo) => `/api/files/${file.id}?download=1`
+export const downloadUrl = (team: string, file: FileInfo) => `${fileUrl(team, file)}?download=1`
+
+/** The address of a Team's page (decision 0025). */
+export const teamPath = (team: string) => `/team/${encodeURIComponent(team)}`
+
+/** The address of an Area's page. */
+export const areaPath = (team: string, area: string) => `${teamPath(team)}/area/${encodeURIComponent(area)}`
+
+/** The address of a Topic's page. */
+export const topicPath = (team: string, number: number) => `${teamPath(team)}/topic/${number}`
 
 /** Where a logged-out person goes to log in with a provider and come back. */
 export function loginUrl(provider: string, next: string): string {

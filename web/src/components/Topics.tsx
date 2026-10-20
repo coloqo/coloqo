@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import type { Schemas, Topic } from '../api/client'
+import { topicPath, type Schemas, type Topic } from '../api/client'
 import { Bell } from './Bell'
 import { Time } from './Time'
 import { Badge } from './ui'
@@ -23,7 +23,7 @@ export function TopicRow({ topic, teamName }: { topic: Topic; teamName?: string 
   return (
     <li>
       <Link
-        to={`/topics/${topic.id}`}
+        to={topicPath(topic.team, topic.number)}
         className="flex gap-3 px-4 py-3 hover:bg-stone-50 dark:hover:bg-stone-800/50"
       >
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -35,7 +35,7 @@ export function TopicRow({ topic, teamName }: { topic: Topic; teamName?: string 
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
             {teamName && <span>{teamName}</span>}
-            <span>{topic.area}</span>
+            <span>{topic.area_name}</span>
             {topic.holder && <span title={t('topic.holder')}>{topic.holder}</span>}
             {topic.status === 'closed' && <StatusBadge status="closed" />}
             {waiting && <Badge tone="amber">{t('topic.waitsForHuman')}</Badge>}
@@ -66,11 +66,11 @@ export function TopicRow({ topic, teamName }: { topic: Topic; teamName?: string 
   )
 }
 
-export function TopicList({ topics, teamNames }: { topics: Topic[]; teamNames?: Map<number, string> }) {
+export function TopicList({ topics, teamNames }: { topics: Topic[]; teamNames?: Map<string, string> }) {
   return (
     <ul className="divide-y divide-stone-200 dark:divide-stone-800">
       {topics.map((topic) => (
-        <TopicRow key={topic.id} topic={topic} teamName={teamNames?.get(topic.team_id)} />
+        <TopicRow key={`${topic.team}/${topic.number}`} topic={topic} teamName={teamNames?.get(topic.team)} />
       ))}
     </ul>
   )

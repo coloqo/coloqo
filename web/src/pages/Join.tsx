@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 
-import { ApiError, api, call } from '../api/client'
+import { ApiError, api, call, teamPath } from '../api/client'
 import { Page } from '../components/Layout'
 import { Button, Card, ErrorNote, Loading } from '../components/ui'
 import { errorText } from '../lib/format'
@@ -15,13 +15,13 @@ export function JoinPage() {
   const queryClient = useQueryClient()
   const preview = useQuery({
     queryKey: ['invite', token],
-    queryFn: () => call(api.GET('/api/invites/{token}', { params: { path: { token } } })),
+    queryFn: () => call(api.GET('/api/invite/{token}', { params: { path: { token } } })),
   })
   const accept = useMutation({
-    mutationFn: () => call(api.POST('/api/invites/{token}/accept', { params: { path: { token } } })),
+    mutationFn: () => call(api.POST('/api/invite/{token}/accept', { params: { path: { token } } })),
     onSuccess: (team) => {
       void queryClient.invalidateQueries({ queryKey: ['teams'] })
-      void navigate(`/teams/${team.id}`, { replace: true })
+      void navigate(teamPath(team.slug), { replace: true })
     },
   })
   const data = preview.data
@@ -45,7 +45,7 @@ export function JoinPage() {
                 <>
                   <p className="text-sm text-stone-600 dark:text-stone-400">{t('join.already')}</p>
                   <div>
-                    <Button variant="primary" onClick={() => navigate(`/teams/${data.team_id}`)}>
+                    <Button variant="primary" onClick={() => navigate(teamPath(data.team))}>
                       {t('join.open')}
                     </Button>
                   </div>

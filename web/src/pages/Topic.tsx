@@ -1,21 +1,23 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   ApiError,
   api,
+  areaPath,
   call,
   downloadUrl,
   fileUrl,
+  topicPath,
   uploadFile,
   type FileInfo,
   type Me,
   type Message,
   type TopicDetail,
 } from '../api/client'
-import { useTeam, useTopic } from '../api/queries'
+import { useTeam } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
 import { AuthorAvatar } from '../components/Avatar'
 import { Bell } from '../components/Bell'
@@ -39,8 +41,8 @@ function usePageVisible() {
 }
 
 /** A draft kept per Topic for this browser tab, so that a reload does not lose it. */
-function useDraft(topicId: number) {
-  const key = `coloqo.draft.${topicId}`
+function useDraft(team: string, number: number) {
+  const key = `coloqo.draft.${team}.${number}`
   const [draft, setDraftState] = useState(() => {
     try {
       return sessionStorage.getItem(key) ?? ''
@@ -60,11 +62,11 @@ function useDraft(topicId: number) {
   return [draft, setDraft] as const
 }
 
-function FileLink({ file }: { file: FileInfo }) {
+function FileLink({ file, team }: { file: FileInfo; team: string }) {
   const { i18n } = useTranslation()
   return (
     <a
-      href={downloadUrl(file)}
+      href={downloadUrl(team, file)}
       download={file.name}
       className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-stone-200 px-2 py-1 text-sm hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
     >
@@ -96,7 +98,8 @@ function continues(message: Message, previous: Message | undefined): boolean {
     message.kind === 'message' &&
     previous.kind === 'message' &&
     previous.author === message.author &&
-    previous.assistant_id === message.assistant_id &&
+    previous.assistant_key === message.assistant_key &&
+    previous.human_part === message.human_part &&
     previous.to === message.to &&
     previous.to_assistant === message.to_assistant &&
     previous.by_holder === message.by_holder &&
@@ -161,23 +164,39 @@ function ReplyArrow() {
   )
 }
 
+/** How much the Assistant's person took part in a reply: without, with, or their words (0026). */
+function HumanPart({ message }: { message: Message }) {
+  const { t } = useTranslation()
+  if (!message.human_part || !message.author) return null
+  const tone = message.human_part === 'without' ? 'stone' : 'blue'
+  return (
+    <Badge tone={tone} title={t(`message.humanPartHint.${message.human_part}`, { name: message.author })}>
+      {t(`message.humanPart.${message.human_part}`, { name: message.author })}
+    </Badge>
+  )
+}
+
 function MessageItem({
   message,
   original,
   me,
+  team,
   holder,
   grouped,
   narrow,
   onReply,
+  onJump,
   avatars,
 }: {
   message: Message
   original: Message | undefined
   me: Me
-  holder: number | null
+  team: string
+  holder: string | null
   grouped: boolean
   narrow: boolean
   onReply: (message: Message) => void
+  onJump: (number: number) => void
   avatars: Map<string, string | null | undefined>
 }) {
   const { t, i18n } = useTranslation()
@@ -190,14 +209,14 @@ function MessageItem({
   const others = message.files.filter((file) => !file.preview)
   const size = narrow ? 32 : 40
   const name = message.assistant ?? message.author ?? t('team.noName')
-  const held = message.by_holder ? (message.assistant_id !== null && message.assistant_id === holder ? 'now' : 'then') : null
+  const held = message.by_holder ? (message.assistant_key !== null && message.assistant_key === holder ? 'now' : 'then') : null
   const bubble = progress
     ? 'border border-dashed border-stone-300 text-stone-500 italic dark:border-stone-700 dark:text-stone-400'
     : mine
       ? 'bg-emerald-50 shadow-sm dark:bg-emerald-950/40'
       : 'bg-white shadow-sm dark:bg-stone-800/80'
   return (
-    <li id={`m-${message.number}`} className={`group relative flex scroll-mt-4 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
+    <li id={`m-${message.number}`} className={`group relative flex scroll-mt-16 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
       <div className="shrink-0" style={{ width: size }}>
         {!grouped && (
           <AuthorAvatar
@@ -216,7 +235,7 @@ function MessageItem({
         {!grouped && (
           <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm not-italic">
             <span className="font-semibold text-stone-900 dark:text-stone-100">{name}</span>
-            {message.relayed && <Badge tone="blue">{t('message.relayed')}</Badge>}
+            <HumanPart message={message} />
             {addressee && (
               <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-500 dark:text-stone-400'}`}>
                 {toMe && <Bell className="size-3.5 self-center" />}→ {toMe ? t('message.toYou') : addressee}
@@ -240,17 +259,17 @@ function MessageItem({
         )}
         {message.reply_to !== null && (
           <div className="mt-0.5 mb-1.5">
-            <Quote message={original} number={message.reply_to} onClick={() => jumpTo(message.reply_to!)} />
+            <Quote message={original} number={message.reply_to} onClick={() => onJump(message.reply_to!)} />
           </div>
         )}
         <div className={progress ? 'text-sm' : undefined}>
           <Markdown text={message.body} />
         </div>
-        {images.length > 0 && <MessageImages images={images} />}
+        {images.length > 0 && <MessageImages images={images} team={team} />}
         {others.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {others.map((file) => (
-              <FileLink key={file.id} file={file} />
+              <FileLink key={file.number} file={file} team={team} />
             ))}
           </div>
         )}
@@ -284,14 +303,15 @@ function DayDivider({ value }: { value: string }) {
   )
 }
 
-/** A stage or a closing: a service line in the middle of the feed, apart from the bubbles (0021). */
+/** A stage, a closing or a takeover: a service line in the feed, apart from the bubbles (0021, 0024). */
 function ServiceLine({ message }: { message: Message }) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'ru'
   const who = message.system ? 'Coloqo' : (message.assistant ?? message.author ?? t('team.noName'))
   const closed = message.kind === 'closed'
+  const taken = message.kind === 'taken'
   return (
-    <li id={`m-${message.number}`} className="mt-3 flex scroll-mt-4 justify-center">
+    <li id={`m-${message.number}`} className="mt-3 flex scroll-mt-16 justify-center">
       <span
         className={`inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-1.5 rounded-full px-3 py-1 text-center text-xs ${
           closed
@@ -302,8 +322,16 @@ function ServiceLine({ message }: { message: Message }) {
       >
         <span aria-hidden="true">{closed ? '✓' : '⚙'}</span>
         <span className="font-medium">{who}</span>
-        <span>{closed ? t('message.closedTopic') : '—'}</span>
-        {message.body && <span className="min-w-0 break-words">{message.body}</span>}
+        {taken ? (
+          <span className="min-w-0 break-words">
+            {message.body ? t('message.tookFrom', { from: message.body }) : t('message.took')}
+          </span>
+        ) : (
+          <>
+            <span>{closed ? t('message.closedTopic') : '—'}</span>
+            {message.body && <span className="min-w-0 break-words">{message.body}</span>}
+          </>
+        )}
         <span className="text-stone-500 tabular-nums dark:text-stone-400">{clock(message.created_at, lang)}</span>
       </span>
     </li>
@@ -336,8 +364,8 @@ function Compose({
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const team = useTeam(topic.team_id)
-  const [body, setBody] = useDraft(topic.id)
+  const team = useTeam(topic.team)
+  const [body, setBody] = useDraft(topic.team, topic.number)
   const [attached, setAttached] = useState<FileInfo[]>([])
   const [uploading, setUploading] = useState(0)
   const [uploadError, setUploadError] = useState<unknown>(null)
@@ -345,21 +373,21 @@ function Compose({
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ['topic', topic.id] })
-    void queryClient.invalidateQueries({ queryKey: ['topics', topic.team_id] })
-    void queryClient.invalidateQueries({ queryKey: ['team', topic.team_id] })
+    void queryClient.invalidateQueries({ queryKey: ['topic', topic.team, topic.number] })
+    void queryClient.invalidateQueries({ queryKey: ['topics', topic.team] })
+    void queryClient.invalidateQueries({ queryKey: ['team', topic.team] })
     void queryClient.invalidateQueries({ queryKey: ['inbox'] })
   }
   const send = useMutation({
     mutationFn: () =>
       call(
-        api.POST('/api/topics/{topic_id}/messages', {
-          params: { path: { topic_id: topic.id } },
+        api.POST('/api/team/{team}/topic/{number}/message', {
+          params: { path: { team: topic.team, number: topic.number } },
           body: {
             number: topic.last_number + 1,
             body,
             to: to || null,
-            file_ids: attached.map((file) => file.id),
+            files: attached.map((file) => file.number),
             reply_to: replying?.number ?? null,
           },
         }),
@@ -386,9 +414,9 @@ function Compose({
     for (const file of Array.from(files)) {
       setUploading((n) => n + 1)
       try {
-        const info = await uploadFile(topic.id, file)
+        const info = await uploadFile(topic.team, topic.number, file)
         setAttached((list) => [...list, info])
-        void queryClient.invalidateQueries({ queryKey: ['topic', topic.id] })
+        void queryClient.invalidateQueries({ queryKey: ['topic', topic.team, topic.number] })
       } catch (error) {
         setUploadError(error)
       } finally {
@@ -448,15 +476,15 @@ function Compose({
           <ul className="flex flex-wrap gap-2">
             {attached.map((file) => (
               <li
-                key={file.id}
+                key={file.number}
                 className={`inline-flex items-center gap-1 rounded-md bg-stone-100 py-0.5 pr-0.5 text-sm dark:bg-stone-800 ${file.preview ? 'pl-0.5' : 'pl-2'}`}
               >
-                {file.preview && <img src={fileUrl(file)} alt="" className="size-10 rounded object-cover" />}
+                {file.preview && <img src={fileUrl(topic.team, file)} alt="" className="size-10 rounded object-cover" />}
                 <span className="max-w-48 truncate">{file.name}</span>
                 <button
                   type="button"
                   className="rounded px-1.5 text-stone-500 hover:bg-stone-200 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-stone-100"
-                  onClick={() => setAttached((list) => list.filter((item) => item.id !== file.id))}
+                  onClick={() => setAttached((list) => list.filter((item) => item.number !== file.number))}
                   aria-label={t('compose.detach', { name: file.name })}
                 >
                   ×
@@ -503,17 +531,17 @@ function Settle({ topic }: { topic: TopicDetail }) {
   const settle = useMutation({
     mutationFn: (status: 'open' | 'closed') =>
       call(
-        api.PATCH('/api/topics/{topic_id}', {
-          params: { path: { topic_id: topic.id } },
+        api.PATCH('/api/team/{team}/topic/{number}', {
+          params: { path: { team: topic.team, number: topic.number } },
           body: { status, outcome: status === 'closed' ? outcome.trim() : '' },
         }),
       ),
     onSuccess: () => {
       setClosing(false)
       setOutcome('')
-      void queryClient.invalidateQueries({ queryKey: ['topic', topic.id] })
-      void queryClient.invalidateQueries({ queryKey: ['topics', topic.team_id] })
-      void queryClient.invalidateQueries({ queryKey: ['team', topic.team_id] })
+      void queryClient.invalidateQueries({ queryKey: ['topic', topic.team, topic.number] })
+      void queryClient.invalidateQueries({ queryKey: ['topics', topic.team] })
+      void queryClient.invalidateQueries({ queryKey: ['team', topic.team] })
       void queryClient.invalidateQueries({ queryKey: ['inbox'] })
     },
   })
@@ -566,7 +594,7 @@ function Settle({ topic }: { topic: TopicDetail }) {
   )
 }
 
-function Files({ files }: { files: FileInfo[] }) {
+function Files({ files, team, onJump }: { files: FileInfo[]; team: string; onJump: (number: number) => void }) {
   const { t } = useTranslation()
   if (files.length === 0) return null
   return (
@@ -574,13 +602,20 @@ function Files({ files }: { files: FileInfo[] }) {
       <CardHeader title={t('files.title')} />
       <ul className="divide-y divide-stone-200 dark:divide-stone-800">
         {files.map((file) => (
-          <li key={file.id} className="flex flex-col gap-1 px-4 py-2.5">
-            <FileLink file={file} />
+          <li key={file.number} className="flex flex-col gap-1 px-4 py-2.5">
+            <FileLink file={file} team={team} />
             <span className="text-xs text-stone-500 dark:text-stone-400">
               {file.uploaded_by ?? t('team.noName')} · <Time value={file.created_at} />
               {' · '}
               {file.message_number !== null ? (
-                <a href={`#m-${file.message_number}`} className="hover:underline">
+                <a
+                  href={`#m-${file.message_number}`}
+                  className="hover:underline"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    onJump(file.message_number!)
+                  }}
+                >
                   {t('files.inMessage', { number: file.message_number })}
                 </a>
               ) : (
@@ -602,8 +637,8 @@ function TopicHeader({ topic }: { topic: TopicDetail }) {
     <div className="mb-5 flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500 dark:text-stone-400">
         <span className="font-mono">{topic.ref}</span>
-        <Link to={`/teams/${topic.team_id}?area=${topic.area_id}`} className="hover:underline">
-          {topic.area}
+        <Link to={areaPath(topic.team, topic.area)} className="hover:underline">
+          {topic.area_name}
         </Link>
         <StatusBadge status={topic.status} />
       </div>
@@ -662,49 +697,168 @@ function TopicHeader({ topic }: { topic: TopicDetail }) {
   )
 }
 
+/** How many Messages a Topic opens with and each "Show earlier" adds (decision 0026). */
+const PAGE = 50
+
+/** Messages by number, oldest first, with later copies of a number winning. */
+function joined(...lists: Message[][]): Message[] {
+  const byNumber = new Map<number, Message>()
+  for (const list of lists) for (const message of list) byNumber.set(message.number, message)
+  return [...byNumber.values()].sort((a, b) => a.number - b.number)
+}
+
+/**
+ * A Topic with the Messages the reader has loaded: its latest window, kept fresh, and the
+ * earlier ones loaded by hand (decision 0026). Each refresh joins the new window to what is
+ * cached, and fetches what lies between when more arrived than the window holds.
+ */
+function useTopicFeed(team: string, number: number) {
+  const queryClient = useQueryClient()
+  const key = ['topic', team, number]
+  const query = useQuery({
+    queryKey: key,
+    queryFn: async () => {
+      const fresh = await call(
+        api.GET('/api/team/{team}/topic/{number}', {
+          params: { path: { team, number }, query: { from_unread: true, limit: PAGE } },
+        }),
+      )
+      const cached = queryClient.getQueryData<TopicDetail>(key)?.messages ?? []
+      let gap: Message[] = []
+      const last = cached.length > 0 ? cached[cached.length - 1].number : null
+      if (last !== null && fresh.messages.length > 0 && fresh.messages[0].number > last + 1) {
+        const between = await call(
+          api.GET('/api/team/{team}/topic/{number}', {
+            params: { path: { team, number }, query: { after: last, limit: 500 } },
+          }),
+        )
+        gap = between.messages
+      }
+      return { ...fresh, messages: joined(cached, gap, fresh.messages) }
+    },
+    enabled: team !== '' && number > 0,
+  })
+  /** Load earlier Messages: a page of them, or as many as reach the given number. */
+  const loadEarlier = async (until?: number) => {
+    let first = queryClient.getQueryData<TopicDetail>(key)?.messages[0]?.number
+    while (first !== undefined && first > 1 && (until === undefined || first > until)) {
+      const limit = until === undefined ? PAGE : Math.min(first - until, 500)
+      const earlier = await call(
+        api.GET('/api/team/{team}/topic/{number}', {
+          params: { path: { team, number }, query: { before: first, limit } },
+        }),
+      )
+      queryClient.setQueryData<TopicDetail>(key, (old) =>
+        old ? { ...old, messages: joined(earlier.messages, old.messages) } : old,
+      )
+      if (until === undefined || earlier.messages.length === 0) break
+      first = earlier.messages[0].number
+    }
+  }
+  return { query, messages: query.data?.messages ?? [], loadEarlier }
+}
+
+/** Whether an element is on screen; the floating buttons show only when there is somewhere to go. */
+function useOnScreen(element: HTMLElement | null) {
+  const [on, setOn] = useState(true)
+  useEffect(() => {
+    if (!element) return
+    const observer = new IntersectionObserver(([entry]) => setOn(entry.isIntersecting))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [element])
+  return on
+}
+
+function Arrow({ up }: { up?: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={`size-4 fill-none stroke-current ${up ? 'rotate-180' : ''}`} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v10M3.5 8.5 8 13l4.5-4.5" />
+    </svg>
+  )
+}
+
 export function TopicPage({ me }: { me: Me }) {
   const { t } = useTranslation()
-  const topicId = Number(useParams().topicId)
-  const topic = useTopic(topicId)
+  const params = useParams()
+  const slug = params.team ?? ''
+  const number = Number(params.number)
+  const feed = useTopicFeed(slug, number)
+  const topic = feed.query
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const visible = usePageVisible()
   const [to, setTo] = useState('')
   const [replying, setReplying] = useState<Message | null>(null)
   // Messages unread when the page opened, and those arriving while it is open, stay marked "new".
   const [newFrom, setNewFrom] = useState<number | null>(null)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [earlierError, setEarlierError] = useState<unknown>(null)
   const scrolled = useRef(false)
   const marking = useRef(0)
+  const anchor = useRef<{ number: number; top: number } | null>(null)
+  const [top, setTop] = useState<HTMLElement | null>(null)
+  const [bottom, setBottom] = useState<HTMLElement | null>(null)
+  const topOnScreen = useOnScreen(top)
+  const bottomOnScreen = useOnScreen(bottom)
   const narrow = useNarrow()
-  const team = useTeam(topic.data?.team_id ?? 0)
-
   const data = topic.data
+  const team = useTeam(data?.team ?? '')
+  const messages = feed.messages
   const lastNumber = data?.last_number ?? 0
   const unread = data?.unread ?? 0
 
   useEffect(() => {
-    if (!data || scrolled.current) return
+    // A former slug answers with the current one: the address follows it (decision 0025).
+    if (data && data.team !== slug) void navigate(topicPath(data.team, data.number), { replace: true })
+  }, [data, slug, navigate])
+
+  useEffect(() => {
+    // Open where the reading is: at the first unread Message, or at the latest (decision 0026).
+    if (!data || scrolled.current || messages.length === 0) return
     scrolled.current = true
     const first = data.last_number - data.unread + 1
     setNewFrom(first)
-    if (data.unread > 0) {
-      window.requestAnimationFrame(() => document.getElementById(`m-${first}`)?.scrollIntoView({ block: 'start' }))
-    }
-  }, [data])
+    // More unread than a window holds starts at the first loaded Message instead.
+    const unreadTarget = document.getElementById(`m-${first}`) ? `m-${first}` : `m-${messages[0].number}`
+    const target = data.unread > 0 ? unreadTarget : `m-${messages[messages.length - 1].number}`
+    window.requestAnimationFrame(() =>
+      document.getElementById(target)?.scrollIntoView({ block: data.unread > 0 ? 'start' : 'end' }),
+    )
+  }, [data, messages])
 
-  // Reading is recorded while the page is in front, up to the newest Message.
+  const firstLoaded = messages[0]?.number
+  useLayoutEffect(() => {
+    // After earlier Messages are inserted, the one above the button stays where it was. Only
+    // an insertion above it moves it: a Message arriving below meanwhile leaves the anchor waiting.
+    const kept = anchor.current
+    if (!kept || firstLoaded === undefined || firstLoaded >= kept.number) return
+    const element = document.getElementById(`m-${kept.number}`)
+    if (element) window.scrollBy(0, element.getBoundingClientRect().top - kept.top)
+    anchor.current = null
+  }, [firstLoaded])
+
+  // Reading is recorded while the page is in front and the latest Messages are on screen.
   useEffect(() => {
-    if (!visible || unread === 0 || lastNumber <= marking.current) return
+    if (!data || !visible || !bottomOnScreen || unread === 0 || lastNumber <= marking.current) return
     marking.current = lastNumber
-    void call(api.POST('/api/topics/{topic_id}/read', { params: { path: { topic_id: topicId } }, body: { number: lastNumber } }))
+    void call(
+      api.POST('/api/team/{team}/topic/{number}/read', {
+        params: { path: { team: data.team, number: data.number } },
+        body: { number: lastNumber },
+      }),
+    )
       .then((out) => {
-        queryClient.setQueryData<TopicDetail>(['topic', topicId], (old) => (old ? { ...old, unread: out.unread, addressed: out.addressed } : old))
+        queryClient.setQueryData<TopicDetail>(['topic', slug, number], (old) =>
+          old ? { ...old, unread: out.unread, addressed: out.addressed } : old,
+        )
         void queryClient.invalidateQueries({ queryKey: ['inbox'] })
-        void queryClient.invalidateQueries({ queryKey: ['topics', out.team_id] })
+        void queryClient.invalidateQueries({ queryKey: ['topics', out.team] })
       })
       .catch(() => {
         marking.current = 0
       })
-  }, [visible, unread, lastNumber, topicId, queryClient])
+  }, [data, visible, bottomOnScreen, unread, lastNumber, slug, number, queryClient])
 
   if (topic.isPending) return <Page><Loading /></Page>
   if (topic.error || !data) {
@@ -715,13 +869,42 @@ export function TopicPage({ me }: { me: Me }) {
     )
   }
 
-  const byNumber = new Map(data.messages.map((m) => [m.number, m]))
+  const byNumber = new Map(messages.map((m) => [m.number, m]))
   const avatars = new Map((team.data?.members ?? []).map((m) => [m.pseudonym ?? '', m.avatar]))
   // The line "New messages" stands before the first one someone else wrote since the page opened.
   const firstNew =
     newFrom === null
       ? -1
-      : data.messages.findIndex((m) => m.number >= newFrom && !(m.assistant === null && m.author === me.pseudonym))
+      : messages.findIndex((m) => m.number >= newFrom && !(m.assistant === null && m.author === me.pseudonym))
+  const hasEarlier = messages.length > 0 && messages[0].number > 1
+  const newBelow = bottomOnScreen ? 0 : unread
+
+  const loadEarlier = () => {
+    const first = messages[0]
+    const element = first ? document.getElementById(`m-${first.number}`) : null
+    anchor.current = first && element ? { number: first.number, top: element.getBoundingClientRect().top } : null
+    setLoadingEarlier(true)
+    setEarlierError(null)
+    feed
+      .loadEarlier()
+      .catch(setEarlierError)
+      .finally(() => setLoadingEarlier(false))
+  }
+
+  /** Show a Message, loading the earlier ones it is among when it is not loaded yet. */
+  const reveal = (target: number) => {
+    if (document.getElementById(`m-${target}`)) {
+      jumpTo(target)
+      return
+    }
+    setLoadingEarlier(true)
+    setEarlierError(null)
+    feed
+      .loadEarlier(target)
+      .then(() => window.requestAnimationFrame(() => jumpTo(target)))
+      .catch(setEarlierError)
+      .finally(() => setLoadingEarlier(false))
+  }
 
   const reply = (message: Message) => {
     setReplying(message)
@@ -732,45 +915,71 @@ export function TopicPage({ me }: { me: Me }) {
     box?.focus({ preventScroll: true })
   }
 
+  const stickyBar = (
+    <div className="sticky top-0 z-20 -mx-4 mb-4 flex min-w-0 items-center gap-2 border-b border-stone-200 bg-stone-50/95 px-4 py-2 text-sm backdrop-blur sm:-mx-6 sm:px-6 dark:border-stone-800 dark:bg-stone-950/90">
+      <span className="shrink-0 font-mono text-stone-500 dark:text-stone-400">{data.ref}</span>
+      <span className="shrink-0 text-stone-400">·</span>
+      <Link to={areaPath(data.team, data.area)} className="shrink-0 text-amber-700 hover:underline dark:text-amber-400">
+        {data.area_name}
+      </Link>
+      <span className="shrink-0 text-stone-400">·</span>
+      <span className="min-w-0 truncate font-medium">{data.title}</span>
+    </div>
+  )
+
   if (data.deleted_at) {
     // Only the card is left: the conversation and its files were deleted (decision 0021).
     return (
       <Page>
+        {stickyBar}
         <TopicHeader topic={data} />
       </Page>
     )
   }
 
+  const floating =
+    'pointer-events-auto inline-flex size-11 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 shadow-md hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800'
+
   return (
     <Page>
+      {stickyBar}
       <TopicHeader topic={data} />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
           <Card>
             <CardHeader title={t('topic.messages', { count: data.last_number })} />
-            {data.messages.length < data.last_number && (
-              <Notice>{t('topic.truncated', { count: data.messages.length })}</Notice>
-            )}
+            <div ref={setTop} className="scroll-mt-16">
+              {hasEarlier && (
+                <div className="flex flex-col items-center gap-2 border-b border-stone-200 bg-stone-100 px-3 py-2 dark:border-stone-800 dark:bg-stone-950/70">
+                  <Button size="sm" onClick={loadEarlier} disabled={loadingEarlier}>
+                    {loadingEarlier ? t('common.loading') : t('topic.showEarlier')}
+                  </Button>
+                  <ErrorNote>{earlierError ? errorText(earlierError, t) : null}</ErrorNote>
+                </div>
+              )}
+            </div>
             <ol className="flex flex-col rounded-b-lg bg-stone-100 px-3 pt-1 pb-4 [--feed-ring:#f5f5f4] sm:px-4 dark:bg-stone-950/70 dark:[--feed-ring:#0f0d0c]">
-              {data.messages.map((message, index) => {
-                const previous = data.messages[index - 1]
+              {messages.map((message, index) => {
+                const previous = messages[index - 1]
                 const newDay = previous === undefined || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString()
                 const divider = index === firstNew
                 return (
                   <Fragment key={message.number}>
                     {newDay && <DayDivider value={message.created_at} />}
                     {divider && <NewDivider />}
-                    {message.kind === 'stage' || message.kind === 'closed' ? (
+                    {message.kind === 'stage' || message.kind === 'closed' || message.kind === 'taken' ? (
                       <ServiceLine message={message} />
                     ) : (
                       <MessageItem
                         message={message}
                         me={me}
-                        holder={data.holder_assistant_id}
+                        team={data.team}
+                        holder={data.holder_key}
                         grouped={!divider && !newDay && continues(message, previous)}
                         narrow={narrow}
                         original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}
                         onReply={reply}
+                        onJump={reveal}
                         avatars={avatars}
                       />
                     )}
@@ -778,13 +987,43 @@ export function TopicPage({ me }: { me: Me }) {
                 )
               })}
             </ol>
+            <div ref={setBottom} />
           </Card>
           <Compose topic={data} to={to} setTo={setTo} replying={replying} setReplying={setReplying} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <Settle topic={data} />
-          <Files files={data.files} />
+          <Files files={data.files} team={data.team} onJump={reveal} />
         </div>
+      </div>
+      <div className="pointer-events-none fixed right-4 bottom-4 z-30 flex flex-col gap-2 sm:right-6 sm:bottom-6">
+        {!topOnScreen && (
+          <button
+            type="button"
+            className={floating}
+            onClick={() => top?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            aria-label={t('topic.toTop')}
+            title={t('topic.toTop')}
+          >
+            <Arrow up />
+          </button>
+        )}
+        {!bottomOnScreen && (
+          <button
+            type="button"
+            className={`${floating} relative`}
+            onClick={() => bottom?.scrollIntoView({ behavior: 'smooth', block: 'end' })}
+            aria-label={t('topic.toLatest')}
+            title={t('topic.toLatest')}
+          >
+            <Arrow />
+            {newBelow > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-5 rounded-full bg-amber-500 px-1 text-center text-xs font-semibold text-white dark:text-stone-950">
+                {newBelow}
+              </span>
+            )}
+          </button>
+        )}
       </div>
     </Page>
   )
