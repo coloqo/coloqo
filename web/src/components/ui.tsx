@@ -123,7 +123,7 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 /** A copy-to-clipboard button that says when it worked. */
-export function CopyButton({ text, size = 'sm' }: { text: string; size?: 'sm' | 'md' }) {
+export function CopyButton({ text, size = 'sm', label }: { text: string; size?: 'sm' | 'md'; label?: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   return (
@@ -136,7 +136,7 @@ export function CopyButton({ text, size = 'sm' }: { text: string; size?: 'sm' | 
         })
       }}
     >
-      {copied ? t('common.copied') : t('common.copy')}
+      {copied ? t('common.copied') : (label ?? t('common.copy'))}
     </Button>
   )
 }

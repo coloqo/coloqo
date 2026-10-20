@@ -3,13 +3,22 @@ import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import { api, call, uploadAvatar, type Installation, type Me, type OwnAssistant, type Team } from '../api/client'
-import { useInstallations, useOwnAssistants, useTeams } from '../api/queries'
+import {
+  api,
+  call,
+  uploadAvatar,
+  type Assistant,
+  type Installation,
+  type Me,
+  type Project,
+  type Team,
+} from '../api/client'
+import { useInstallations, useProjects, useTeams } from '../api/queries'
 import { PersonAvatar } from '../components/Avatar'
 import { Page } from '../components/Layout'
 import { PseudonymForm } from '../components/PseudonymForm'
 import { Time } from '../components/Time'
-import { Badge, Button, Card, CardHeader, Empty, ErrorNote, Loading, Select } from '../components/ui'
+import { Badge, Button, Card, CardHeader, Empty, ErrorNote, Input, Loading, Select } from '../components/ui'
 import { errorText } from '../lib/format'
 
 function InstallationRow({ installation }: { installation: Installation }) {
@@ -18,7 +27,7 @@ function InstallationRow({ installation }: { installation: Installation }) {
   const [confirming, setConfirming] = useState(false)
   const revoke = useMutation({
     mutationFn: () =>
-      call(api.DELETE('/api/installations/{installation_id}', { params: { path: { installation_id: installation.id } } })),
+      call(api.DELETE('/api/installation/{key}', { params: { path: { key: installation.key } } })),
     onSuccess: () => {
       setConfirming(false)
       void queryClient.invalidateQueries({ queryKey: ['installations'] })
@@ -116,68 +125,136 @@ function AvatarCard({ me }: { me: Me }) {
   )
 }
 
-function AssistantRow({ assistant, teams }: { assistant: OwnAssistant; teams: Team[] }) {
+/** A live session of a project: its word, renamed in place; its id on hover (decision 0024). */
+function SessionRow({ assistant }: { assistant: Assistant }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const link = useMutation({
-    mutationFn: (teamId: number | null) =>
-      call(
-        api.PUT('/api/assistants/{assistant_id}/team', {
-          params: { path: { assistant_id: assistant.id } },
-          body: { team_id: teamId },
-        }),
-      ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['assistants'] }),
+  const [word, setWord] = useState<string | null>(null)
+  const rename = useMutation({
+    mutationFn: (value: string) =>
+      call(api.PATCH('/api/assistant/{key}', { params: { path: { key: assistant.key } }, body: { word: value } })),
+    onSuccess: () => {
+      setWord(null)
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+      void queryClient.invalidateQueries({ queryKey: ['team'] })
+    },
   })
   return (
-    <li className="flex flex-wrap items-center gap-3 px-4 py-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="font-medium break-words">{assistant.name}</span>
-        <span className="text-xs text-stone-500 dark:text-stone-400">
-          {assistant.installation}
+    <li className="flex flex-wrap items-center gap-2 py-1.5 pl-4 text-sm">
+      {word === null ? (
+        <>
+          <span
+            className="font-medium break-words"
+            title={assistant.session_id ? t('sessions.id', { id: assistant.session_id }) : undefined}
+          >
+            {assistant.name}
+          </span>
           {assistant.last_seen_at && (
-            <>
-              {' · '}
-              {t('installations.lastSeen')} <Time value={assistant.last_seen_at} />
-            </>
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              <Time value={assistant.last_seen_at} />
+            </span>
           )}
-        </span>
-        <ErrorNote>{link.error && errorText(link.error, t)}</ErrorNote>
-      </div>
-      <div className="w-full sm:w-56">
-        <Select
-          aria-label={t('assistants.team', { name: assistant.name })}
-          value={assistant.team_id ?? ''}
-          disabled={link.isPending}
-          onChange={(event) => link.mutate(event.target.value ? Number(event.target.value) : null)}
+          <Button size="sm" variant="ghost" onClick={() => setWord(assistant.word)}>
+            {t('sessions.rename')}
+          </Button>
+        </>
+      ) : (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            rename.mutate(word)
+          }}
         >
-          <option value="">{t('assistants.unlinked')}</option>
-          {teams.map((team) => (
-            <option key={team.id} value={team.id}>
-              {team.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+          <Input
+            aria-label={t('sessions.word')}
+            value={word}
+            onChange={(event) => setWord(event.target.value)}
+            className="w-40"
+            autoFocus
+          />
+          <Button size="sm" variant="primary" type="submit" disabled={rename.isPending || !word.trim()}>
+            {t('common.save')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setWord(null)}>
+            {t('common.cancel')}
+          </Button>
+        </form>
+      )}
+      <ErrorNote>{rename.error && errorText(rename.error, t)}</ErrorNote>
     </li>
   )
 }
 
-function AssistantsCard() {
+/** A project on a computer: the Team it is linked to and its live sessions (decision 0024). */
+function ProjectRow({ project, teams }: { project: Project; teams: Team[] }) {
   const { t } = useTranslation()
-  const assistants = useOwnAssistants()
+  const queryClient = useQueryClient()
+  const link = useMutation({
+    mutationFn: (team: string | null) =>
+      call(api.PUT('/api/project/{key}/team', { params: { path: { key: project.key } }, body: { team } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['projects'] }),
+  })
+  return (
+    <li className="flex flex-col gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="font-medium break-words">{project.name}</span>
+          <span className="text-xs text-stone-500 dark:text-stone-400">
+            {project.installation}
+            {project.last_seen_at && (
+              <>
+                {' · '}
+                {t('installations.lastSeen')} <Time value={project.last_seen_at} />
+              </>
+            )}
+          </span>
+          <ErrorNote>{link.error && errorText(link.error, t)}</ErrorNote>
+        </div>
+        <div className="w-full sm:w-56">
+          <Select
+            aria-label={t('assistants.team', { name: project.name })}
+            value={project.team ?? ''}
+            disabled={link.isPending}
+            onChange={(event) => link.mutate(event.target.value || null)}
+          >
+            <option value="">{t('assistants.unlinked')}</option>
+            {teams.map((team) => (
+              <option key={team.slug} value={team.slug}>
+                {team.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </div>
+      {project.assistants.length > 0 ? (
+        <ul className="flex flex-col border-l-2 border-stone-200 dark:border-stone-800">
+          {project.assistants.map((assistant) => (
+            <SessionRow key={assistant.key} assistant={assistant} />
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-stone-500 dark:text-stone-400">{t('sessions.none')}</p>
+      )}
+    </li>
+  )
+}
+
+function ProjectsCard() {
+  const { t } = useTranslation()
+  const projects = useProjects()
   const teams = useTeams()
   return (
     <Card>
       <CardHeader title={t('assistants.title')} />
       <p className="px-4 pt-3 text-sm text-stone-600 dark:text-stone-400">{t('assistants.lead')}</p>
-      {(assistants.isPending || teams.isPending) && <Loading />}
-      <ErrorNote>{assistants.error && errorText(assistants.error, t)}</ErrorNote>
-      {assistants.data?.length === 0 && <Empty>{t('assistants.empty')}</Empty>}
-      {assistants.data && assistants.data.length > 0 && teams.data && (
+      {(projects.isPending || teams.isPending) && <Loading />}
+      <ErrorNote>{projects.error && errorText(projects.error, t)}</ErrorNote>
+      {projects.data?.length === 0 && <Empty>{t('assistants.empty')}</Empty>}
+      {projects.data && projects.data.length > 0 && teams.data && (
         <ul className="mt-2 divide-y divide-stone-200 border-t border-stone-200 dark:divide-stone-800 dark:border-stone-800">
-          {assistants.data.map((assistant) => (
-            <AssistantRow key={assistant.id} assistant={assistant} teams={teams.data} />
+          {projects.data.map((project) => (
+            <ProjectRow key={project.key} project={project} teams={teams.data} />
           ))}
         </ul>
       )}
@@ -201,7 +278,7 @@ export function SettingsPage({ me }: { me: Me }) {
           </div>
         </Card>
         <AvatarCard me={me} />
-        <AssistantsCard />
+        <ProjectsCard />
         <Card>
           <CardHeader title={t('installations.title')} />
           <p className="px-4 pt-3 text-sm text-stone-600 dark:text-stone-400">
@@ -216,7 +293,7 @@ export function SettingsPage({ me }: { me: Me }) {
           {installations.data && installations.data.length > 0 && (
             <ul className="mt-2 divide-y divide-stone-200 border-t border-stone-200 dark:divide-stone-800 dark:border-stone-800">
               {installations.data.map((installation) => (
-                <InstallationRow key={installation.id} installation={installation} />
+                <InstallationRow key={installation.key} installation={installation} />
               ))}
             </ul>
           )}

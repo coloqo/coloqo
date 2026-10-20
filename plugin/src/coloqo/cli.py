@@ -38,7 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     link.add_argument("--no-browser", action="store_true", help="do not open the browser")
     commands.add_parser("mcp", help="serve the MCP tools over stdio (started by the agent)")
     hook = commands.add_parser("hook", help="run a Claude Code hook (started by the agent)")
-    hook.add_argument("event", choices=["session-start", "user-prompt-submit", "post-tool-use"])
+    hook.add_argument(
+        "event", choices=["session-start", "user-prompt-submit", "post-tool-use", "stop"]
+    )
     watch = commands.add_parser("watch", help="print a line per event (a Claude Code monitor)")
     watch.add_argument("--project", help="project directory (default: the current one)")
     return parser
@@ -107,10 +109,11 @@ def status() -> int:
 
 
 def link(project_dir: str | None, write: bool, open_browser: bool) -> int:
-    """Link the project's Assistant to a Team the person picks in the browser.
+    """Link the project to a Team the person picks in the browser (decisions 0020, 0025).
 
-    Waits up to ten minutes for the choice. With ``write``, then writes ``.coloqo.json`` so
-    that the repository links every teammate's project to the same Team.
+    The page opens by a one-time link and works for ten minutes; the command waits for the
+    choice. With ``write``, then writes ``.coloqo.json`` so that the repository links every
+    teammate's project to the same Team.
 
     Args:
         project_dir: The project; the current directory when omitted.
@@ -121,27 +124,23 @@ def link(project_dir: str | None, write: bool, open_browser: bool) -> int:
     api = Api()
     try:
         api.register(project)
-        mine = api.request("GET", f"/assistants/{api.assistant_id}")
-        if mine["team_id"] is None:
-            page = f"{api.url}/assistants/{api.assistant_id}/link"
-            print(f"Open {page} and pick the Team for «{mine['name']}».", flush=True)
+        mine = api.request("GET", f"/assistant/{api.assistant_key}")
+        if mine["team"] is None:
+            page = api.request("POST", "/link")["url"]
+            print(f"Open {page} and pick the Team for the project «{mine['project']}».", flush=True)
             if open_browser:
                 webbrowser.open(page)
             deadline = time.monotonic() + 600
-            while mine["team_id"] is None and time.monotonic() < deadline:
+            while mine["team"] is None and time.monotonic() < deadline:
                 time.sleep(3)
-                mine = api.request("GET", f"/assistants/{api.assistant_id}")
-            if mine["team_id"] is None:
+                mine = api.request("GET", f"/assistant/{api.assistant_key}")
+            if mine["team"] is None:
                 print("No Team was picked; run `coloqo link` again.", file=sys.stderr)
                 return 1
-        print(f"«{mine['name']}» is linked to «{mine['team']}».")
+        print(f"The project «{mine['project']}» is linked to «{mine['team_name']}».")
         if write:
             path = Project.directory(project_dir) / LINK_FILE
-            path.write_text(
-                json.dumps({"team_id": mine["team_id"], "team": mine["team"]}, ensure_ascii=False)
-                + "\n",
-                encoding="utf-8",
-            )
+            path.write_text(json.dumps({"team": mine["team"]}) + "\n", encoding="utf-8")
             print(f"Wrote {path}; commit it to link the repository for the whole Team.")
         return 0
     except ColoqoError as error:

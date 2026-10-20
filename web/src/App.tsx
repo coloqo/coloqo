@@ -1,5 +1,6 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Route, Routes } from 'react-router'
+import { Link, Route, Routes, useParams } from 'react-router'
 
 import type { Me } from './api/client'
 import { useEventStream } from './api/events'
@@ -10,9 +11,9 @@ import { errorText } from './lib/format'
 import { ConnectPage } from './pages/Connect'
 import { DevicePage } from './pages/Device'
 import { Home } from './pages/Home'
-import { InboxPage } from './pages/Inbox'
+import { ForYouPage } from './pages/ForYou'
 import { JoinPage } from './pages/Join'
-import { LinkPage } from './pages/Link'
+import { LinkPage, OldLinkPage } from './pages/Link'
 import { SettingsPage } from './pages/Settings'
 import { TeamPage } from './pages/Team'
 import { TopicPage } from './pages/Topic'
@@ -29,6 +30,28 @@ function NotFound() {
   )
 }
 
+/** An address from before slugs and per-Team numbers (decision 0025); it says so. */
+function OldAddress() {
+  const { t } = useTranslation()
+  return (
+    <Page title={t('oldAddress.title')}>
+      <p className="mb-3 text-sm text-stone-600 dark:text-stone-400">{t('oldAddress.lead')}</p>
+      <Link to="/" className="text-amber-700 hover:underline dark:text-amber-400">
+        {t('notFound.home')}
+      </Link>
+    </Page>
+  )
+}
+
+/** A file's page address opens the file itself, which the API serves (decision 0025). */
+function FileAddress() {
+  const { team = '', number = '' } = useParams()
+  useEffect(() => {
+    window.location.replace(`/api/team/${encodeURIComponent(team)}/file/${encodeURIComponent(number)}${window.location.search}`)
+  }, [team, number])
+  return <Page><Loading /></Page>
+}
+
 function Shell({ me }: { me: Me }) {
   useEventStream(true)
   return (
@@ -36,14 +59,20 @@ function Shell({ me }: { me: Me }) {
       <Header me={me} />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/inbox" element={<InboxPage />} />
-        <Route path="/teams/:teamId" element={<TeamPage />} />
-        <Route path="/topics/:topicId" element={<TopicPage me={me} />} />
+        <Route path="/for-you" element={<ForYouPage />} />
+        <Route path="/team/:team" element={<TeamPage />} />
+        <Route path="/team/:team/area/:area" element={<TeamPage />} />
+        <Route path="/team/:team/topic/:number" element={<TopicPage me={me} />} />
+        <Route path="/team/:team/file/:number" element={<FileAddress />} />
+        <Route path="/inbox" element={<ForYouPage />} />
+        <Route path="/teams/:id" element={<OldAddress />} />
+        <Route path="/topics/:id" element={<OldAddress />} />
         <Route path="/device" element={<DevicePage />} />
         <Route path="/join/:token" element={<JoinPage />} />
         <Route path="/settings" element={<SettingsPage me={me} />} />
         <Route path="/connect" element={<ConnectPage me={me} />} />
-        <Route path="/assistants/:assistantId/link" element={<LinkPage />} />
+        <Route path="/link/:token" element={<LinkPage />} />
+        <Route path="/assistants/:id/link" element={<OldLinkPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </div>

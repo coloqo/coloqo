@@ -12,10 +12,14 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.models import Assistant, Installation, Team, User, WebSession
+from coloqo_server.models import Assistant, Installation, Project, Team, User, WebSession
 
 SESSION_COOKIE = "__Host-coloqo_session"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+SESSIONS_SINCE = (0, 5, 0)
+"""The first plugin version that knows sessions and public names (decisions 0024, 0025); older
+plugins are served the former paths and shapes for one more release."""
 
 
 def new_token() -> str:
@@ -45,16 +49,41 @@ class Actor:
         user: The User on whose behalf the request is made.
         installation: The plugin installation, or ``None`` for the web session.
         assistant: The Assistant, when the plugin names one in ``X-Coloqo-Assistant``.
+        project: The Assistant's project, which holds the Team link (decision 0024).
+        plugin: The plugin's version from ``X-Coloqo-Plugin``, as numbers; ``None`` for the web.
+        legacy: A plugin older than 0.5.0: it gets the former paths' shapes (decision 0025).
     """
 
     user: User
     installation: Installation | None = None
     assistant: Assistant | None = None
+    project: Project | None = None
+    plugin: tuple[int, ...] | None = None
+    legacy: bool = False
 
     @property
     def is_human(self) -> bool:
         """The request comes from the human's own web session."""
         return self.installation is None
+
+    @property
+    def team_id(self) -> int | None:
+        """The Team the Assistant's project is linked to; ``None`` while unlinked or for the web."""
+        return self.project.team_id if self.project else None
+
+
+def plugin_version(text: str | None) -> tuple[int, ...] | None:
+    """Read a version such as ``0.4.0``; ``None`` when there is none or it is not one.
+
+    Args:
+        text: The ``X-Coloqo-Plugin`` header.
+    """
+    if not text:
+        return None
+    parts = text.strip().split(".")
+    if not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
 
 
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
@@ -109,7 +138,8 @@ async def get_actor(
     request: Request,
     db: DB,
     authorization: Annotated[str | None, Header()] = None,
-    x_coloqo_assistant: Annotated[int | None, Header()] = None,
+    x_coloqo_assistant: Annotated[str | None, Header()] = None,
+    x_coloqo_plugin: Annotated[str | None, Header()] = None,
 ) -> Actor:
     """Identify the caller by an installation token or by the web session.
 
@@ -117,7 +147,9 @@ async def get_actor(
         request: The incoming request.
         db: Database session.
         authorization: ``Bearer <installation token>`` from the plugin.
-        x_coloqo_assistant: Id of the calling Assistant, registered by this installation.
+        x_coloqo_assistant: Key of the calling Assistant, registered by this installation; a
+            plugin older than 0.5.0 sends its numeric id.
+        x_coloqo_plugin: The plugin's version.
 
     Raises:
         HTTPException: 401 without valid credentials; 403 for a foreign Assistant id or a
@@ -137,16 +169,32 @@ async def get_actor(
                 "The installation token is not valid or was revoked; run `coloqo login`",
             )
         installation.last_seen_at = now()
+        version = plugin_version(x_coloqo_plugin)
+        legacy = version is None or version < SESSIONS_SINCE
         assistant = None
-        if x_coloqo_assistant is not None:
-            assistant = await db.get(Assistant, x_coloqo_assistant)
+        project = None
+        if x_coloqo_assistant:
+            named = x_coloqo_assistant.strip()
+            if named.isdigit():
+                assistant = await db.get(Assistant, int(named))
+                legacy = True
+            else:
+                assistant = await db.scalar(select(Assistant).where(Assistant.key == named))
             if assistant is None or assistant.installation_id != installation.id:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, "Unknown Assistant")
             assistant.last_seen_at = installation.last_seen_at
+            project = await db.get(Project, assistant.project_id)
         await db.commit()
         user = await db.get(User, installation.user_id)
         assert user is not None
-        return Actor(user=user, installation=installation, assistant=assistant)
+        return Actor(
+            user=user,
+            installation=installation,
+            assistant=assistant,
+            project=project,
+            plugin=version,
+            legacy=legacy,
+        )
     user = await _web_user(request, db)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not logged in")
@@ -243,10 +291,9 @@ async def require_writer(db: AsyncSession, actor: Actor, team_id: int) -> None:
             linked to another Team, or for a plugin request without an Assistant.
     """
     require_reader(actor)
-    assistant = actor.assistant
-    if assistant is None or assistant.team_id == team_id:
+    if actor.assistant is None or actor.team_id == team_id:
         return
-    if assistant.team_id is None:
+    if actor.team_id is None:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             {
@@ -255,7 +302,7 @@ async def require_writer(db: AsyncSession, actor: Actor, team_id: int) -> None:
                 f"not write. {LINK_HINT}",
             },
         )
-    linked = await db.get(Team, assistant.team_id)
+    linked = await db.get(Team, actor.team_id)
     target = await db.get(Team, team_id)
     raise HTTPException(
         status.HTTP_403_FORBIDDEN,
@@ -280,4 +327,4 @@ def pushed_teams(actor: Actor) -> set[int] | None:
     """
     if actor.assistant is None:
         return None
-    return {actor.assistant.team_id} if actor.assistant.team_id else set()
+    return {actor.team_id} if actor.team_id else set()

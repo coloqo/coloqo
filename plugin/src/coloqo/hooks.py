@@ -18,6 +18,9 @@ from coloqo.render import topic_line
 FILE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 """Tools that change a file; a change inside the project is a change the team will see."""
 
+SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
+"""Tools that run shell commands: Bash, and PowerShell, which Claude Code uses on Windows."""
+
 GIT_WRITE = re.compile(
     r"\bgit\b[^;&|\n]*?\s(?:commit|push|checkout\s+-b|switch\s+-c)(?=\s|$)"
     r"|\b(?:gh\s+pr|glab\s+mr)\s+create(?=\s|$)"
@@ -51,9 +54,9 @@ def session_start() -> None:
     data = _input()
     api = Api(timeout=8)
     try:
-        api.register(Project.detect(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd")))
+        api.register(Project.detect(str(_project(data))), _session(data) or None)
         briefing = api.request("GET", "/briefing")
-        unread = api.request("GET", "/inbox") if briefing.get("team_id") else []
+        unread = api.request("GET", "/inbox") if briefing.get("team") else []
     except NotLoggedIn:
         print(LOGIN_HINT)
         return
@@ -63,11 +66,11 @@ def session_start() -> None:
     finally:
         api.close()
     lines = [briefing["text"]]
-    if briefing.get("team_id"):
+    if briefing.get("team"):
         current = focus.load(data.get("session_id"))
         if unread:
             lines.append(f"Inbox — {len(unread)} topics with unread messages:")
-            lines.extend(f"- {topic_line(t)}" for t in unread[:10])
+            lines.extend(f"- {topic_line(t, api.team)}" for t in unread[:10])
             lines.append("Mention them to the user; read with the coloqo read_topic tool.")
         lines.append(
             f"This session's Coloqo focus: {current.describe()} (what reaches it unasked; the "
@@ -80,10 +83,13 @@ def user_prompt_submit() -> None:
     """Remind the session of Topics addressed to the user that its focus lets through.
 
     Also of its task's Topic, when a subagent of the session changed what the team will see and
-    the conversation has not been told yet (decision 0023).
+    the conversation has not been told yet (decision 0023). And note that a turn starts with a
+    prompt, the user's or one made from an event (decision 0026).
     """
     data = _input()
     session = _session(data)
+    if session:
+        trail.prompt_arrived(session, str(data.get("prompt") or ""))
     if session and trail.is_pending(session) and not trail.is_done(session):
         line = task_reminder(session, _project(data))
         if line:
@@ -93,7 +99,7 @@ def user_prompt_submit() -> None:
         return
     api = Api(timeout=3)
     try:
-        api.register(Project.detect(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd")))
+        api.register(Project.detect(str(_project(data))), session or None)
         unread = api.request("GET", "/inbox")
     except ColoqoError:
         return
@@ -101,13 +107,13 @@ def user_prompt_submit() -> None:
         api.close()
     addressed = [t for t in unread if t.get("addressed")]
     if current.mode == "mine":
-        addressed = [t for t in addressed if t.get("holder_assistant_id") == api.assistant_id]
+        addressed = [t for t in addressed if t.get("holder_key") == api.assistant_key]
     elif current.mode == "people":
         people = {p.lower() for p in current.people}
         addressed = [t for t in addressed if str(t.get("created_by") or "").lower() in people]
     if addressed:
         lines = ["Coloqo — unread messages addressed to your user:"]
-        lines.extend(f"- {topic_line(t)}" for t in addressed[:5])
+        lines.extend(f"- {topic_line(t, api.team)}" for t in addressed[:5])
         lines.append("Mention them briefly in your answer; read with read_topic when relevant.")
         print("\n".join(lines))
 
@@ -136,7 +142,7 @@ def visible_change(tool: str, tool_input: dict[str, Any], project: Path) -> bool
     if tool in FILE_TOOLS:
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
         return bool(path) and (project / str(path)).resolve().is_relative_to(project)
-    if tool == "Bash":
+    if tool in SHELL_TOOLS:
         return bool(GIT_WRITE.search(str(tool_input.get("command") or "")))
     if tool.startswith("mcp__"):
         server, _, name = tool.removeprefix("mcp__").rpartition("__")
@@ -198,12 +204,10 @@ def task_reminder(session: str, project: Path) -> str | None:
     """
     api = Api(timeout=3)
     try:
-        api.register(Project.detect(str(project)))
+        api.register(Project.detect(str(project)), session)
         topics = (
-            api.request(
-                "GET", f"/teams/{api.team_id}/topics", params={"status": "open", "limit": 200}
-            )
-            if api.team_id
+            api.request("GET", f"/team/{api.team}/topic", params={"status": "open", "limit": 200})
+            if api.team
             else None
         )
     except NotLoggedIn:
@@ -216,7 +220,7 @@ def task_reminder(session: str, project: Path) -> str | None:
     trail.mark_done(session)
     if topics is None:
         return None
-    return reminder([t for t in topics if t.get("holder_assistant_id") == api.assistant_id])
+    return reminder([t for t in topics if t.get("holder_key") == api.assistant_key])
 
 
 def post_tool_use() -> None:
@@ -252,8 +256,16 @@ def post_tool_use() -> None:
         print(json.dumps({"hookSpecificOutput": output}, ensure_ascii=False))
 
 
+def stop() -> None:
+    """Note that the session's turn ended, so a turn a notification starts is told apart (0026)."""
+    session = _session(_input())
+    if session:
+        trail.turn_ended(session)
+
+
 HOOKS = {
     "session-start": session_start,
     "user-prompt-submit": user_prompt_submit,
     "post-tool-use": post_tool_use,
+    "stop": stop,
 }

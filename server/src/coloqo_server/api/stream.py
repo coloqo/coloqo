@@ -34,6 +34,33 @@ def _frame(kind: str, data: dict, event_id: int | None = None) -> str:
     return f"{head}event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def shaped(data: dict, legacy: bool) -> dict:
+    """Return an event's data in the shape its reader knows (decision 0025).
+
+    Events keep both shapes: the data of decision 0025, and under ``legacy`` the former one
+    with database ids, for plugins older than 0.5.0. Events written before carry only the
+    former shape. The Team's id under ``_team_id`` is never sent.
+
+    Args:
+        data: The stored data.
+        legacy: The reader is a plugin older than 0.5.0.
+    """
+    if "legacy" not in data:
+        return data if legacy else {}
+    if legacy:
+        return data["legacy"]
+    return {key: value for key, value in data.items() if key not in ("legacy", "_team_id")}
+
+
+def team_of(data: dict) -> int | None:
+    """Return the Team an event is about, from either shape.
+
+    Args:
+        data: The stored data.
+    """
+    return data.get("_team_id", data.get("team_id"))
+
+
 @router.get("/events")
 async def events(
     request: Request,
@@ -62,6 +89,7 @@ async def events(
     bus = request.app.state.bus
     user_id = actor.user.id
     scope = pushed_teams(actor)
+    legacy = actor.legacy
 
     async def frames() -> AsyncIterator[str]:
         """Yield frames until the client goes away."""
@@ -89,9 +117,12 @@ async def events(
                     )
                 for row in rows:
                     cursor = row.id
-                    if scope is not None and row.data.get("team_id") not in scope:
+                    if scope is not None and team_of(row.data) not in scope:
                         continue
-                    yield _frame(row.kind, row.data, row.id)
+                    data = shaped(row.data, legacy)
+                    if not data:
+                        continue
+                    yield _frame(row.kind, data, row.id)
                 if rows:
                     continue
                 started = asyncio.get_running_loop().time()

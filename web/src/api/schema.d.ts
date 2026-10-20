@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/areas/{area_id}": {
+    "/api/assistant": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,103 +12,30 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Area
-         * @description Rename an Area or change its description.
-         *
-         *     Args:
-         *         area_id: The Area.
-         *         body: New name and description.
-         *         actor: The logged-in owner.
-         *         db: Database session.
-         *
-         *     Raises:
-         *         HTTPException: 404 when there is no such Area for the caller; 403 when not the
-         *             owner; 409 when the name is taken.
-         */
-        patch: operations["update_area_api_areas__area_id__patch"];
-        trace?: never;
-    };
-    "/api/areas/{area_id}/topics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Topic
-         * @description Open a Topic in an Area with its first Message; the calling Assistant holds it.
-         *
-         *     Args:
-         *         request: The incoming request.
-         *         area_id: The Area.
-         *         body: Title and first Message.
-         *         actor: The caller.
-         *         db: Database session.
-         *
-         *     Raises:
-         *         HTTPException: 404 when there is no such Area in the caller's Teams; 403 when the
-         *             caller may not write there (decision 0020); 422 for an unknown addressee.
-         */
-        post: operations["create_topic_api_areas__area_id__topics_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Own Assistants
-         * @description List the person's Assistants on computers not revoked, with the Teams they write in.
-         *
-         *     Args:
-         *         actor: The logged-in human.
-         *         db: Database session.
-         */
-        get: operations["list_own_assistants_api_assistants_get"];
         put?: never;
         /**
          * Register Assistant
-         * @description Register the calling installation's Assistant for a project (decision 0003).
+         * @description Register the calling session's Assistant (decisions 0003, 0024).
          *
-         *     One Assistant per installation and project: the plugin's tools and its watch in that
-         *     project act as it.
+         *     One Assistant per project and Claude Code session: the plugin's tools, hooks and watch in
+         *     that session act as it.
          *
          *     Args:
-         *         body: The project.
+         *         body: The project and the session.
          *         actor: The plugin.
          *         db: Database session.
-         *
-         *     A ``team_id`` from the project's ``.coloqo.json`` links the Assistant when it is not
-         *     linked yet and the person is a member of that Team; otherwise it is ignored, so a file
-         *     never overrides the person's choice (decision 0020).
          *
          *     Raises:
          *         HTTPException: 403 for a web session: only the plugin registers Assistants.
          */
-        post: operations["register_assistant_api_assistants_post"];
+        post: operations["register_assistant_api_assistant_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/assistants/{assistant_id}": {
+    "/api/assistant/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -116,56 +43,39 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Own Assistant
-         * @description Return one of the person's Assistants; the plugin waits here for a link to be chosen.
+         * Get Assistant
+         * @description Return an Assistant to its person, or to its own session; the plugin waits here for a
+         *     link to be chosen.
          *
          *     Args:
-         *         assistant_id: The Assistant.
-         *         actor: Its person in the web, or the installation it runs on.
+         *         key: The Assistant's key.
+         *         actor: Its person in the web, or the session itself.
          *         db: Database session.
          *
          *     Raises:
          *         HTTPException: 404 when it is not the caller's.
          */
-        get: operations["get_own_assistant_api_assistants__assistant_id__get"];
+        get: operations["get_assistant_api_assistant__key__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistants/{assistant_id}/team": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
         /**
-         * Link Assistant
-         * @description Link an Assistant's project to one of the person's Teams, or unlink it.
-         *
-         *     Only the person, from the web: the model in a session cannot move itself to another Team
-         *     (decision 0020).
+         * Rename Assistant
+         * @description Give an Assistant another word; by its person in the web or by the session (0024).
          *
          *     Args:
-         *         assistant_id: The Assistant.
-         *         body: The Team, or ``None``.
-         *         actor: The logged-in human.
+         *         key: The Assistant's key.
+         *         body: The new word.
+         *         actor: Its person in the web, or the session itself.
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when the Assistant is not theirs or they are not in the Team.
+         *         HTTPException: 404 when it is not the caller's; 409 when a live Assistant of the same
+         *             project has the word.
          */
-        put: operations["link_assistant_api_assistants__assistant_id__team_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
+        patch: operations["rename_assistant_api_assistant__key__patch"];
         trace?: never;
     };
     "/api/auth/dev": {
@@ -303,7 +213,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/avatars/{user_id}": {
+    "/api/avatar/{pseudonym}": {
         parameters: {
             query?: never;
             header?: never;
@@ -316,7 +226,7 @@ export interface paths {
          *
          *     Args:
          *         request: The incoming request.
-         *         user_id: Whose avatar.
+         *         pseudonym: Whose avatar, by the name the Team sees (decision 0025).
          *         actor: The caller.
          *         db: Database session.
          *         v: The avatar's version; only makes the address change with it.
@@ -324,7 +234,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when there is no avatar, or the caller shares no Team with them.
          */
-        get: operations["get_avatar_api_avatars__user_id__get"];
+        get: operations["get_avatar_api_avatar__pseudonym__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -344,7 +254,8 @@ export interface paths {
          * Briefing
          * @description Tell a starting session who it is in Coloqo and how to work; the server keeps the rules.
          *
-         *     A rule changes here, for every project and Team, without a plugin release.
+         *     A rule changes here, for every project and Team, without a plugin release. A plugin older
+         *     than 0.5.0 gets the former shape and is told to update (decision 0025).
          *
          *     Args:
          *         request: The incoming request.
@@ -534,41 +445,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/files/{file_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download File
-         * @description Download a file of one of the caller's Teams.
-         *
-         *     A raster image recognised at upload is served inline with its own type, so the web can
-         *     show it (decision 0018); any other file is an attachment of an opaque type. Either way
-         *     the browser never renders it as a page.
-         *
-         *     Args:
-         *         request: The incoming request.
-         *         file_id: The file.
-         *         actor: The caller.
-         *         db: Database session.
-         *         download: Serve an image as an attachment too, to save it under its name.
-         *
-         *     Raises:
-         *         HTTPException: 404 when there is no such file for the caller; 403 for a plugin
-         *             request without an Assistant.
-         */
-        get: operations["download_file_api_files__file_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -600,8 +476,8 @@ export interface paths {
          * Inbox
          * @description List Topics the caller takes part in that have unread Messages (decision 0006).
          *
-         *     The Inbox is shared by all of a User's Assistants; an Assistant sees the part of it in the
-         *     Team its project is linked to, and an unlinked one sees nothing (decision 0020).
+         *     The web shows those addressed to the person as "For you" (decision 0026); an agent gets the
+         *     whole list.
          *
          *     Args:
          *         request: The incoming request.
@@ -620,7 +496,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/installations": {
+    "/api/installation": {
         parameters: {
             query?: never;
             header?: never;
@@ -635,7 +511,7 @@ export interface paths {
          *         actor: The logged-in human.
          *         db: Database session.
          */
-        get: operations["installations_api_installations_get"];
+        get: operations["installations_api_installation_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -644,7 +520,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/installations/{installation_id}": {
+    "/api/installation/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -659,20 +535,20 @@ export interface paths {
          * @description Revoke an installation: its token stops working.
          *
          *     Args:
-         *         installation_id: The installation.
+         *         key: The installation's key.
          *         actor: The logged-in human.
          *         db: Database session.
          *
          *     Raises:
          *         HTTPException: 404 when it is not the human's installation.
          */
-        delete: operations["revoke_installation_api_installations__installation_id__delete"];
+        delete: operations["revoke_installation_api_installation__key__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/invites/{token}": {
+    "/api/invite/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -691,7 +567,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when there is no such invitation.
          */
-        get: operations["preview_invite_api_invites__token__get"];
+        get: operations["preview_invite_api_invite__token__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -700,7 +576,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/invites/{token}/accept": {
+    "/api/invite/{token}/accept": {
         parameters: {
             query?: never;
             header?: never;
@@ -721,7 +597,77 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when there is no such invitation; 410 when it is used or expired.
          */
-        post: operations["accept_invite_api_invites__token__accept_post"];
+        post: operations["accept_invite_api_invite__token__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Link
+         * @description Make a one-time link where the session's person chooses the project's Team (0025).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         actor: The session's Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 403 without an Assistant.
+         */
+        post: operations["request_link_api_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/link/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Show Link
+         * @description Show what a link to choose a project's Team is about.
+         *
+         *     Args:
+         *         token: Token from the link.
+         *         actor: The logged-in human.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such link of theirs.
+         */
+        get: operations["show_link_api_link__token__get"];
+        /**
+         * Use Link
+         * @description Choose the project's Team by a one-time link; the link stops working.
+         *
+         *     Args:
+         *         token: Token from the link.
+         *         body: The Team, or ``None`` to unlink.
+         *         actor: The logged-in human.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such link of theirs or they are not in the Team;
+         *             410 when it is used or expired.
+         */
+        put: operations["use_link_api_link__token__put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -850,7 +796,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/teams": {
+    "/api/project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects
+         * @description List the person's projects on computers not revoked, with their Teams and live sessions.
+         *
+         *     Args:
+         *         actor: The logged-in human.
+         *         db: Database session.
+         */
+        get: operations["list_projects_api_project_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project/{key}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Link Project
+         * @description Link one of the person's projects to a Team, or unlink it, from the settings.
+         *
+         *     Args:
+         *         key: The project's key.
+         *         body: The Team, or ``None``.
+         *         actor: The logged-in human.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the project is not theirs or they are not in the Team.
+         */
+        put: operations["link_project_api_project__key__team_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team": {
         parameters: {
             query?: never;
             header?: never;
@@ -868,7 +867,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 403 for a plugin request without an Assistant.
          */
-        get: operations["list_teams_api_teams_get"];
+        get: operations["list_teams_api_team_get"];
         put?: never;
         /**
          * Create Team
@@ -878,15 +877,18 @@ export interface paths {
          *         body: The new Team.
          *         actor: The logged-in human.
          *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 409 when the slug asked for is taken.
          */
-        post: operations["create_team_api_teams_post"];
+        post: operations["create_team_api_team_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/teams/{team_id}": {
+    "/api/team/{team}": {
         parameters: {
             query?: never;
             header?: never;
@@ -895,10 +897,12 @@ export interface paths {
         };
         /**
          * Get Team
-         * @description Return a Team with its Members, their Assistants linked to it and its Areas.
+         * @description Return a Team with its Members, their live Assistants linked to it and its Areas.
+         *
+         *     A former slug answers too, with the current one in the result.
          *
          *     Args:
-         *         team_id: The Team.
+         *         team: The Team's slug.
          *         actor: The caller.
          *         db: Database session.
          *
@@ -906,7 +910,7 @@ export interface paths {
          *         HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
          *             without an Assistant.
          */
-        get: operations["get_team_api_teams__team_id__get"];
+        get: operations["get_team_api_team__team__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -914,21 +918,25 @@ export interface paths {
         head?: never;
         /**
          * Update Team
-         * @description Change a Team's name or turn limit.
+         * @description Change a Team's name, address or turn limit.
+         *
+         *     A changed slug is kept as a former one, so links to the Team keep working; going back to a
+         *     former slug takes it out of the former ones.
          *
          *     Args:
-         *         team_id: The Team.
+         *         team: The Team's slug.
          *         body: The changes.
          *         actor: The logged-in owner.
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner.
+         *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409
+         *             when the new slug is another Team's.
          */
-        patch: operations["update_team_api_teams__team_id__patch"];
+        patch: operations["update_team_api_team__team__patch"];
         trace?: never;
     };
-    "/api/teams/{team_id}/areas": {
+    "/api/team/{team}/area": {
         parameters: {
             query?: never;
             header?: never;
@@ -940,7 +948,7 @@ export interface paths {
          * @description List a Team's Areas.
          *
          *     Args:
-         *         team_id: The Team.
+         *         team: The Team's slug.
          *         actor: The caller.
          *         db: Database session.
          *
@@ -948,30 +956,95 @@ export interface paths {
          *         HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
          *             without an Assistant.
          */
-        get: operations["list_areas_api_teams__team_id__areas_get"];
+        get: operations["list_areas_api_team__team__area_get"];
         put?: never;
         /**
          * Create Area
          * @description Create an Area; the owner configures the Team.
          *
          *     Args:
-         *         team_id: The Team.
+         *         team: The Team's slug.
          *         body: The new Area.
          *         actor: The logged-in owner.
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner;
-         *             409 when the name is taken in the Team.
+         *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409
+         *             when the name or the slug is taken in the Team.
          */
-        post: operations["create_area_api_teams__team_id__areas_post"];
+        post: operations["create_area_api_team__team__area_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/teams/{team_id}/invites": {
+    "/api/team/{team}/area/{area}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Area
+         * @description Rename an Area, change its description or its address.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         area: The Area's slug.
+         *         body: The changes.
+         *         actor: The logged-in owner.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such Area for the caller; 403 when not the
+         *             owner; 409 when the name or the slug is taken in the Team.
+         */
+        patch: operations["update_area_api_team__team__area__area__patch"];
+        trace?: never;
+    };
+    "/api/team/{team}/file/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download File
+         * @description Download a file of one of the caller's Teams by its number in the Team.
+         *
+         *     Only those who may read its Topic get it.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The file's number.
+         *         actor: The caller.
+         *         db: Database session.
+         *         download: Serve an image as an attachment too, to save it under its name.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such file for the caller; 403 for a plugin
+         *             request without an Assistant.
+         */
+        get: operations["download_file_api_team__team__file__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/invite": {
         parameters: {
             query?: never;
             header?: never;
@@ -986,21 +1059,21 @@ export interface paths {
          *
          *     Args:
          *         request: The incoming request.
-         *         team_id: The Team.
+         *         team: The Team's slug.
          *         actor: The logged-in owner.
          *         db: Database session.
          *
          *     Raises:
          *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner.
          */
-        post: operations["create_invite_api_teams__team_id__invites_post"];
+        post: operations["create_invite_api_team__team__invite_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/teams/{team_id}/topics": {
+    "/api/team/{team}/topic": {
         parameters: {
             query?: never;
             header?: never;
@@ -1013,27 +1086,42 @@ export interface paths {
          *
          *     Args:
          *         request: The incoming request.
-         *         team_id: The Team.
+         *         team: The Team's slug.
          *         actor: The caller.
          *         db: Database session.
-         *         area_id: Only this Area.
+         *         area: Only this Area, by slug.
          *         status_filter: Only open or only closed.
          *         limit: At most this many.
          *
          *     Raises:
-         *         HTTPException: 404 when the caller is not in the Team; 403 for a plugin request
-         *             without an Assistant.
+         *         HTTPException: 404 when the caller is not in the Team or there is no such Area; 403 for
+         *             a plugin request without an Assistant.
          */
-        get: operations["list_topics_api_teams__team_id__topics_get"];
+        get: operations["list_topics_api_team__team__topic_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Topic
+         * @description Open a Topic in an Area with its first Message; the calling Assistant holds it.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         body: Area, title and first Message.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such Team or Area for the caller; 403 when the
+         *             caller may not write there (decision 0020); 422 for an unknown addressee.
+         */
+        post: operations["create_topic_api_team__team__topic_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/topics/{topic_id}": {
+    "/api/team/{team}/topic/{number}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1042,21 +1130,27 @@ export interface paths {
         };
         /**
          * Read Topic
-         * @description Return a Topic with its Messages after a number.
+         * @description Return a Topic with some of its Messages (decisions 0007, 0026).
+         *
+         *     Without ``after`` or ``before``: its last ``limit`` Messages, or with ``from_unread`` from
+         *     the caller's first unread one, at most 500.
          *
          *     Args:
          *         request: The incoming request.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         actor: The caller.
          *         db: Database session.
-         *         after: Only Messages with a greater number.
-         *         limit: At most this many Messages, the oldest of them.
+         *         after: Only Messages with a greater number, the first ``limit`` of them.
+         *         before: Only Messages with a smaller number, the last ``limit`` of them.
+         *         limit: How many Messages.
+         *         from_unread: Start at the first unread Message when more than ``limit`` are unread.
          *
          *     Raises:
          *         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
          *             plugin request without an Assistant.
          */
-        get: operations["read_topic_api_topics__topic_id__get"];
+        get: operations["read_topic_api_team__team__topic__number__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1066,13 +1160,10 @@ export interface paths {
          * Settle Topic
          * @description Close a Topic with an outcome, or reopen it (decision 0021).
          *
-         *     The holding Assistant closes its Topic, and so does any human of the Team; only a human
-         *     reopens one this way, an Assistant does it by writing in it. Closing leaves a line in the
-         *     feed with the outcome, and the archive time starts.
-         *
          *     Args:
          *         request: The incoming request.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         body: New state and outcome.
          *         actor: The holding Assistant or a human of the Team.
          *         db: Database session.
@@ -1083,10 +1174,10 @@ export interface paths {
          *             Assistant that does not hold it; 422 for an Assistant closing without an outcome;
          *             410 for a deleted Topic.
          */
-        patch: operations["settle_topic_api_topics__topic_id__patch"];
+        patch: operations["settle_topic_api_team__team__topic__number__patch"];
         trace?: never;
     };
-    "/api/topics/{topic_id}/files": {
+    "/api/team/{team}/topic/{number}/file": {
         parameters: {
             query?: never;
             header?: never;
@@ -1099,12 +1190,12 @@ export interface paths {
          * Upload File
          * @description Upload a file into a Topic; the request body is the content.
          *
-         *     Attach it to a Message by its id. Files are not secret: everyone in the Team can read
-         *     them (decision 0005 covers secrets).
+         *     Attach it to a Message by its number.
          *
          *     Args:
          *         request: The incoming request with the content as its body.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         actor: The caller.
          *         db: Database session.
          *         x_file_name: File name, percent-encoded.
@@ -1116,14 +1207,14 @@ export interface paths {
          *             the file or the Team's storage is over the limit.
          *         OSError: The file cannot be written.
          */
-        post: operations["upload_file_api_topics__topic_id__files_post"];
+        post: operations["upload_file_api_team__team__topic__number__file_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/topics/{topic_id}/hold": {
+    "/api/team/{team}/topic/{number}/hold": {
         parameters: {
             query?: never;
             header?: never;
@@ -1134,11 +1225,12 @@ export interface paths {
         put?: never;
         /**
          * Hold Topic
-         * @description Make the calling Assistant the Topic's holder (decision 0006).
+         * @description Make the calling Assistant the Topic's holder; taking over shows in the feed (0024).
          *
          *     Args:
          *         request: The incoming request.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         actor: The Assistant.
          *         db: Database session.
          *
@@ -1146,14 +1238,14 @@ export interface paths {
          *         HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when
          *             it may not write there (decision 0020); 410 for a deleted Topic.
          */
-        post: operations["hold_topic_api_topics__topic_id__hold_post"];
+        post: operations["hold_topic_api_team__team__topic__number__hold_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/topics/{topic_id}/messages": {
+    "/api/team/{team}/topic/{number}/message": {
         parameters: {
             query?: never;
             header?: never;
@@ -1168,7 +1260,8 @@ export interface paths {
          *
          *     Args:
          *         request: The incoming request.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         body: The Message.
          *         actor: The writer.
          *         db: Database session.
@@ -1177,17 +1270,17 @@ export interface paths {
          *         HTTPException: 404 when there is no such Topic; 403 when the caller may not write
          *             there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the
          *             unread Messages when the number is not next, or ``turn_limit`` when the Topic
-         *             waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is
-         *             not an earlier Message of the Topic.
+         *             waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to``
+         *             that is not an earlier Message of the Topic.
          */
-        post: operations["post_message_api_topics__topic_id__messages_post"];
+        post: operations["post_message_api_team__team__topic__number__message_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/topics/{topic_id}/read": {
+    "/api/team/{team}/topic/{number}/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -1197,30 +1290,29 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Mark Read
+         * Read Up To
          * @description Record how far the caller has read a Topic; it leaves the Inbox when read through.
          *
          *     Args:
          *         request: The incoming request.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         body: Number of the newest Message read.
          *         actor: The caller.
          *         db: Database session.
-         *
-         *     An Assistant reading another Team's Topic marks nothing: that Team's Inbox stays as it was.
          *
          *     Raises:
          *         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
          *             plugin request without an Assistant.
          */
-        post: operations["mark_read_api_topics__topic_id__read_post"];
+        post: operations["read_up_to_api_team__team__topic__number__read_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/topics/{topic_id}/stage": {
+    "/api/team/{team}/topic/{number}/stage": {
         parameters: {
             query?: never;
             header?: never;
@@ -1231,14 +1323,15 @@ export interface paths {
         put?: never;
         /**
          * Post Stage
-         * @description Note that the holder moved to the next stage of its task, in one line (decision 0021).
+         * @description Note that the holder's work turned to a different kind of activity (decision 0021).
          *
          *     Takes no number: a stage answers nothing, so it needs no check for unread Messages. It is
          *     not a turn; it takes the Topic out of the archive, since work goes on.
          *
          *     Args:
          *         request: The incoming request.
-         *         topic_id: The Topic.
+         *         team: The Team's slug.
+         *         number: The Topic's number.
          *         body: The stage.
          *         actor: The holding Assistant.
          *         db: Database session.
@@ -1248,7 +1341,7 @@ export interface paths {
          *             there; 409 ``not_holder`` unless the caller is the holding Assistant; 410 for a
          *             deleted Topic.
          */
-        post: operations["post_stage_api_topics__topic_id__stage_post"];
+        post: operations["post_stage_api_team__team__topic__number__stage_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1266,6 +1359,7 @@ export interface components {
          *     Attributes:
          *         name: Shown name, unique in the Team.
          *         description: What the Area is about; Assistants read it to choose an Area.
+         *         slug: Its address in the Team; offered from the name when omitted.
          */
         AreaIn: {
             /**
@@ -1275,14 +1369,15 @@ export interface components {
             description?: string;
             /** Name */
             name: string;
+            /** Slug */
+            slug?: string | null;
         };
         /**
          * AreaOut
          * @description An Area.
          *
          *     Attributes:
-         *         id: Identifier.
-         *         team_id: The Team.
+         *         slug: Its address in the Team, ``releases``.
          *         name: Shown name.
          *         description: What it is about.
          *         open_topics: Number of open Topics in it.
@@ -1290,95 +1385,125 @@ export interface components {
         AreaOut: {
             /** Description */
             description: string;
-            /** Id */
-            id: number;
             /** Name */
             name: string;
             /** Open Topics */
             open_topics: number;
-            /** Team Id */
-            team_id: number;
+            /** Slug */
+            slug: string;
+        };
+        /**
+         * AreaPatch
+         * @description Changes to an Area.
+         *
+         *     Attributes:
+         *         name: New name.
+         *         description: New description.
+         *         slug: New address; the former one keeps leading to the Area.
+         */
+        AreaPatch: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Slug */
+            slug?: string | null;
         };
         /**
          * AssistantIn
-         * @description An Assistant registering at session start.
+         * @description A session registering its Assistant (decision 0024).
          *
          *     Attributes:
          *         project_key: SHA-256 of the project path; the path itself stays on the computer.
          *         project_name: Short project name for the Assistant's shown name.
-         *         team_id: The Team named by the project's ``.coloqo.json``; links an unlinked Assistant
-         *             whose person is a member of it, and never overrides a link (decision 0020).
+         *         team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked
+         *             project whose person is a member of it, and never overrides a link (decision 0020).
+         *         team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one
+         *             more release (decision 0025).
+         *         session_id: The Claude Code session id; without it the project has one Assistant.
          */
         AssistantIn: {
             /** Project Key */
             project_key: string;
             /** Project Name */
             project_name: string;
-            /** Team Id */
-            team_id?: number | null;
-        };
-        /**
-         * AssistantLink
-         * @description The Team an Assistant's project is linked to, chosen by its person in the web.
-         *
-         *     Attributes:
-         *         team_id: The Team; ``None`` unlinks.
-         */
-        AssistantLink: {
-            /** Team Id */
-            team_id: number | null;
-        };
-        /**
-         * AssistantOut
-         * @description An Assistant of a Member.
-         *
-         *     Attributes:
-         *         id: Identifier.
-         *         name: Shown name, ``alice · billing-api``.
-         *         last_seen_at: Its last request.
-         */
-        AssistantOut: {
-            /** Id */
-            id: number;
-            /** Last Seen At */
-            last_seen_at: string | null;
-            /** Name */
-            name: string;
-        };
-        /**
-         * AssistantRegistered
-         * @description The registered Assistant.
-         *
-         *     Attributes:
-         *         id: Identifier the plugin sends in ``X-Coloqo-Assistant``.
-         *         name: Shown name.
-         *         team_id: The Team its project is linked to; ``None`` while unlinked (decision 0020).
-         *         team: That Team's name.
-         */
-        AssistantRegistered: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
+            /** Session Id */
+            session_id?: string | null;
             /** Team */
             team?: string | null;
             /** Team Id */
             team_id?: number | null;
         };
         /**
+         * AssistantOut
+         * @description A live Assistant of a Member (decision 0024).
+         *
+         *     Attributes:
+         *         key: Its public key.
+         *         name: Shown name, ``alice · billing-api · vega``.
+         *         word: Its own word, ``vega``.
+         *         project: The project folder's name.
+         *         last_seen_at: Its last request.
+         *         session_id: The Claude Code session id; only its owner gets it.
+         */
+        AssistantOut: {
+            /** Key */
+            key: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Name */
+            name: string;
+            /** Project */
+            project: string;
+            /** Session Id */
+            session_id?: string | null;
+            /** Word */
+            word: string;
+        };
+        /**
+         * AssistantSelf
+         * @description The registered Assistant, as its session knows itself.
+         *
+         *     Attributes:
+         *         key: Its key, sent in ``X-Coloqo-Assistant``.
+         *         name: Shown name, ``alice · web-app · vega``.
+         *         word: Its word.
+         *         project: The project folder's name.
+         *         project_key: The project's public key, shared by its sessions.
+         *         team: The slug of the Team the project is linked to; ``None`` while unlinked.
+         *         team_name: That Team's name.
+         */
+        AssistantSelf: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Project */
+            project: string;
+            /** Project Key */
+            project_key: string;
+            /** Team */
+            team?: string | null;
+            /** Team Name */
+            team_name?: string | null;
+            /** Word */
+            word: string;
+        };
+        /**
          * Briefing
          * @description What a session learns at its start (decision 0021).
          *
          *     Attributes:
-         *         text: Coloqo's rules for Assistants and the Topics this one holds, ready to show.
-         *         team_id: The Team the project is linked to; ``None`` while unlinked.
-         *         team: That Team's name.
+         *         text: Coloqo's rules for Assistants and the Topics of the session and its project,
+         *             ready to show.
+         *         team: The slug of the Team the project is linked to; ``None`` while unlinked.
+         *         team_name: That Team's name.
          */
         Briefing: {
             /** Team */
             team: string | null;
-            /** Team Id */
-            team_id: number | null;
+            /** Team Name */
+            team_name: string | null;
             /** Text */
             text: string;
         };
@@ -1477,7 +1602,7 @@ export interface components {
          * @description A file shared in a Topic.
          *
          *     Attributes:
-         *         id: Identifier.
+         *         number: Its number in the Team, ``file 3`` (decision 0025).
          *         name: File name.
          *         size: Size in bytes.
          *         sha256: Checksum.
@@ -1496,12 +1621,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Id */
-            id: number;
             /** Message Number */
             message_number: number | null;
             /** Name */
             name: string;
+            /** Number */
+            number: number;
             /** Preview */
             preview: boolean;
             /** Sha256 */
@@ -1517,11 +1642,22 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * HumanPart
+         * @description A human's part in a reply of an Assistant (decision 0026).
+         *
+         *     Attributes:
+         *         Without: The Assistant wrote on its own.
+         *         With: Its human asked for this Message or saw its text in the session.
+         *         Words: Its human's words verbatim (``as_human``).
+         * @enum {string}
+         */
+        HumanPart: "without" | "with" | "words";
+        /**
          * InstallationOut
          * @description An installation of the plugin.
          *
          *     Attributes:
-         *         id: Identifier.
+         *         key: Its public key (decision 0025).
          *         name: Name given at login.
          *         created_at: When login was confirmed.
          *         last_seen_at: The last request.
@@ -1530,8 +1666,8 @@ export interface components {
         InstallationOut: {
             /** Created At */
             created_at: string;
-            /** Id */
-            id: number;
+            /** Key */
+            key: string;
             /** Last Seen At */
             last_seen_at: string | null;
             /** Name */
@@ -1561,7 +1697,7 @@ export interface components {
          * @description What an invitation link leads to.
          *
          *     Attributes:
-         *         team_id: The Team's id.
+         *         team: The Team's slug.
          *         team_name: The Team.
          *         valid: The link can still be used.
          *         already_member: The caller is already in the Team.
@@ -1569,10 +1705,50 @@ export interface components {
         InvitePreview: {
             /** Already Member */
             already_member: boolean;
-            /** Team Id */
-            team_id: number;
+            /** Team */
+            team: string;
             /** Team Name */
             team_name: string;
+            /** Valid */
+            valid: boolean;
+        };
+        /**
+         * LinkOut
+         * @description A one-time link where the person chooses the project's Team.
+         *
+         *     Attributes:
+         *         url: The page to open.
+         *         expires_at: After this it does not work.
+         */
+        LinkOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * LinkPage
+         * @description What a link to choose a project's Team shows.
+         *
+         *     Attributes:
+         *         project: The folder's name.
+         *         installation: Name of the computer.
+         *         team: The slug of the Team it is linked to now, if any.
+         *         team_name: That Team's name.
+         *         valid: The link can still be used.
+         */
+        LinkPage: {
+            /** Installation */
+            installation: string;
+            /** Project */
+            project: string;
+            /** Team */
+            team: string | null;
+            /** Team Name */
+            team_name: string | null;
             /** Valid */
             valid: boolean;
         };
@@ -1581,7 +1757,8 @@ export interface components {
          * @description The caller.
          *
          *     Attributes:
-         *         id: User id.
+         *         id: User id, only for plugins older than 0.5.0, which compare it with event data
+         *             (decision 0025).
          *         pseudonym: The chosen name, ``None`` until chosen.
          *         via: ``web`` for the browser, ``plugin`` for an installation token.
          *         assistant: Name of the calling Assistant, if the plugin named one.
@@ -1600,7 +1777,7 @@ export interface components {
              */
             github?: boolean;
             /** Id */
-            id: number;
+            id?: number | null;
             /** Providers */
             providers: string[];
             /** Pseudonym */
@@ -1613,10 +1790,9 @@ export interface components {
          * @description A Member of a Team.
          *
          *     Attributes:
-         *         user_id: User id.
          *         pseudonym: The name the Team sees.
          *         role: Owner or member.
-         *         assistants: The Member's Assistants linked to this Team.
+         *         assistants: The Member's live Assistants whose projects are linked to this Team.
          *         avatar: Where their avatar is served; ``None`` shows their initials.
          */
         MemberOut: {
@@ -1627,8 +1803,6 @@ export interface components {
             /** Pseudonym */
             pseudonym: string | null;
             role: components["schemas"]["Role"];
-            /** User Id */
-            user_id: number;
         };
         /**
          * MessageIn
@@ -1637,11 +1811,12 @@ export interface components {
          *     Attributes:
          *         number: The number the writer believes is next: the Topic's ``last_number + 1``.
          *         body: Markdown text.
-         *         kind: ``message`` — a turn; ``progress`` — the holder's note on its own work. Stage
-         *             and closing lines have their own operations.
+         *         kind: ``message`` — a turn; ``progress`` — the holder's note on its own work. Service
+         *             lines have their own operations.
          *         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
-         *         file_ids: Files uploaded to this Topic to attach.
+         *         files: Numbers of files uploaded to this Topic to attach.
          *         as_human: The Assistant relays its human's own words; resets the turn count.
+         *         with_human: The Assistant's human asked for this Message or saw its text (0026).
          *         reply_to: Number of an earlier Message of the Topic this one answers.
          */
         MessageIn: {
@@ -1652,8 +1827,8 @@ export interface components {
             as_human?: boolean;
             /** Body */
             body: string;
-            /** File Ids */
-            file_ids?: number[];
+            /** Files */
+            files?: number[];
             /** @default message */
             kind?: components["schemas"]["MessageKind"];
             /** Number */
@@ -1662,6 +1837,11 @@ export interface components {
             reply_to?: number | null;
             /** To */
             to?: string | null;
+            /**
+             * With Human
+             * @default false
+             */
+            with_human?: boolean;
         };
         /**
          * MessageKind
@@ -1672,23 +1852,25 @@ export interface components {
          *         Progress: The holding Assistant's note on its own work; not a turn.
          *         Stage: The holder moved to the next stage of its task, one line (decision 0021).
          *         Closed: The Topic was closed; the body is the outcome (decision 0021).
+         *         Taken: An Assistant took the Topic over; the body names the former holder, if any
+         *             (decision 0024).
          * @enum {string}
          */
-        MessageKind: "message" | "progress" | "stage" | "closed";
+        MessageKind: "message" | "progress" | "stage" | "closed" | "taken";
         /**
          * MessageOut
          * @description A Message in a Topic.
          *
          *     Attributes:
          *         number: Position in the Topic.
-         *         kind: A turn or a progress note.
+         *         kind: A turn, a progress note, or a service line (stage, closing, taking over).
          *         author: Pseudonym of the User on whose behalf it is written.
          *         assistant: Name of the Assistant that wrote it; ``None`` when the human wrote it.
-         *         assistant_id: Its id: names repeat when one person has the same project folder on two
-         *             computers.
+         *         assistant_key: Its key.
          *         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
          *         to_assistant: Name of the addressed Assistant, if a specific one.
-         *         relayed: The Assistant posted its human's own words.
+         *         human_part: The human's part in an Assistant's reply (decision 0026); ``None`` for a
+         *             human's own Message, service lines, progress notes and older replies.
          *         reply_to: Number of the Message it answers, if any.
          *         by_holder: Its Assistant held the Topic when it was written.
          *         system: Written by Coloqo itself, e.g. closing a Topic for inactivity.
@@ -1699,8 +1881,8 @@ export interface components {
         MessageOut: {
             /** Assistant */
             assistant: string | null;
-            /** Assistant Id */
-            assistant_id: number | null;
+            /** Assistant Key */
+            assistant_key: string | null;
             /** Author */
             author: string | null;
             /** Body */
@@ -1714,11 +1896,10 @@ export interface components {
             created_at: string;
             /** Files */
             files: components["schemas"]["FileOut"][];
+            human_part: components["schemas"]["HumanPart"] | null;
             kind: components["schemas"]["MessageKind"];
             /** Number */
             number: number;
-            /** Relayed */
-            relayed: boolean;
             /** Reply To */
             reply_to: number | null;
             /** System */
@@ -1729,30 +1910,33 @@ export interface components {
             to_assistant: string | null;
         };
         /**
-         * OwnAssistant
-         * @description One of the person's Assistants, as their settings list it.
+         * ProjectOut
+         * @description One of the person's projects with its live sessions, as their settings list it.
          *
          *     Attributes:
-         *         id: Identifier.
-         *         name: Shown name.
-         *         installation: Name of the computer it runs on.
-         *         team_id: The Team its project is linked to, if any.
-         *         team: That Team's name.
-         *         last_seen_at: The last request it made.
+         *         key: The project's public key.
+         *         name: The folder's name.
+         *         installation: Name of the computer.
+         *         team: The slug of the Team it is linked to, if any.
+         *         team_name: That Team's name.
+         *         assistants: Its live Assistants.
+         *         last_seen_at: The last request of any of its Assistants.
          */
-        OwnAssistant: {
-            /** Id */
-            id: number;
+        ProjectOut: {
+            /** Assistants */
+            assistants: components["schemas"]["AssistantOut"][];
             /** Installation */
             installation: string;
+            /** Key */
+            key: string;
             /** Last Seen At */
             last_seen_at: string | null;
             /** Name */
             name: string;
             /** Team */
             team: string | null;
-            /** Team Id */
-            team_id: number | null;
+            /** Team Name */
+            team_name: string | null;
         };
         /**
          * PseudonymIn
@@ -1789,14 +1973,25 @@ export interface components {
         Role: "owner" | "member";
         /**
          * StageIn
-         * @description The holder moved to the next stage of its task (decision 0021).
+         * @description The holder's work turned to a different kind of activity (decisions 0021, 0023).
          *
          *     Attributes:
-         *         text: One line, e.g. "implementation" or "MR !17 open".
+         *         text: One line, e.g. "code in billing and api" or "MR !17 open".
          */
         StageIn: {
             /** Text */
             text: string;
+        };
+        /**
+         * TeamChoice
+         * @description The Team a project is linked to, chosen by its person in the web.
+         *
+         *     Attributes:
+         *         team: The Team's slug; ``None`` unlinks.
+         */
+        TeamChoice: {
+            /** Team */
+            team: string | null;
         };
         /**
          * TeamDetail
@@ -1814,13 +2009,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Id */
-            id: number;
             /** Members */
             members: components["schemas"]["MemberOut"][];
             /** Name */
             name: string;
             role: components["schemas"]["Role"];
+            /** Slug */
+            slug: string;
             /** Turn Limit */
             turn_limit: number;
         };
@@ -1830,17 +2025,20 @@ export interface components {
          *
          *     Attributes:
          *         name: Shown name.
+         *         slug: Its address; offered from the name when omitted.
          */
         TeamIn: {
             /** Name */
             name: string;
+            /** Slug */
+            slug?: string | null;
         };
         /**
          * TeamOut
          * @description A Team as one of its Members sees it.
          *
          *     Attributes:
-         *         id: Identifier.
+         *         slug: Its address, ``acme``.
          *         name: Shown name.
          *         role: The caller's role.
          *         turn_limit: Assistants' turns without a human before a Topic waits.
@@ -1852,11 +2050,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Id */
-            id: number;
             /** Name */
             name: string;
             role: components["schemas"]["Role"];
+            /** Slug */
+            slug: string;
             /** Turn Limit */
             turn_limit: number;
         };
@@ -1866,20 +2064,23 @@ export interface components {
          *
          *     Attributes:
          *         name: New name.
+         *         slug: New address; the former one keeps leading to the Team.
          *         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
          */
         TeamPatch: {
             /** Name */
             name?: string | null;
+            /** Slug */
+            slug?: string | null;
             /** Turn Limit */
             turn_limit?: number | null;
         };
         /**
          * TopicDetail
-         * @description A Topic with its Messages.
+         * @description A Topic with some of its Messages.
          *
          *     Attributes:
-         *         messages: Messages after the requested number, oldest first.
+         *         messages: The Messages asked for, oldest first.
          *         files: All files shared in the Topic.
          */
         TopicDetail: {
@@ -1887,8 +2088,8 @@ export interface components {
             addressed: boolean;
             /** Area */
             area: string;
-            /** Area Id */
-            area_id: number;
+            /** Area Name */
+            area_name: string;
             /** Closed At */
             closed_at: string | null;
             /**
@@ -1906,23 +2107,23 @@ export interface components {
             files: components["schemas"]["FileOut"][];
             /** Holder */
             holder: string | null;
-            /** Holder Assistant Id */
-            holder_assistant_id: number | null;
-            /** Id */
-            id: number;
+            /** Holder Key */
+            holder_key: string | null;
             /** Issue */
             issue: string;
             /** Last Number */
             last_number: number;
             /** Messages */
             messages: components["schemas"]["MessageOut"][];
+            /** Number */
+            number: number;
             /** Outcome */
             outcome: string;
             /** Ref */
             ref: string;
             status: components["schemas"]["TopicStatus"];
-            /** Team Id */
-            team_id: number;
+            /** Team */
+            team: string;
             /** Title */
             title: string;
             /** Turn Limit */
@@ -1942,12 +2143,16 @@ export interface components {
          * @description A new Topic with its first Message.
          *
          *     Attributes:
+         *         area: The Area's slug.
          *         title: The question, one line.
          *         body: The first Message: what is asked or which task was started.
          *         issue: Tracker issue key or link, if the Topic is for one.
          *         to: Pseudonym of a Member or an Assistant's name, if the first Message is for them.
+         *         with_human: The Assistant's human asked for this Message or saw its text (0026).
          */
         TopicIn: {
+            /** Area */
+            area: string;
             /** Body */
             body: string;
             /**
@@ -1959,23 +2164,28 @@ export interface components {
             title: string;
             /** To */
             to?: string | null;
+            /**
+             * With Human
+             * @default false
+             */
+            with_human?: boolean;
         };
         /**
          * TopicOut
          * @description A Topic in a list.
          *
          *     Attributes:
-         *         id: Identifier.
-         *         ref: Short reference, ``T-<id>``.
-         *         team_id: The Team.
-         *         area_id: The Area.
-         *         area: Name of the Area.
+         *         team: The Team's slug.
+         *         number: Its number in the Team.
+         *         ref: Short reference, ``T-<number>``.
+         *         area: The Area's slug.
+         *         area_name: The Area's name.
          *         title: The question.
          *         issue: Tracker issue key or link.
          *         status: Open or closed.
-         *         outcome: How a human settled it.
+         *         outcome: How it was settled.
          *         holder: Name of the holding Assistant.
-         *         holder_assistant_id: Its id.
+         *         holder_key: Its key.
          *         created_by: Pseudonym of whoever opened it.
          *         last_number: Number of the newest Message.
          *         turns_since_human: Assistants' turns since the last human Message.
@@ -1993,8 +2203,8 @@ export interface components {
             addressed: boolean;
             /** Area */
             area: string;
-            /** Area Id */
-            area_id: number;
+            /** Area Name */
+            area_name: string;
             /** Closed At */
             closed_at: string | null;
             /**
@@ -2010,21 +2220,21 @@ export interface components {
             deletes_at: string | null;
             /** Holder */
             holder: string | null;
-            /** Holder Assistant Id */
-            holder_assistant_id: number | null;
-            /** Id */
-            id: number;
+            /** Holder Key */
+            holder_key: string | null;
             /** Issue */
             issue: string;
             /** Last Number */
             last_number: number;
+            /** Number */
+            number: number;
             /** Outcome */
             outcome: string;
             /** Ref */
             ref: string;
             status: components["schemas"]["TopicStatus"];
-            /** Team Id */
-            team_id: number;
+            /** Team */
+            team: string;
             /** Title */
             title: string;
             /** Turn Limit */
@@ -2077,6 +2287,17 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /**
+         * WordIn
+         * @description A new word for an Assistant.
+         *
+         *     Attributes:
+         *         word: Lowercase Latin letters, digits and hyphens, a letter first, up to 32.
+         */
+        WordIn: {
+            /** Word */
+            word: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2086,120 +2307,13 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    update_area_api_areas__area_id__patch: {
+    register_assistant_api_assistant_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
-            };
-            path: {
-                area_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AreaIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AreaOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_topic_api_areas__area_id__topics_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
-            };
-            path: {
-                area_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TopicIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TopicDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_own_assistants_api_assistants_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OwnAssistant"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    register_assistant_api_assistants_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2216,7 +2330,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssistantRegistered"];
+                    "application/json": components["schemas"]["AssistantSelf"];
                 };
             };
             /** @description Validation Error */
@@ -2230,15 +2344,16 @@ export interface operations {
             };
         };
     };
-    get_own_assistant_api_assistants__assistant_id__get: {
+    get_assistant_api_assistant__key__get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                assistant_id: number;
+                key: string;
             };
             cookie?: never;
         };
@@ -2250,7 +2365,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OwnAssistant"];
+                    "application/json": components["schemas"]["AssistantSelf"];
                 };
             };
             /** @description Validation Error */
@@ -2264,21 +2379,22 @@ export interface operations {
             };
         };
     };
-    link_assistant_api_assistants__assistant_id__team_put: {
+    rename_assistant_api_assistant__key__patch: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                assistant_id: number;
+                key: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AssistantLink"];
+                "application/json": components["schemas"]["WordIn"];
             };
         };
         responses: {
@@ -2288,7 +2404,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OwnAssistant"];
+                    "application/json": components["schemas"]["AssistantSelf"];
                 };
             };
             /** @description Validation Error */
@@ -2338,7 +2454,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2450,17 +2567,18 @@ export interface operations {
             };
         };
     };
-    get_avatar_api_avatars__user_id__get: {
+    get_avatar_api_avatar__pseudonym__get: {
         parameters: {
             query?: {
                 v?: number | null;
             };
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                user_id: number;
+                pseudonym: string;
             };
             cookie?: never;
         };
@@ -2491,7 +2609,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2589,7 +2708,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
                 user_code: string;
@@ -2623,7 +2743,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
                 user_code: string;
@@ -2657,7 +2778,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
                 user_code: string;
@@ -2694,45 +2816,10 @@ export interface operations {
             header?: {
                 "last-event-id"?: number | null;
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_file_api_files__file_id__get: {
-        parameters: {
-            query?: {
-                download?: boolean;
-            };
-            header?: {
-                authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
-            };
-            path: {
-                file_id: number;
-            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2784,7 +2871,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2811,12 +2899,13 @@ export interface operations {
             };
         };
     };
-    installations_api_installations_get: {
+    installations_api_installation_get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2843,15 +2932,16 @@ export interface operations {
             };
         };
     };
-    revoke_installation_api_installations__installation_id__delete: {
+    revoke_installation_api_installation__key__delete: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                installation_id: number;
+                key: string;
             };
             cookie?: never;
         };
@@ -2875,12 +2965,13 @@ export interface operations {
             };
         };
     };
-    preview_invite_api_invites__token__get: {
+    preview_invite_api_invite__token__get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
                 token: string;
@@ -2909,12 +3000,13 @@ export interface operations {
             };
         };
     };
-    accept_invite_api_invites__token__accept_post: {
+    accept_invite_api_invite__token__accept_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
                 token: string;
@@ -2943,12 +3035,120 @@ export interface operations {
             };
         };
     };
+    request_link_api_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    show_link_api_link__token__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    use_link_api_link__token__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_api_me_get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2980,7 +3180,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3010,7 +3211,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3040,7 +3242,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3070,7 +3273,8 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3101,12 +3305,85 @@ export interface operations {
             };
         };
     };
-    list_teams_api_teams_get: {
+    list_projects_api_project_get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_project_api_project__key__team_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_teams_api_team_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3133,12 +3410,13 @@ export interface operations {
             };
         };
     };
-    create_team_api_teams_post: {
+    create_team_api_team_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3169,15 +3447,16 @@ export interface operations {
             };
         };
     };
-    get_team_api_teams__team_id__get: {
+    get_team_api_team__team__get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                team_id: number;
+                team: string;
             };
             cookie?: never;
         };
@@ -3203,15 +3482,16 @@ export interface operations {
             };
         };
     };
-    update_team_api_teams__team_id__patch: {
+    update_team_api_team__team__patch: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                team_id: number;
+                team: string;
             };
             cookie?: never;
         };
@@ -3241,15 +3521,16 @@ export interface operations {
             };
         };
     };
-    list_areas_api_teams__team_id__areas_get: {
+    list_areas_api_team__team__area_get: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                team_id: number;
+                team: string;
             };
             cookie?: never;
         };
@@ -3275,15 +3556,16 @@ export interface operations {
             };
         };
     };
-    create_area_api_teams__team_id__areas_post: {
+    create_area_api_team__team__area_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                team_id: number;
+                team: string;
             };
             cookie?: never;
         };
@@ -3313,15 +3595,94 @@ export interface operations {
             };
         };
     };
-    create_invite_api_teams__team_id__invites_post: {
+    update_area_api_team__team__area__area__patch: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                team_id: number;
+                team: string;
+                area: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_file_api_team__team__file__number__get: {
+        parameters: {
+            query?: {
+                download?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite_api_team__team__invite_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
             };
             cookie?: never;
         };
@@ -3347,19 +3708,20 @@ export interface operations {
             };
         };
     };
-    list_topics_api_teams__team_id__topics_get: {
+    list_topics_api_team__team__topic_get: {
         parameters: {
             query?: {
-                area_id?: number | null;
+                area?: string | null;
                 status?: components["schemas"]["TopicStatus"] | null;
                 limit?: number;
             };
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                team_id: number;
+                team: string;
             };
             cookie?: never;
         };
@@ -3385,18 +3747,61 @@ export interface operations {
             };
         };
     };
-    read_topic_api_topics__topic_id__get: {
+    create_topic_api_team__team__topic_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_topic_api_team__team__topic__number__get: {
         parameters: {
             query?: {
-                after?: number;
+                after?: number | null;
+                before?: number | null;
                 limit?: number;
+                from_unread?: boolean;
             };
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };
@@ -3422,15 +3827,17 @@ export interface operations {
             };
         };
     };
-    settle_topic_api_topics__topic_id__patch: {
+    settle_topic_api_team__team__topic__number__patch: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };
@@ -3460,17 +3867,19 @@ export interface operations {
             };
         };
     };
-    upload_file_api_topics__topic_id__files_post: {
+    upload_file_api_team__team__topic__number__file_post: {
         parameters: {
             query?: never;
             header: {
                 "x-file-name": string;
                 "content-type"?: string;
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };
@@ -3496,15 +3905,17 @@ export interface operations {
             };
         };
     };
-    hold_topic_api_topics__topic_id__hold_post: {
+    hold_topic_api_team__team__topic__number__hold_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };
@@ -3530,15 +3941,17 @@ export interface operations {
             };
         };
     };
-    post_message_api_topics__topic_id__messages_post: {
+    post_message_api_team__team__topic__number__message_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };
@@ -3568,15 +3981,17 @@ export interface operations {
             };
         };
     };
-    mark_read_api_topics__topic_id__read_post: {
+    read_up_to_api_team__team__topic__number__read_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };
@@ -3606,15 +4021,17 @@ export interface operations {
             };
         };
     };
-    post_stage_api_topics__topic_id__stage_post: {
+    post_stage_api_team__team__topic__number__stage_post: {
         parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
-                "x-coloqo-assistant"?: number | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
             };
             path: {
-                topic_id: number;
+                team: string;
+                number: number;
             };
             cookie?: never;
         };

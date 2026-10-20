@@ -1,6 +1,6 @@
 [project]
 name = "coloqo-server"
-version = "0.5.1"
+version = "0.6.0"
 description = "Coloqo server: the API and, when configured, the built web interface"
 license = "AGPL-3.0-only"
 requires-python = ">=3.14"

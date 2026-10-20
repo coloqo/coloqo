@@ -10,7 +10,7 @@ from typing import Any
 from coloqo.config import config_dir
 
 MODES = ("all", "mine", "people", "quiet")
-"""``all``: the Team; ``mine``: Topics this project's Assistant holds or writes in; ``people``:
+"""``all``: the Team; ``mine``: Topics this session's Assistant holds or writes in; ``people``:
 Messages of some people and their Assistants; ``quiet``: nothing."""
 
 STALE_SECONDS = 14 * 24 * 3600
@@ -125,21 +125,21 @@ def save(focus: Focus, session: str | None = None) -> Path:
     return path
 
 
-def allows(focus: Focus, kind: str, data: dict[str, Any], assistant_id: int) -> bool:
+def allows(focus: Focus, kind: str, data: dict[str, Any], assistant: str) -> bool:
     """Whether an event may reach a session with this focus; the watch asks before printing.
 
     Args:
         focus: The session's focus.
         kind: Event kind.
         data: Event data.
-        assistant_id: This project's Assistant.
+        assistant: This session's Assistant, by key (decision 0024).
     """
     if focus.mode == "all":
         return True
     if focus.mode == "quiet":
         return False
     if focus.mode == "mine":
-        involved = set(data.get("assistant_ids") or []) | {data.get("holder_assistant_id")}
-        return assistant_id in involved or data.get("to_assistant_id") == assistant_id
+        involved = set(data.get("assistants") or []) | {data.get("holder"), data.get("from")}
+        return assistant in involved or data.get("to_assistant") == assistant
     author = str(data.get("author") or "").lower()
     return kind in ("message", "topic") and author in {p.lower() for p in focus.people}

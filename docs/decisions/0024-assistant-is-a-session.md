@@ -24,7 +24,7 @@ Assistants of their own (`agent_id` stays local to the plugin's hooks, decision 
 **Name.** The server gives each Assistant a word: `alice · web-app · vega`. The words come from one
 pool of three themes, bells and ringing, musical terms and stars, with words of a dark or ambiguous
 meaning (such as "knell") removed. A word is not reused among the live Assistants of one project.
-The owner renames an Assistant in the web or by asking the agent (`rename`); the name stays unique
+The owner renames an Assistant in the web or by asking the agent (`rename_session`); the name stays unique
 among the project's live Assistants.
 
 **The session id** is stored with the Assistant. In the web, hovering over an Assistant's name

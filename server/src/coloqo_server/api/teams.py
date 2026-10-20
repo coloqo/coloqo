@@ -1,9 +1,9 @@
-"""Teams, their Members, invitations and Areas."""
+"""Teams, their Members, invitations and Areas, by slug (decisions 0024, 0025)."""
 
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,16 +12,21 @@ from coloqo_server.api.avatars import avatar_url
 from coloqo_server.models import (
     Area,
     Assistant,
+    FormerAreaSlug,
+    FormerTeamSlug,
     Invite,
     Member,
+    Project,
     Role,
     Team,
     Topic,
     TopicStatus,
     User,
 )
+from coloqo_server.naming import SLUG, numbered, slugify
 from coloqo_server.security import (
     DB,
+    Actor,
     ActorDep,
     HumanDep,
     new_token,
@@ -34,15 +39,41 @@ router = APIRouter(tags=["teams"])
 
 INVITE_DAYS = 7
 
+LIVE = timedelta(hours=24)
+"""An Assistant seen this recently is live: the directory lists it and its word stays its own."""
+
+
+def _slug(value: str | None) -> str | None:
+    """Check a slug given by a person.
+
+    Args:
+        value: The slug, or ``None`` when not given.
+
+    Raises:
+        ValueError: Not lowercase Latin letters, digits and inner hyphens, 1 to 40 long.
+    """
+    if value is None:
+        return None
+    value = value.strip()
+    if not SLUG.match(value):
+        raise ValueError(
+            "A slug is 1 to 40 lowercase Latin letters, digits and hyphens, not at the ends"
+        )
+    return value
+
 
 class TeamIn(BaseModel):
     """A new Team.
 
     Attributes:
         name: Shown name.
+        slug: Its address; offered from the name when omitted.
     """
 
     name: str = Field(min_length=1, max_length=100)
+    slug: str | None = None
+
+    _check_slug = field_validator("slug")(_slug)
 
 
 class TeamPatch(BaseModel):
@@ -50,25 +81,29 @@ class TeamPatch(BaseModel):
 
     Attributes:
         name: New name.
+        slug: New address; the former one keeps leading to the Team.
         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
     """
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
+    slug: str | None = None
     turn_limit: int | None = Field(default=None, ge=1, le=100)
+
+    _check_slug = field_validator("slug")(_slug)
 
 
 class TeamOut(BaseModel):
     """A Team as one of its Members sees it.
 
     Attributes:
-        id: Identifier.
+        slug: Its address, ``acme``.
         name: Shown name.
         role: The caller's role.
         turn_limit: Assistants' turns without a human before a Topic waits.
         created_at: Creation time.
     """
 
-    id: int
+    slug: str
     name: str
     role: Role
     turn_limit: int
@@ -76,31 +111,35 @@ class TeamOut(BaseModel):
 
 
 class AssistantOut(BaseModel):
-    """An Assistant of a Member.
+    """A live Assistant of a Member (decision 0024).
 
     Attributes:
-        id: Identifier.
-        name: Shown name, ``alice · billing-api``.
+        key: Its public key.
+        name: Shown name, ``alice · billing-api · vega``.
+        word: Its own word, ``vega``.
+        project: The project folder's name.
         last_seen_at: Its last request.
+        session_id: The Claude Code session id; only its owner gets it.
     """
 
-    id: int
+    key: str
     name: str
+    word: str
+    project: str
     last_seen_at: datetime | None
+    session_id: str | None = None
 
 
 class MemberOut(BaseModel):
     """A Member of a Team.
 
     Attributes:
-        user_id: User id.
         pseudonym: The name the Team sees.
         role: Owner or member.
-        assistants: The Member's Assistants linked to this Team.
+        assistants: The Member's live Assistants whose projects are linked to this Team.
         avatar: Where their avatar is served; ``None`` shows their initials.
     """
 
-    user_id: int
     pseudonym: str | None
     role: Role
     assistants: list[AssistantOut]
@@ -113,25 +152,43 @@ class AreaIn(BaseModel):
     Attributes:
         name: Shown name, unique in the Team.
         description: What the Area is about; Assistants read it to choose an Area.
+        slug: Its address in the Team; offered from the name when omitted.
     """
 
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
+    slug: str | None = None
+
+    _check_slug = field_validator("slug")(_slug)
+
+
+class AreaPatch(BaseModel):
+    """Changes to an Area.
+
+    Attributes:
+        name: New name.
+        description: New description.
+        slug: New address; the former one keeps leading to the Area.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=2000)
+    slug: str | None = None
+
+    _check_slug = field_validator("slug")(_slug)
 
 
 class AreaOut(BaseModel):
     """An Area.
 
     Attributes:
-        id: Identifier.
-        team_id: The Team.
+        slug: Its address in the Team, ``releases``.
         name: Shown name.
         description: What it is about.
         open_topics: Number of open Topics in it.
     """
 
-    id: int
-    team_id: int
+    slug: str
     name: str
     description: str
     open_topics: int
@@ -165,16 +222,30 @@ class InvitePreview(BaseModel):
     """What an invitation link leads to.
 
     Attributes:
-        team_id: The Team's id.
+        team: The Team's slug.
         team_name: The Team.
         valid: The link can still be used.
         already_member: The caller is already in the Team.
     """
 
-    team_id: int
+    team: str
     team_name: str
     valid: bool
     already_member: bool
+
+
+async def find_team(db: AsyncSession, slug: str) -> Team | None:
+    """Return the Team with this slug or a former one.
+
+    Args:
+        db: Database session.
+        slug: Current or former slug.
+    """
+    team = await db.scalar(select(Team).where(Team.slug == slug))
+    if team is None:
+        former = await db.get(FormerTeamSlug, slug)
+        team = await db.get(Team, former.team_id) if former else None
+    return team
 
 
 async def membership(db: AsyncSession, team_id: int, user_id: int) -> tuple[Team, Member]:
@@ -195,21 +266,80 @@ async def membership(db: AsyncSession, team_id: int, user_id: int) -> tuple[Team
     return team, member
 
 
-async def ownership(db: AsyncSession, team_id: int, user_id: int) -> Team:
-    """Return the Team if the User owns it.
+async def team_for(db: AsyncSession, slug: str, user_id: int) -> tuple[Team, Member]:
+    """Return a Team of the User by its current or former slug, and their membership.
 
     Args:
         db: Database session.
-        team_id: The Team.
+        slug: The Team's slug.
+        user_id: The User.
+
+    Raises:
+        HTTPException: 404 when there is no such Team or the User is not in it.
+    """
+    team = await find_team(db, slug)
+    if team is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such Team")
+    return await membership(db, team.id, user_id)
+
+
+async def owned(db: AsyncSession, slug: str, user_id: int) -> Team:
+    """Return a Team by slug if the User owns it.
+
+    Args:
+        db: Database session.
+        slug: The Team's slug.
         user_id: The User.
 
     Raises:
         HTTPException: 404 when the User is not in the Team; 403 when not its owner.
     """
-    team, member = await membership(db, team_id, user_id)
+    team, member = await team_for(db, slug, user_id)
     if member.role != Role.Owner:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the Team's owner can do this")
     return team
+
+
+async def find_area(db: AsyncSession, team_id: int, slug: str) -> Area | None:
+    """Return a Team's Area with this slug or a former one.
+
+    Args:
+        db: Database session.
+        team_id: The Team.
+        slug: Current or former slug of the Area.
+    """
+    area = await db.scalar(select(Area).where(Area.team_id == team_id, Area.slug == slug))
+    if area is None:
+        former = await db.get(FormerAreaSlug, (team_id, slug))
+        area = await db.get(Area, former.area_id) if former else None
+    return area
+
+
+async def _taken_team_slugs(db: AsyncSession, but: int | None = None) -> set[str]:
+    """Return the slugs no other Team may take: current and former ones.
+
+    Args:
+        db: Database session.
+        but: A Team whose own slugs do not count.
+    """
+    current = select(Team.slug).where(Team.id != (but or 0))
+    former = select(FormerTeamSlug.slug).where(FormerTeamSlug.team_id != (but or 0))
+    return set(await db.scalars(current)) | set(await db.scalars(former))
+
+
+async def _taken_area_slugs(db: AsyncSession, team_id: int, but: int | None = None) -> set[str]:
+    """Return the slugs no other Area of the Team may take.
+
+    Args:
+        db: Database session.
+        team_id: The Team.
+        but: An Area whose own slugs do not count.
+    """
+    current = select(Area.slug).where(Area.team_id == team_id, Area.id != (but or 0))
+    former = select(FormerAreaSlug.slug).where(
+        FormerAreaSlug.team_id == team_id, FormerAreaSlug.area_id != (but or 0)
+    )
+    return set(await db.scalars(current)) | set(await db.scalars(former))
 
 
 def _team_out(team: Team, role: Role) -> TeamOut:
@@ -220,7 +350,7 @@ def _team_out(team: Team, role: Role) -> TeamOut:
         role: The caller's role in it.
     """
     return TeamOut(
-        id=team.id,
+        slug=team.slug,
         name=team.name,
         role=role,
         turn_limit=team.turn_limit,
@@ -228,7 +358,7 @@ def _team_out(team: Team, role: Role) -> TeamOut:
     )
 
 
-async def _areas(db: AsyncSession, team_id: int) -> list[AreaOut]:
+async def areas_of(db: AsyncSession, team_id: int) -> list[AreaOut]:
     """Return a Team's Areas with their open Topic counts.
 
     Args:
@@ -248,18 +378,30 @@ async def _areas(db: AsyncSession, team_id: int) -> list[AreaOut]:
         .order_by(Area.name)
     )
     return [
-        AreaOut(
-            id=area.id,
-            team_id=area.team_id,
-            name=area.name,
-            description=area.description,
-            open_topics=count,
-        )
+        AreaOut(slug=area.slug, name=area.name, description=area.description, open_topics=count)
         for area, count in rows
     ]
 
 
-@router.get("/teams")
+def assistant_out(assistant: Assistant, project: Project, viewer: Actor) -> AssistantOut:
+    """Build the view of an Assistant; its session id only for its owner (decision 0024).
+
+    Args:
+        assistant: The Assistant.
+        project: Its project.
+        viewer: Who looks.
+    """
+    return AssistantOut(
+        key=assistant.key,
+        name=assistant.name,
+        word=assistant.word,
+        project=project.name,
+        last_seen_at=assistant.last_seen_at,
+        session_id=assistant.session_id if assistant.user_id == viewer.user.id else None,
+    )
+
+
+@router.get("/team")
 async def list_teams(actor: ActorDep, db: DB) -> list[TeamOut]:
     """List the caller's Teams.
 
@@ -280,7 +422,7 @@ async def list_teams(actor: ActorDep, db: DB) -> list[TeamOut]:
     return [_team_out(team, role) for team, role in rows]
 
 
-@router.post("/teams", status_code=status.HTTP_201_CREATED)
+@router.post("/team", status_code=status.HTTP_201_CREATED)
 async def create_team(body: TeamIn, actor: HumanDep, db: DB) -> TeamOut:
     """Create a Team; its creator owns it.
 
@@ -288,8 +430,16 @@ async def create_team(body: TeamIn, actor: HumanDep, db: DB) -> TeamOut:
         body: The new Team.
         actor: The logged-in human.
         db: Database session.
+
+    Raises:
+        HTTPException: 409 when the slug asked for is taken.
     """
-    team = Team(name=body.name, turn_limit=10)
+    taken = await _taken_team_slugs(db)
+    if body.slug is not None and body.slug in taken:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"The address {body.slug!r} is taken")
+    team = Team(
+        name=body.name.strip(), slug=body.slug or numbered(slugify(body.name), taken), turn_limit=10
+    )
     db.add(team)
     await db.flush()
     db.add(Member(team_id=team.id, user_id=actor.user.id, role=Role.Owner))
@@ -297,12 +447,63 @@ async def create_team(body: TeamIn, actor: HumanDep, db: DB) -> TeamOut:
     return _team_out(team, Role.Owner)
 
 
-@router.get("/teams/{team_id}")
-async def get_team(team_id: int, actor: ActorDep, db: DB) -> TeamDetail:
-    """Return a Team with its Members, their Assistants linked to it and its Areas.
+async def team_detail(db: AsyncSession, team: Team, member: Member, actor: Actor) -> TeamDetail:
+    """Return a Team with its Members, their live Assistants linked to it, and its Areas.
 
     Args:
-        team_id: The Team.
+        db: Database session.
+        team: The Team.
+        member: The caller's membership.
+        actor: The caller.
+    """
+    member_rows = (
+        await db.execute(
+            select(Member, User)
+            .join(User, User.id == Member.user_id)
+            .where(Member.team_id == team.id)
+            .order_by(User.pseudonym)
+        )
+    ).all()
+    assistants = (
+        await db.execute(
+            select(Assistant, Project)
+            .join(Project, Project.id == Assistant.project_id)
+            .where(
+                Assistant.user_id.in_([user.id for _, user in member_rows]),
+                Project.team_id == team.id,
+                Assistant.last_seen_at > now() - LIVE,
+            )
+            .order_by(Project.name, Assistant.word)
+        )
+    ).all()
+    members = [
+        MemberOut(
+            pseudonym=user.pseudonym,
+            role=row.role,
+            avatar=avatar_url(user),
+            assistants=[
+                assistant_out(a, project, actor)
+                for a, project in assistants
+                if a.user_id == user.id
+            ],
+        )
+        for row, user in member_rows
+    ]
+    return TeamDetail(
+        **_team_out(team, member.role).model_dump(),
+        members=members,
+        areas=await areas_of(db, team.id),
+    )
+
+
+@router.get("/team/{team}")
+async def get_team(team: str, actor: ActorDep, db: DB) -> TeamDetail:
+    """Return a Team with its Members, their live Assistants linked to it and its Areas.
+
+    A former slug answers too, with the current one in the result.
+
+    Args:
+        team: The Team's slug.
         actor: The caller.
         db: Database session.
 
@@ -311,83 +512,61 @@ async def get_team(team_id: int, actor: ActorDep, db: DB) -> TeamDetail:
             without an Assistant.
     """
     require_reader(actor)
-    team, own = await membership(db, team_id, actor.user.id)
-    member_rows = (
-        await db.execute(
-            select(Member, User)
-            .join(User, User.id == Member.user_id)
-            .where(Member.team_id == team_id)
-            .order_by(User.pseudonym)
-        )
-    ).all()
-    assistants = (
-        await db.scalars(
-            select(Assistant)
-            .where(
-                Assistant.user_id.in_([user.id for _, user in member_rows]),
-                Assistant.team_id == team_id,
-            )
-            .order_by(Assistant.name)
-        )
-    ).all()
-    members = [
-        MemberOut(
-            user_id=user.id,
-            pseudonym=user.pseudonym,
-            role=member.role,
-            avatar=avatar_url(user),
-            assistants=[
-                AssistantOut(id=a.id, name=a.name, last_seen_at=a.last_seen_at)
-                for a in assistants
-                if a.user_id == user.id
-            ],
-        )
-        for member, user in member_rows
-    ]
-    return TeamDetail(
-        **_team_out(team, own.role).model_dump(), members=members, areas=await _areas(db, team_id)
-    )
+    found, member = await team_for(db, team, actor.user.id)
+    return await team_detail(db, found, member, actor)
 
 
-@router.patch("/teams/{team_id}")
-async def update_team(team_id: int, body: TeamPatch, actor: HumanDep, db: DB) -> TeamOut:
-    """Change a Team's name or turn limit.
+@router.patch("/team/{team}")
+async def update_team(team: str, body: TeamPatch, actor: HumanDep, db: DB) -> TeamOut:
+    """Change a Team's name, address or turn limit.
+
+    A changed slug is kept as a former one, so links to the Team keep working; going back to a
+    former slug takes it out of the former ones.
 
     Args:
-        team_id: The Team.
+        team: The Team's slug.
         body: The changes.
         actor: The logged-in owner.
         db: Database session.
 
     Raises:
-        HTTPException: 404 when the caller is not in the Team; 403 when not its owner.
+        HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409
+            when the new slug is another Team's.
     """
-    team = await ownership(db, team_id, actor.user.id)
+    found = await owned(db, team, actor.user.id)
+    if body.slug is not None and body.slug != found.slug:
+        if body.slug in await _taken_team_slugs(db, but=found.id):
+            raise HTTPException(status.HTTP_409_CONFLICT, f"The address {body.slug!r} is taken")
+        former = await db.get(FormerTeamSlug, body.slug)
+        if former is not None:
+            await db.delete(former)
+        db.add(FormerTeamSlug(slug=found.slug, team_id=found.id))
+        found.slug = body.slug
     if body.name is not None:
-        team.name = body.name
+        found.name = body.name.strip()
     if body.turn_limit is not None:
-        team.turn_limit = body.turn_limit
+        found.turn_limit = body.turn_limit
     await db.commit()
-    return _team_out(team, Role.Owner)
+    return _team_out(found, Role.Owner)
 
 
-@router.post("/teams/{team_id}/invites", status_code=status.HTTP_201_CREATED)
-async def create_invite(request: Request, team_id: int, actor: HumanDep, db: DB) -> InviteOut:
+@router.post("/team/{team}/invite", status_code=status.HTTP_201_CREATED)
+async def create_invite(request: Request, team: str, actor: HumanDep, db: DB) -> InviteOut:
     """Make a one-time invitation link to the Team.
 
     Args:
         request: The incoming request.
-        team_id: The Team.
+        team: The Team's slug.
         actor: The logged-in owner.
         db: Database session.
 
     Raises:
         HTTPException: 404 when the caller is not in the Team; 403 when not its owner.
     """
-    await ownership(db, team_id, actor.user.id)
+    found = await owned(db, team, actor.user.id)
     token = new_token()
     invite = Invite(
-        team_id=team_id,
+        team_id=found.id,
         token_hash=token_hash(token),
         created_by=actor.user.id,
         expires_at=now() + timedelta(days=INVITE_DAYS),
@@ -416,7 +595,7 @@ async def _invite(db: AsyncSession, token: str) -> tuple[Invite, Team]:
     return invite, team
 
 
-@router.get("/invites/{token}")
+@router.get("/invite/{token}")
 async def preview_invite(token: str, actor: HumanDep, db: DB) -> InvitePreview:
     """Show what an invitation link leads to.
 
@@ -430,14 +609,14 @@ async def preview_invite(token: str, actor: HumanDep, db: DB) -> InvitePreview:
     """
     invite, team = await _invite(db, token)
     return InvitePreview(
-        team_id=team.id,
+        team=team.slug,
         team_name=team.name,
         valid=invite.used_at is None and invite.expires_at > now(),
         already_member=await db.get(Member, (team.id, actor.user.id)) is not None,
     )
 
 
-@router.post("/invites/{token}/accept")
+@router.post("/invite/{token}/accept")
 async def accept_invite(token: str, actor: HumanDep, db: DB) -> TeamOut:
     """Join a Team by a one-time link.
 
@@ -462,12 +641,12 @@ async def accept_invite(token: str, actor: HumanDep, db: DB) -> TeamOut:
     return _team_out(team, Role.Member)
 
 
-@router.get("/teams/{team_id}/areas")
-async def list_areas(team_id: int, actor: ActorDep, db: DB) -> list[AreaOut]:
+@router.get("/team/{team}/area")
+async def list_areas(team: str, actor: ActorDep, db: DB) -> list[AreaOut]:
     """List a Team's Areas.
 
     Args:
-        team_id: The Team.
+        team: The Team's slug.
         actor: The caller.
         db: Database session.
 
@@ -476,63 +655,76 @@ async def list_areas(team_id: int, actor: ActorDep, db: DB) -> list[AreaOut]:
             without an Assistant.
     """
     require_reader(actor)
-    await membership(db, team_id, actor.user.id)
-    return await _areas(db, team_id)
+    found, _ = await team_for(db, team, actor.user.id)
+    return await areas_of(db, found.id)
 
 
-@router.post("/teams/{team_id}/areas", status_code=status.HTTP_201_CREATED)
-async def create_area(team_id: int, body: AreaIn, actor: HumanDep, db: DB) -> AreaOut:
+@router.post("/team/{team}/area", status_code=status.HTTP_201_CREATED)
+async def create_area(team: str, body: AreaIn, actor: HumanDep, db: DB) -> AreaOut:
     """Create an Area; the owner configures the Team.
 
     Args:
-        team_id: The Team.
+        team: The Team's slug.
         body: The new Area.
         actor: The logged-in owner.
         db: Database session.
 
     Raises:
-        HTTPException: 404 when the caller is not in the Team; 403 when not its owner;
-            409 when the name is taken in the Team.
+        HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409
+            when the name or the slug is taken in the Team.
     """
-    await ownership(db, team_id, actor.user.id)
-    area = Area(team_id=team_id, name=body.name, description=body.description)
+    found = await owned(db, team, actor.user.id)
+    taken = await _taken_area_slugs(db, found.id)
+    if body.slug is not None and body.slug in taken:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"The address {body.slug!r} is taken")
+    area = Area(
+        team_id=found.id,
+        name=body.name.strip(),
+        description=body.description,
+        slug=body.slug or numbered(slugify(body.name, "area"), taken),
+    )
     db.add(area)
     try:
         await db.commit()
     except IntegrityError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, "An Area with this name exists") from error
-    return AreaOut(
-        id=area.id,
-        team_id=team_id,
-        name=area.name,
-        description=area.description,
-        open_topics=0,
-    )
+    return AreaOut(slug=area.slug, name=area.name, description=area.description, open_topics=0)
 
 
-@router.patch("/areas/{area_id}")
-async def update_area(area_id: int, body: AreaIn, actor: HumanDep, db: DB) -> AreaOut:
-    """Rename an Area or change its description.
+@router.patch("/team/{team}/area/{area}")
+async def update_area(team: str, area: str, body: AreaPatch, actor: HumanDep, db: DB) -> AreaOut:
+    """Rename an Area, change its description or its address.
 
     Args:
-        area_id: The Area.
-        body: New name and description.
+        team: The Team's slug.
+        area: The Area's slug.
+        body: The changes.
         actor: The logged-in owner.
         db: Database session.
 
     Raises:
         HTTPException: 404 when there is no such Area for the caller; 403 when not the
-            owner; 409 when the name is taken.
+            owner; 409 when the name or the slug is taken in the Team.
     """
-    area = await db.get(Area, area_id)
-    if area is None:
+    found = await owned(db, team, actor.user.id)
+    row = await find_area(db, found.id, area)
+    if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such Area")
-    await ownership(db, area.team_id, actor.user.id)
-    area.name = body.name
-    area.description = body.description
+    if body.slug is not None and body.slug != row.slug:
+        if body.slug in await _taken_area_slugs(db, found.id, but=row.id):
+            raise HTTPException(status.HTTP_409_CONFLICT, f"The address {body.slug!r} is taken")
+        former = await db.get(FormerAreaSlug, (found.id, body.slug))
+        if former is not None:
+            await db.delete(former)
+        db.add(FormerAreaSlug(team_id=found.id, slug=row.slug, area_id=row.id))
+        row.slug = body.slug
+    if body.name is not None:
+        row.name = body.name.strip()
+    if body.description is not None:
+        row.description = body.description
     try:
         await db.commit()
     except IntegrityError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, "An Area with this name exists") from error
-    areas = await _areas(db, area.team_id)
-    return next(a for a in areas if a.id == area_id)
+    areas = await areas_of(db, found.id)
+    return next(a for a in areas if a.slug == row.slug)

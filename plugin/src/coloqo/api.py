@@ -64,8 +64,16 @@ def find_link_file(directory: Path) -> Path | None:
     return None
 
 
-def link_file_team(directory: Path) -> int | None:
+SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+"""A Team's slug (decision 0025)."""
+
+
+def link_file_team(directory: Path) -> str | int | None:
     """Return the Team a project's ``.coloqo.json`` names; ``None`` without a usable file.
+
+    A file names the Team by slug, ``{"team": "acme"}``. A file written before slugs names it
+    by id, ``{"team_id": 3, "team": "Acme"}``, with the name for people; the id is returned
+    then, and the server understands it for one more release.
 
     Args:
         directory: The project directory.
@@ -74,10 +82,18 @@ def link_file_team(directory: Path) -> int | None:
     if found is None:
         return None
     try:
-        team = json.loads(found.read_text(encoding="utf-8")).get("team_id")
+        data = json.loads(found.read_text(encoding="utf-8"))
+        old, team = data.get("team_id"), data.get("team")
     except (OSError, ValueError, AttributeError):
         return None
-    return team if isinstance(team, int) and not isinstance(team, bool) else None
+    if isinstance(old, int) and not isinstance(old, bool):
+        return old
+    return team if isinstance(team, str) and SLUG.match(team) else None
+
+
+def session_id() -> str | None:
+    """Return the Claude Code session the process serves, when Claude Code says so (0024)."""
+    return os.environ.get("CLAUDE_CODE_SESSION_ID") or None
 
 
 @dataclass
@@ -87,12 +103,13 @@ class Project:
     Attributes:
         key: SHA-256 of the project's absolute path; the path itself is not sent.
         name: The project folder's name, part of the Assistant's name.
-        team_id: The Team its ``.coloqo.json`` names, if the repository has one (decision 0020).
+        team: The Team its ``.coloqo.json`` names, if the repository has one (decision 0020):
+            a slug, or an id from a file written before slugs.
     """
 
     key: str
     name: str
-    team_id: int | None = None
+    team: str | int | None = None
 
     @staticmethod
     def directory(directory: str | None = None) -> Path:
@@ -120,7 +137,7 @@ class Project:
         return cls(
             key=hashlib.sha256(str(path).encode()).hexdigest(),
             name=name[:60],
-            team_id=link_file_team(path),
+            team=link_file_team(path),
         )
 
 
@@ -143,10 +160,11 @@ class Api:
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         self.http = httpx.Client(base_url=self.url, headers=headers, timeout=timeout)
-        self.assistant_id: int | None = None
+        self.assistant_key: str | None = None
         self.assistant_name: str | None = None
-        self.team_id: int | None = None
+        self.project_key: str | None = None
         self.team: str | None = None
+        self.team_name: str | None = None
 
     def close(self) -> None:
         """Close the connection."""
@@ -178,37 +196,43 @@ class Api:
             return None
         return response.json()
 
-    def register(self, project: Project) -> str:
-        """Register this installation's Assistant for a project and act as it.
+    def register(self, project: Project, session: str | None = None) -> str:
+        """Register this session's Assistant for a project and act as it (decision 0024).
 
         Args:
             project: The project.
+            session: The Claude Code session; the one the process serves when omitted.
 
         Raises:
             NotLoggedIn: The token is missing, invalid or revoked.
             ColoqoError: The server refused the request or could not be reached.
         """
+        team = project.team
         registered = self.request(
             "POST",
-            "/assistants",
+            "/assistant",
             json={
                 "project_key": project.key,
                 "project_name": project.name,
-                "team_id": project.team_id,
+                "team": team if isinstance(team, str) else None,
+                "team_id": team if isinstance(team, int) else None,
+                "session_id": session or session_id(),
             },
         )
-        self.assistant_id = registered["id"]
+        self.assistant_key = registered["key"]
         self.assistant_name = registered["name"]
-        self.team_id = registered.get("team_id")
+        self.project_key = registered["project_key"]
         self.team = registered.get("team")
-        self.http.headers["X-Coloqo-Assistant"] = str(self.assistant_id)
+        self.team_name = registered.get("team_name")
+        self.http.headers["X-Coloqo-Assistant"] = registered["key"]
         return registered["name"]
 
-    def upload(self, topic_id: int, path: Path) -> dict:
+    def upload(self, team: str, number: int, path: Path) -> dict:
         """Upload a local file into a Topic.
 
         Args:
-            topic_id: The Topic.
+            team: The Team's slug.
+            number: The Topic's number.
             path: The file.
 
         Raises:
@@ -219,7 +243,7 @@ class Api:
         with path.open("rb") as content:
             return self.request(
                 "POST",
-                f"/topics/{topic_id}/files",
+                f"/team/{team}/topic/{number}/file",
                 content=content,
                 headers={
                     "X-File-Name": quote(path.name),
@@ -227,11 +251,12 @@ class Api:
                 },
             )
 
-    def download(self, file_id: int, folder: Path, target: Path | None = None) -> Path:
-        """Download a file of a Topic and return where it was written.
+    def download(self, team: str, number: int, folder: Path, target: Path | None = None) -> Path:
+        """Download a file of a Team and return where it was written.
 
         Args:
-            file_id: The file.
+            team: The Team's slug.
+            number: The file's number in the Team.
             folder: Folder for the file under its own name, when ``target`` is not given.
             target: Exact path to write.
 
@@ -243,14 +268,14 @@ class Api:
         if not self.token:
             raise NotLoggedIn(401, "This computer is not logged in to Coloqo")
         try:
-            with self.http.stream("GET", f"/api/files/{file_id}") as response:
+            with self.http.stream("GET", f"/api/team/{team}/file/{number}") as response:
                 if response.status_code >= 400:
                     response.read()
                     error = NotLoggedIn if response.status_code == 401 else ColoqoError
                     raise error(response.status_code, _detail(response))
                 if target is None:
                     name = _file_name(response.headers.get("content-disposition", ""))
-                    target = folder / (name or f"file-{file_id}")
+                    target = folder / (name or f"file-{number}")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with target.open("wb") as out:
                     for chunk in response.iter_bytes():
