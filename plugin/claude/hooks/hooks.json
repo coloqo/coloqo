@@ -3,14 +3,22 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "uvx coloqo@0.3.0 hook session-start", "timeout": 60 }
+          { "type": "command", "command": "uvx coloqo@0.4.0 hook session-start", "timeout": 60 }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "uvx coloqo@0.3.0 hook user-prompt-submit", "timeout": 10 }
+          { "type": "command", "command": "uvx coloqo@0.4.0 hook user-prompt-submit", "timeout": 10 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__.*",
+        "hooks": [
+          { "type": "command", "command": "uvx coloqo@0.4.0 hook post-tool-use", "timeout": 10 }
         ]
       }
     ]

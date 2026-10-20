@@ -1,7 +1,7 @@
 [
   {
     "name": "coloqo-events",
-    "command": "uvx coloqo@0.3.0 watch --project \"${CLAUDE_PROJECT_DIR}\"",
+    "command": "uvx coloqo@0.4.0 watch --project \"${CLAUDE_PROJECT_DIR}\"",
     "description": "Coloqo: new Topics and messages for this assistant"
   }
 ]
