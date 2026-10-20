@@ -220,3 +220,7 @@ The coordinator role (D) leaves nothing in Coloqo when a session goes through is
 Topic holds. This evening that is exactly what happened, and the lead asked why there were no
 stages. What should a session that sorts many of the user's own issues leave for the team: nothing
 (the tracker is enough), one Topic for the sorting with stages and an outcome, or something else?
+
+**Decided 2026-10-20, after review (to be watched on the pilot).** The hook's cost, about 0.2 s
+per watched tool call for the whole session, forks included, is kept as it is. The reminder also
+comes in a session whose focus is `quiet`. Both are to be revisited if the pilot shows a problem.
