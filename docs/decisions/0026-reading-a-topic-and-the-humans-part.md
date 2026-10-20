@@ -10,7 +10,8 @@ The working file is `docs/tasks/2026-10-20-web-look-and-numbering.md`, points 1 
 
 **Reading a Topic.**
 
-- A Topic loads its last 50 Messages, or from the first unread one when more are unread. A button
+- A Topic loads its last 50 Messages, or from the first unread one when more are unread, at most
+  500, the most a request returns; beyond that the reader starts 500 back from the latest. A button
   at the top of the feed, "Show earlier messages", loads 50 more; loading is never automatic. The
   Message the button stood above stays where it was on the screen: the page measures it before
   loading and scrolls by the height of what was inserted, without relying on the browser's scroll

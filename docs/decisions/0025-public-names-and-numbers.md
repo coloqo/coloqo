@@ -61,8 +61,8 @@ tools they mean the Team the project is linked to; another Team's are `globex/T-
 `globex/file 3`. In an MR or a tracker the agent writes the full link
 (`https://app.coloqo.team/team/acme/topic/12`), or at least `acme/T-12`; the briefing says so.
 
-**Linking an Assistant to a Team** in the browser opens by a one-time random token, not by the
-Assistant's id.
+**Linking a project to a Team** in the browser (decision 0020; the link belongs to the computer ×
+project, decision 0024) opens by a one-time random token, not by an id.
 
 **The change keeps the data.** A migration gives each Team a slug from its name and each Area a
 slug within its Team, and numbers the Topics and files of each Team from 1 in their old order. The

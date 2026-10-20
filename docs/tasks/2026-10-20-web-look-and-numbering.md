@@ -13,7 +13,8 @@ the first 200 Messages").
 
 **Decided 2026-10-20.**
 
-- The Topic loads its last 50 Messages, or from the first unread one when more are unread.
+- The Topic loads its last 50 Messages, or from the first unread one when more are unread, at most
+  500 (found in review: the server caps a request at 500).
 - At the top of the feed, a button "Show earlier messages" loads 50 more. Loading is never
   automatic. The Message the button stood above stays where it was on the screen. The page measures
   its position before loading and scrolls by the height of what was inserted. It does not rely on
