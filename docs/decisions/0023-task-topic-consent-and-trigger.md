@@ -73,16 +73,26 @@ will see:
 | `Bash` | `git commit`, `git push`, `git checkout -b`, `git switch -c`, `gh pr create`, `glab mr create` |
 | another MCP server's tool | its name has a write verb: `create`, `update`, `transition`, `edit`, `close`, `comment`, `send` |
 
-On the first such call in a session of a linked project that has not written to Coloqo (no
-`open_topic`, `note_stage`, `post_message`, `hold_topic` or `close_topic` in its transcript), it
-adds one line to the session: the Topics the Assistant holds, and to note the stage there, open a
-Topic, or tell the user why none is needed. Once per session; after that, or after a write to
-Coloqo is seen, the hook returns before the network. An unreachable server leaves the session
-unmarked, so the next change tries again. A subagent's call (it carries `agent_id`) is left alone:
-the reminder would land in the subagent, and the conversation that keeps the Topic would never
-hear it. The plugin knows no tracker and needs no settings: no
-issue-key pattern, nothing in `.coloqo.json`. There is no `Stop` hook: saying a skip aloud covers
-it, and blocking the end of a turn would be intrusive.
+On the first such call in a session of a linked project that has not written to Coloqo, it adds
+one line to the session: the Topics the Assistant holds, and to note the stage there, open a
+Topic, or tell the user why none is needed. Once per session; after that the hook returns before
+the network. An unreachable server leaves the session unmarked, so the next change tries again.
+
+- **A write to Coloqo** (`open_topic`, `note_stage`, `post_message`, `hold_topic`,
+  `close_topic`) is marked by the plugin's MCP server, which knows its session; the session's
+  subagents and forks call the same server, so their writes count. The transcript is not read:
+  its format is internal to Claude Code and changes between versions.
+- **A subagent's or a fork's change** (the call carries `agent_id`) is not reminded where it
+  happens: parallel forks would each be told before either wrote, and could open a Topic each;
+  and it is the conversation that holds the Topic and talks to the user. The change is marked
+  pending, and the conversation hears the reminder at its next tool call or, if it makes none,
+  at the user's next prompt (the prompt hook).
+- **A branch of a session** (`/branch`, `--fork-session`) has a new session id and may be
+  reminded once more; the line names the Topic it already holds.
+
+The plugin knows no tracker and needs no settings: no issue-key pattern, nothing in
+`.coloqo.json`. There is no `Stop` hook: saying a skip aloud covers it, and blocking the end of
+a turn would be intrusive.
 
 ## Why
 

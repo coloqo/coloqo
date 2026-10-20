@@ -117,6 +117,13 @@ naming the Topics the Assistant holds and saying to note the stage there, open o
 user why none is needed; once per session, then it exits without the network. No issue-key
 pattern, no `Stop` hook. Done now, with the rules, not after checking the rules alone.
 
+**Decided 2026-10-20, in review (C refined).** The author's sessions do code work in forks. So:
+the plugin's MCP server marks the session on each write to Coloqo, instead of the hook reading
+the transcript (its format is internal to Claude Code); a subagent's or a fork's visible change is
+marked pending and told to the conversation at its next tool call or the user's next prompt, not
+reminded in the fork. `agent_id` stays local to the hook: the server keeps telling sessions apart,
+not the forks inside them.
+
 **Decided 2026-10-20 (H).** Different sessions are different Assistants: they have different
 context and may do different tasks, and the Team should tell them apart. A Topic is held by one
 of them; when another picks the task up, that is seen in the Topic.

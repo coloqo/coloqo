@@ -9,7 +9,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from coloqo import __version__, focus
+from coloqo import __version__, focus, trail
 from coloqo.api import LINK_FILE, Api, ColoqoError, NotLoggedIn, Project
 from coloqo.render import message_text, size, topic_line, topic_ref, topic_text
 
@@ -233,6 +233,7 @@ def open_topic(
         f"/areas/{area_id}/topics",
         json={"title": title, "body": body, "to": to, "issue": issue or ""},
     )
+    trail.mark_done()
     return f"Opened {data['ref']} «{data['title']}» in {data['area']}. Next message number: 2."
 
 
@@ -310,6 +311,7 @@ def post_message(
                 f"again with number={error.detail['next_number']}.{kept}"
             ) from error
         raise ToolError(f"Not posted: {error}") from error
+    trail.mark_done()
     attached = "".join(
         f"\n[file {f['id']}: {f['name']}, {size(f['size'])}]" for f in message["files"]
     )
@@ -358,6 +360,7 @@ def hold_topic(topic: str) -> str:
         topic: Topic reference.
     """
     data = _call("POST", f"/topics/{_topic_id(topic)}/hold")
+    trail.mark_done()
     return f"You now hold {data['ref']} «{data['title']}»."
 
 
@@ -377,6 +380,7 @@ def note_stage(topic: str, text: str) -> str:
         text: The stage, one line.
     """
     data = _call("POST", f"/topics/{_topic_id(topic)}/stage", json={"text": text})
+    trail.mark_done()
     return f"Stage noted as #{data['number']}."
 
 
@@ -399,6 +403,7 @@ def close_topic(topic: str, outcome: str) -> str:
     data = _call(
         "PATCH", f"/topics/{_topic_id(topic)}", json={"status": "closed", "outcome": outcome}
     )
+    trail.mark_done()
     deletes = (data.get("deletes_at") or "")[:10]
     return f"Closed {data['ref']} «{data['title']}»; its conversation is deleted on {deletes}."
 

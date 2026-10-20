@@ -8,13 +8,11 @@ import json
 import os
 import re
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
-from coloqo import focus
+from coloqo import focus, trail
 from coloqo.api import Api, ColoqoError, NotLoggedIn, Project
-from coloqo.config import config_dir
 from coloqo.render import topic_line
 
 FILE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
@@ -28,15 +26,6 @@ GIT_WRITE = re.compile(
 
 WRITE_VERBS = frozenset({"create", "update", "transition", "edit", "close", "comment", "send"})
 """Words in another MCP server's tool name that mark a write: a tracker, mail, documents."""
-
-COLOQO_WRITE = re.compile(
-    r'"name":\s*"mcp__[^"]*coloqo[^"]*__'
-    r'(?:open_topic|note_stage|post_message|hold_topic|close_topic)"'
-)
-"""A call of a Coloqo tool that writes, as the session's transcript records it."""
-
-REMINDED_STALE_SECONDS = 14 * 24 * 3600
-"""A reminder mark of a session not touched this long is removed."""
 
 LOGIN_HINT = (
     "Coloqo plugin is installed, but this computer is not logged in to Coloqo. If the user wants "
@@ -88,8 +77,17 @@ def session_start() -> None:
 
 
 def user_prompt_submit() -> None:
-    """Remind the session of Topics addressed to the user that its focus lets through."""
+    """Remind the session of Topics addressed to the user that its focus lets through.
+
+    Also of its task's Topic, when a subagent of the session changed what the team will see and
+    the conversation has not been told yet (decision 0023).
+    """
     data = _input()
+    session = _session(data)
+    if session and trail.is_pending(session) and not trail.is_done(session):
+        line = task_reminder(session, _project(data))
+        if line:
+            print(line)
     current = focus.load(data.get("session_id"))
     if current.mode == "quiet":
         return
@@ -146,48 +144,6 @@ def visible_change(tool: str, tool_input: dict[str, Any], project: Path) -> bool
     return False
 
 
-def wrote_to_coloqo(transcript: str | None) -> bool:
-    """Whether the session has already written to Coloqo, by its transcript.
-
-    Args:
-        transcript: Path of the session's transcript, as Claude Code gives it.
-    """
-    if not transcript:
-        return False
-    try:
-        text = Path(transcript).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return False
-    return bool(COLOQO_WRITE.search(text))
-
-
-def _reminded_mark(session: str) -> Path:
-    """Return the file that marks a session as reminded or as needing no reminder.
-
-    Args:
-        session: The Claude Code session.
-    """
-    return config_dir() / "reminded" / session
-
-
-def _remember(session: str) -> None:
-    """Mark a session so that it is not reminded again, and forget long-gone sessions.
-
-    Args:
-        session: The Claude Code session.
-    """
-    mark = _reminded_mark(session)
-    try:
-        mark.parent.mkdir(parents=True, exist_ok=True)
-        now = time.time()
-        for old in mark.parent.iterdir():
-            if now - old.stat().st_mtime > REMINDED_STALE_SECONDS:
-                old.unlink(missing_ok=True)
-        mark.touch()
-    except OSError:
-        pass
-
-
 def reminder(held: list[dict[str, Any]]) -> str:
     """Return the line that reminds a session of its task's Topic.
 
@@ -212,30 +168,34 @@ def reminder(held: list[dict[str, Any]]) -> str:
     return line + "if it needs no Topic, tell your user in one line why."
 
 
-def post_tool_use() -> None:
-    """Remind a session of its task's Topic once, when its work starts showing to the team.
+def _session(data: dict[str, Any]) -> str:
+    """Return the Claude Code session a hook serves; empty when Claude Code does not say.
 
-    Fires on the first tool call that changes what the team will see, in a linked project, in a
-    session that has not written to Coloqo; then the session is marked and the hook returns
-    before the network. An unreachable server leaves the session unmarked, to try again on the
-    next change (decision 0023). A subagent's call (``agent_id``) is left alone: the reminder
-    would land in the subagent, and the conversation that keeps the Topic would never hear it.
+    Args:
+        data: The hook's input.
     """
-    data = _input()
-    session = str(data.get("session_id") or focus.session_id() or "")
-    if not session or data.get("agent_id") or _reminded_mark(session).exists():
-        return
-    project = Project.directory(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd"))
-    tool_input = data.get("tool_input")
-    if not visible_change(
-        str(data.get("tool_name") or ""),
-        tool_input if isinstance(tool_input, dict) else {},
-        project,
-    ):
-        return
-    if wrote_to_coloqo(data.get("transcript_path")):
-        _remember(session)
-        return
+    return str(data.get("session_id") or focus.session_id() or "")
+
+
+def _project(data: dict[str, Any]) -> Path:
+    """Return the project directory a hook serves.
+
+    Args:
+        data: The hook's input.
+    """
+    return Project.directory(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd"))
+
+
+def task_reminder(session: str, project: Path) -> str | None:
+    """Return the reminder of the task's Topic and mark the session; ``None`` when not needed.
+
+    An unlinked project or a computer not logged in needs none, and the session is marked; an
+    unreachable server leaves it unmarked, to try again later.
+
+    Args:
+        session: The Claude Code session.
+        project: The project directory.
+    """
     api = Api(timeout=3)
     try:
         api.register(Project.detect(str(project)))
@@ -247,18 +207,48 @@ def post_tool_use() -> None:
             else None
         )
     except NotLoggedIn:
-        _remember(session)
-        return
+        trail.mark_done(session)
+        return None
     except ColoqoError:
-        return
+        return None
     finally:
         api.close()
-    _remember(session)
+    trail.mark_done(session)
     if topics is None:
+        return None
+    return reminder([t for t in topics if t.get("holder_assistant_id") == api.assistant_id])
+
+
+def post_tool_use() -> None:
+    """Remind the conversation of its task's Topic once, when its work starts showing to the team.
+
+    Fires on the first tool call that changes what the team will see, in a session that has not
+    written to Coloqo (the MCP server marks each write, decision 0023). A subagent's or a fork's
+    change is not reminded where it happens: parallel forks would each be told and could open a
+    Topic each, and it is the conversation that holds the Topic and talks to the user. It is
+    marked pending instead, and the conversation hears it at its next tool call or prompt.
+    """
+    data = _input()
+    session = _session(data)
+    if not session or trail.is_done(session):
         return
-    held = [t for t in topics if t.get("holder_assistant_id") == api.assistant_id]
-    output = {"hookEventName": "PostToolUse", "additionalContext": reminder(held)}
-    print(json.dumps({"hookSpecificOutput": output}, ensure_ascii=False))
+    tool_input = data.get("tool_input")
+    project = _project(data)
+    changed = visible_change(
+        str(data.get("tool_name") or ""),
+        tool_input if isinstance(tool_input, dict) else {},
+        project,
+    )
+    if data.get("agent_id"):
+        if changed:
+            trail.mark_pending(session)
+        return
+    if not (changed or trail.is_pending(session)):
+        return
+    line = task_reminder(session, project)
+    if line:
+        output = {"hookEventName": "PostToolUse", "additionalContext": line}
+        print(json.dumps({"hookSpecificOutput": output}, ensure_ascii=False))
 
 
 HOOKS = {

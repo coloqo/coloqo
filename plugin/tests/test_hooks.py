@@ -6,23 +6,22 @@ from typing import Any, ClassVar
 
 import pytest
 
-from coloqo import hooks
+from coloqo import focus, hooks, mcp_server, trail
 from coloqo.api import ColoqoError, NotLoggedIn, Project
 
 MINE, OTHER = 10, 20
 
 
 @pytest.fixture
-def config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Keep the plugin's configuration in a temporary directory.
+def config(trail_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep the plugin's configuration, the focus included, in a temporary directory.
 
     Args:
-        tmp_path: Temporary directory from pytest.
+        trail_dir: Where the trail marks are kept.
         monkeypatch: Patching helper from pytest.
     """
-    folder = tmp_path / "config"
-    monkeypatch.setattr(hooks, "config_dir", lambda: folder)
-    return folder
+    monkeypatch.setattr(focus, "config_dir", lambda: trail_dir)
+    return trail_dir
 
 
 @pytest.fixture
@@ -79,7 +78,7 @@ class FakeApi:
         return "alice · web-app"
 
     def request(self, method: str, path: str, **kwargs: Any) -> object:
-        """Answer the list of open Topics.
+        """Answer the Inbox (empty) and the list of open Topics.
 
         Args:
             method: HTTP method.
@@ -87,6 +86,8 @@ class FakeApi:
             **kwargs: Ignored.
         """
         FakeApi.asked.append(path)
+        if path == "/inbox":
+            return []
         return [
             {"ref": "T-12", "title": "Fix export", "issue": "ACME-42", "holder_assistant_id": MINE},
             {"ref": "T-13", "title": "Not mine", "issue": "", "holder_assistant_id": OTHER},
@@ -112,7 +113,7 @@ def _call(
     monkeypatch: pytest.MonkeyPatch,
     tool: str,
     tool_input: dict[str, Any],
-    transcript: Path | None = None,
+    agent: str | None = None,
 ) -> None:
     """Run the hook for one tool call.
 
@@ -120,14 +121,11 @@ def _call(
         monkeypatch: Patching helper from pytest.
         tool: The tool's name.
         tool_input: Its arguments.
-        transcript: The session's transcript.
+        agent: The subagent or fork making the call; ``None`` for the conversation itself.
     """
-    data = {
-        "session_id": "s1",
-        "tool_name": tool,
-        "tool_input": tool_input,
-        "transcript_path": str(transcript) if transcript else None,
-    }
+    data = {"session_id": "s1", "tool_name": tool, "tool_input": tool_input}
+    if agent:
+        data["agent_id"] = agent
     monkeypatch.setattr(hooks, "_input", lambda: data)
     hooks.post_tool_use()
 
@@ -174,25 +172,6 @@ def test_a_change_the_team_will_see_is_told_apart(
     assert hooks.visible_change(tool, filled, project) is expected
 
 
-def test_a_coloqo_write_is_found_in_the_transcript(tmp_path: Path) -> None:
-    """A writing Coloqo tool in the transcript counts; reading or no transcript does not.
-
-    Args:
-        tmp_path: Temporary directory from pytest.
-    """
-    wrote, read = tmp_path / "wrote.jsonl", tmp_path / "read.jsonl"
-    wrote.write_text(
-        json.dumps({"type": "tool_use", "name": "mcp__plugin_coloqo_coloqo__note_stage"}) + "\n"
-    )
-    read.write_text(
-        json.dumps({"type": "tool_use", "name": "mcp__plugin_coloqo_coloqo__read_topic"}) + "\n"
-    )
-
-    found = [hooks.wrote_to_coloqo(str(p)) for p in (wrote, read, tmp_path / "gone.jsonl")]
-
-    assert [*found, hooks.wrote_to_coloqo(None)] == [True, False, False, False]
-
-
 def test_the_session_is_reminded_once_with_its_held_topics(
     config: Path,
     project: Path,
@@ -224,14 +203,14 @@ def test_the_session_is_reminded_once_with_its_held_topics(
     assert len(server.asked) == 1
 
 
-def test_a_subagent_is_not_reminded_and_leaves_the_session_unmarked(
+def test_a_subagents_change_is_told_to_the_conversation_at_its_next_call(
     config: Path,
     project: Path,
     server: type[FakeApi],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A subagent's change neither gets the reminder nor uses up the conversation's one.
+    """A fork's change is not reminded in the fork; the conversation hears it next.
 
     Args:
         config: The configuration directory.
@@ -240,19 +219,63 @@ def test_a_subagent_is_not_reminded_and_leaves_the_session_unmarked(
         monkeypatch: Patching helper from pytest.
         capsys: Captured output from pytest.
     """
-    data = {
-        "session_id": "s1",
-        "agent_id": "a1",
-        "tool_name": "Bash",
-        "tool_input": {"command": "git push"},
-    }
-    monkeypatch.setattr(hooks, "_input", lambda: data)
-    hooks.post_tool_use()
-    in_subagent = capsys.readouterr().out
-    _call(monkeypatch, "Bash", {"command": "git push"})
+    _call(monkeypatch, "Bash", {"command": "git push"}, agent="a1")
+    in_fork = capsys.readouterr().out
+    _call(monkeypatch, "Bash", {"command": "ls"})
 
-    assert in_subagent == ""
+    assert in_fork == ""
     assert "you hold T-12" in capsys.readouterr().out
+    assert trail.is_done("s1")
+
+
+def test_a_subagent_that_changes_nothing_visible_leaves_nothing_pending(
+    config: Path,
+    project: Path,
+    server: type[FakeApi],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A subagent reading or running tests marks nothing, so the conversation stays quiet.
+
+    Args:
+        config: The configuration directory.
+        project: The project directory.
+        server: The fake server.
+        monkeypatch: Patching helper from pytest.
+        capsys: Captured output from pytest.
+    """
+    _call(monkeypatch, "Bash", {"command": "uv run pytest"}, agent="a1")
+    _call(monkeypatch, "Bash", {"command": "ls"})
+
+    assert capsys.readouterr().out == ""
+    assert server.asked == []
+
+
+def test_the_prompt_tells_the_conversation_of_a_subagents_change(
+    config: Path,
+    project: Path,
+    server: type[FakeApi],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When the conversation makes no call after a fork's change, the next prompt carries it.
+
+    Args:
+        config: The configuration directory.
+        project: The project directory.
+        server: The fake server.
+        monkeypatch: Patching helper from pytest.
+        capsys: Captured output from pytest.
+    """
+    _call(monkeypatch, "Edit", {"file_path": str(project / "app.py")}, agent="a1")
+    capsys.readouterr()
+    monkeypatch.setattr(hooks, "_input", lambda: {"session_id": "s1"})
+    hooks.user_prompt_submit()
+    first = capsys.readouterr().out
+    hooks.user_prompt_submit()
+
+    assert "you hold T-12" in first
+    assert capsys.readouterr().out == ""
 
 
 def test_a_session_that_holds_nothing_is_told_to_open_a_topic() -> None:
@@ -267,28 +290,81 @@ def test_a_session_that_wrote_to_coloqo_is_not_reminded(
     config: Path,
     project: Path,
     server: type[FakeApi],
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A session that opened or noted a Topic needs no reminder and asks the server nothing.
+    """A session the MCP server marked on a write needs no reminder and asks the server nothing.
 
     Args:
         config: The configuration directory.
         project: The project directory.
         server: The fake server.
-        tmp_path: Temporary directory from pytest.
         monkeypatch: Patching helper from pytest.
         capsys: Captured output from pytest.
     """
-    transcript = tmp_path / "t.jsonl"
-    transcript.write_text('{"name": "mcp__plugin_coloqo_coloqo__open_topic"}\n')
+    trail.mark_done("s1")
 
-    _call(monkeypatch, "Bash", {"command": "git push"}, transcript)
+    _call(monkeypatch, "Bash", {"command": "git push"})
 
     assert capsys.readouterr().out == ""
     assert server.asked == []
-    assert (config / "reminded" / "s1").exists()
+
+
+class ServerAnswers:
+    """Answers every request of a Coloqo tool with a Topic, a Message and a closing at once."""
+
+    def request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Answer with every field the tools read back.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            **kwargs: Ignored.
+        """
+        return {
+            "ref": "T-3",
+            "title": "Fix",
+            "area": "Dev",
+            "status": "open",
+            "number": 6,
+            "last_number": 6,
+            "files": [],
+            "messages": [],
+            "turns_since_human": 0,
+            "turn_limit": 8,
+            "deletes_at": "2026-10-27T10:00:00Z",
+        }
+
+
+@pytest.mark.parametrize(
+    ("tool", "writes"),
+    [
+        (lambda: mcp_server.open_topic(1, "Fix export", "Took ACME-42"), True),
+        (lambda: mcp_server.post_message("T-3", 6, "Done."), True),
+        (lambda: mcp_server.hold_topic("T-3"), True),
+        (lambda: mcp_server.note_stage("T-3", "code in billing"), True),
+        (lambda: mcp_server.close_topic("T-3", "Fixed in ACME-42"), True),
+        (lambda: mcp_server.read_topic("T-3"), False),
+    ],
+    ids=["open_topic", "post_message", "hold_topic", "note_stage", "close_topic", "read_topic"],
+)
+def test_a_write_to_coloqo_marks_the_session(
+    trail_dir: Path, monkeypatch: pytest.MonkeyPatch, tool: Any, writes: bool
+) -> None:
+    """Each writing tool marks the session it runs in, a fork's included; reading does not.
+
+    Args:
+        trail_dir: Where the trail marks are kept.
+        monkeypatch: Patching helper from pytest.
+        tool: Calls the tool.
+        writes: Whether the tool writes to Coloqo.
+    """
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "s1")
+    monkeypatch.setattr(mcp_server, "_client", ServerAnswers)
+
+    tool()
+
+    assert trail.is_done("s1") is writes
 
 
 def test_a_computer_not_logged_in_is_not_reminded(
@@ -312,7 +388,7 @@ def test_a_computer_not_logged_in_is_not_reminded(
     _call(monkeypatch, "Bash", {"command": "git push"})
 
     assert capsys.readouterr().out == ""
-    assert (config / "reminded" / "s1").exists()
+    assert trail.is_done("s1")
 
 
 def test_an_unlinked_project_is_not_reminded(
@@ -337,7 +413,7 @@ def test_an_unlinked_project_is_not_reminded(
 
     assert capsys.readouterr().out == ""
     assert server.asked == []
-    assert (config / "reminded" / "s1").exists()
+    assert trail.is_done("s1")
 
 
 def test_an_unreachable_server_leaves_the_reminder_for_later(
