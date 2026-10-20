@@ -338,7 +338,10 @@ async def _own(db: AsyncSession, key: str, actor: Actor) -> tuple[Assistant, Pro
     if (
         assistant is None
         or assistant.user_id != actor.user.id
-        or (actor.installation is not None and actor.assistant != assistant)
+        or (
+            actor.installation is not None
+            and (actor.assistant is None or actor.assistant.id != assistant.id)
+        )
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such Assistant")
     project = await db.get(Project, assistant.project_id)

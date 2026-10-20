@@ -134,7 +134,11 @@ def describe(kind: str, data: dict[str, Any], me: Me) -> str | None:
         return f"Coloqo: {topic} was {data.get('status')} by {data.get('author')}{outcome}."
     if kind == "topic_idle":
         mine = data.get("holder") == me.assistant
-        sibling = me.project is not None and data.get("holder_project") == me.project
+        sibling = (
+            me.project is not None
+            and data.get("holder_project") == me.project
+            and not data.get("holder_live")
+        )
         if not (mine or sibling):
             return None
         whose = "" if mine else " (held by another session of this project)"

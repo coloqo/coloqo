@@ -10,7 +10,7 @@ import pytest
 
 from coloqo import config, mcp_server
 from coloqo.api import Project, _file_name
-from coloqo.render import file_ref, size, topic_ref, topic_text
+from coloqo.render import file_ref, message_text, size, topic_ref, topic_text
 from coloqo.watch import Me, describe, frames
 
 ME = Me(pseudonym="alice", assistant="k-mine", project="p-mine")
@@ -158,13 +158,41 @@ def test_watch_tells_a_sibling_of_an_idle_topic() -> None:
     """An idle notice reaches the holder and the other sessions of its project (0024)."""
     idle = {"team": "acme", "ref": "T-3", "title": "Rename", "closes_at": "2026-11-20T00:00"}
 
-    mine = describe("topic_idle", {**idle, "holder": "k-mine", "holder_project": "p-mine"}, ME)
+    mine = describe(
+        "topic_idle",
+        {**idle, "holder": "k-mine", "holder_project": "p-mine", "holder_live": True},
+        ME,
+    )
     sibling = describe("topic_idle", {**idle, "holder": "k-gone", "holder_project": "p-mine"}, ME)
+    live_sibling = describe(
+        "topic_idle",
+        {**idle, "holder": "k-on", "holder_project": "p-mine", "holder_live": True},
+        ME,
+    )
     foreign = describe("topic_idle", {**idle, "holder": OTHER, "holder_project": "p-x"}, ME)
 
     assert mine is not None and "another session" not in mine
     assert sibling is not None and "held by another session of this project" in sibling
+    assert live_sibling is None
     assert foreign is None
+
+
+def test_a_takeover_names_the_former_holder_once() -> None:
+    """A takeover line reads as one line: the former holder is in its head, not repeated."""
+    taken = {
+        "number": 4,
+        "kind": "taken",
+        "author": "alice",
+        "assistant": "alice · api · piano",
+        "body": "alice · api · allegro",
+        "files": [],
+        "created_at": "2026-10-20T19:50:00+00:00",
+    }
+
+    text = message_text(taken)
+
+    assert text.count("alice · api · allegro") == 1
+    assert "took the Topic over from alice · api · allegro" in text
 
 
 def test_watch_reports_new_topics_except_own() -> None:

@@ -155,7 +155,8 @@ def message_text(message: dict[str, Any]) -> str:
     elif message["kind"] == "taken":
         head += f" [took the Topic over from {message['body'] or 'nobody'}]"
     head += f" · {message['created_at'][:16].replace('T', ' ')}"
-    lines = [head, message["body"]]
+    # A takeover's body is the former holder, already named in the head.
+    lines = [head] if message["kind"] == "taken" else [head, message["body"]]
     for file in message.get("files", []):
         lines.append(f"[file {file['number']}: {file['name']}, {size(file['size'])}]")
     return "\n".join(lines)

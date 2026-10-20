@@ -103,6 +103,7 @@ def settings(database_url: str, tmp_path: Path) -> Settings:
         max_file_bytes=1024,
         team_storage_bytes=4096,
         preview_max_bytes=512,
+        plugin_index_url="",
     )
 
 

@@ -59,10 +59,16 @@ def test_idle_topic_is_announced_once(setup: Setup, settings: Settings) -> None:
 
     first, second = _tend(settings), _tend(settings)
     topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    with _connect(settings.database_url) as connection:
+        (data,) = connection.execute(
+            "SELECT data FROM events WHERE kind = 'topic_idle' LIMIT 1"
+        ).fetchone()
 
     assert len(first) == 2
     assert second == set()
     assert topic["status"] == "open"
+    assert (data["holder"], data["holder_live"]) == (setup.alice_api.key, True)
+    assert data["holder_project"] == setup.alice_api.project_key
 
 
 def test_idle_topic_closes_with_a_line(setup: Setup, settings: Settings) -> None:
