@@ -40,12 +40,15 @@ class AssistantIn(BaseModel):
         project_name: Short project name for the Assistant's shown name.
         team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked
             project whose person is a member of it, and never overrides a link (decision 0020).
+        team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one
+            more release (decision 0025).
         session_id: The Claude Code session id; without it the project has one Assistant.
     """
 
     project_key: str = Field(pattern=r"^[0-9a-f]{64}$")
     project_name: str = Field(min_length=1, max_length=60)
     team: str | None = Field(default=None, max_length=40)
+    team_id: int | None = None
     session_id: str | None = Field(default=None, max_length=100)
 
 
@@ -313,8 +316,9 @@ async def register_assistant(body: AssistantIn, actor: ActorDep, db: DB) -> Assi
         HTTPException: 403 for a web session: only the plugin registers Assistants.
     """
     team = await find_team(db, body.team) if body.team else None
+    team_id = team.id if team else body.team_id
     assistant, project = await register(
-        db, actor, body.project_key, body.project_name, team.id if team else None, body.session_id
+        db, actor, body.project_key, body.project_name, team_id, body.session_id
     )
     return await self_view(db, assistant, project)
 

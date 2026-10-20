@@ -107,7 +107,7 @@
         "type": "object"
       },
       "AssistantIn": {
-        "description": "A session registering its Assistant (decision 0024).\n\nAttributes:\n    project_key: SHA-256 of the project path; the path itself stays on the computer.\n    project_name: Short project name for the Assistant's shown name.\n    team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked\n        project whose person is a member of it, and never overrides a link (decision 0020).\n    session_id: The Claude Code session id; without it the project has one Assistant.",
+        "description": "A session registering its Assistant (decision 0024).\n\nAttributes:\n    project_key: SHA-256 of the project path; the path itself stays on the computer.\n    project_name: Short project name for the Assistant's shown name.\n    team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked\n        project whose person is a member of it, and never overrides a link (decision 0020).\n    team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one\n        more release (decision 0025).\n    session_id: The Claude Code session id; without it the project has one Assistant.",
         "properties": {
           "project_key": {
             "pattern": "^[0-9a-f]{64}$",
@@ -143,6 +143,17 @@
               }
             ],
             "title": "Team"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
           }
         },
         "required": [

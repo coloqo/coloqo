@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from coloqo import focus, hooks, mcp_server, trail
 from coloqo.api import ColoqoError, NotLoggedIn, Project
 
-MINE, OTHER = 10, 20
+MINE, OTHER = "k-mine", "k-other"
 
 
 @pytest.fixture
@@ -42,16 +43,18 @@ class FakeApi:
     """Stands in for the server when the hook asks which Topics the Assistant holds.
 
     Attributes:
-        team_id: The Team the project is linked to; ``None`` while unlinked.
+        team: The Team the project is linked to; ``None`` while unlinked.
         down: Whether the server is unreachable.
         logged_out: Whether the computer is not logged in.
         asked: Paths requested.
+        sessions: The sessions registered.
     """
 
-    team_id: int | None = 1
+    team: str | None = "acme"
     down = False
     logged_out = False
     asked: ClassVar[list[str]] = []
+    sessions: ClassVar[list[str | None]] = []
 
     def __init__(self, timeout: float) -> None:
         """Start a session with the server.
@@ -59,13 +62,14 @@ class FakeApi:
         Args:
             timeout: Ignored.
         """
-        self.assistant_id = MINE
+        self.assistant_key = MINE
 
-    def register(self, project: Project) -> str:
+    def register(self, project: Project, session: str | None = None) -> str:
         """Pretend to register.
 
         Args:
             project: The project.
+            session: The Claude Code session.
 
         Raises:
             NotLoggedIn: The computer is not logged in.
@@ -75,7 +79,8 @@ class FakeApi:
             raise NotLoggedIn(401, "not logged in")
         if FakeApi.down:
             raise ColoqoError(0, "unreachable")
-        return "alice · web-app"
+        type(self).sessions.append(session)
+        return "alice · web-app · vega"
 
     def request(self, method: str, path: str, **kwargs: Any) -> object:
         """Answer the Inbox (empty) and the list of open Topics.
@@ -89,8 +94,8 @@ class FakeApi:
         if path == "/inbox":
             return []
         return [
-            {"ref": "T-12", "title": "Fix export", "issue": "ACME-42", "holder_assistant_id": MINE},
-            {"ref": "T-13", "title": "Not mine", "issue": "", "holder_assistant_id": OTHER},
+            {"ref": "T-12", "title": "Fix export", "issue": "ACME-42", "holder_key": MINE},
+            {"ref": "T-13", "title": "Not mine", "issue": "", "holder_key": OTHER},
         ]
 
     def close(self) -> None:
@@ -105,7 +110,8 @@ def server(monkeypatch: pytest.MonkeyPatch) -> type[FakeApi]:
         monkeypatch: Patching helper from pytest.
     """
     monkeypatch.setattr(hooks, "Api", FakeApi)
-    FakeApi.team_id, FakeApi.down, FakeApi.logged_out, FakeApi.asked = 1, False, False, []
+    FakeApi.team, FakeApi.down, FakeApi.logged_out, FakeApi.asked = "acme", False, False, []
+    FakeApi.sessions = []
     return FakeApi
 
 
@@ -145,6 +151,8 @@ def _call(
         ("Bash", {"command": "git switch -c fix-export"}, True),
         ("Bash", {"command": "gh pr create --fill"}, True),
         ("Bash", {"command": "glab mr create"}, True),
+        ("PowerShell", {"command": "git push origin fix-export"}, True),
+        ("PowerShell", {"command": "Get-ChildItem"}, False),
         ("Bash", {"command": "git status && git log --grep=commit"}, False),
         ("Bash", {"command": "git fetch origin push-fix"}, False),
         ("Bash", {"command": "git log | grep push"}, False),
@@ -311,7 +319,13 @@ def test_a_session_that_wrote_to_coloqo_is_not_reminded(
 
 
 class ServerAnswers:
-    """Answers every request of a Coloqo tool with a Topic, a Message and a closing at once."""
+    """Answers every request of a Coloqo tool with a Topic, a Message and a closing at once.
+
+    Attributes:
+        team: The Team the project is linked to.
+    """
+
+    team = "acme"
 
     def request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         """Answer with every field the tools read back.
@@ -322,9 +336,11 @@ class ServerAnswers:
             **kwargs: Ignored.
         """
         return {
+            "team": "acme",
             "ref": "T-3",
             "title": "Fix",
-            "area": "Dev",
+            "area": "dev",
+            "area_name": "Dev",
             "status": "open",
             "number": 6,
             "last_number": 6,
@@ -339,7 +355,7 @@ class ServerAnswers:
 @pytest.mark.parametrize(
     ("tool", "writes"),
     [
-        (lambda: mcp_server.open_topic(1, "Fix export", "Took ACME-42"), True),
+        (lambda: mcp_server.open_topic("dev", "Fix export", "Took ACME-42"), True),
         (lambda: mcp_server.post_message("T-3", 6, "Done."), True),
         (lambda: mcp_server.hold_topic("T-3"), True),
         (lambda: mcp_server.note_stage("T-3", "code in billing"), True),
@@ -407,7 +423,7 @@ def test_an_unlinked_project_is_not_reminded(
         monkeypatch: Patching helper from pytest.
         capsys: Captured output from pytest.
     """
-    server.team_id = None
+    server.team = None
 
     _call(monkeypatch, "Bash", {"command": "git push"})
 
@@ -440,3 +456,120 @@ def test_an_unreachable_server_leaves_the_reminder_for_later(
 
     assert silent == ""
     assert "you hold T-12" in capsys.readouterr().out
+
+
+def test_turn_marks_tell_when_the_user_did_not_start_the_turn(trail_dir: Path) -> None:
+    """A turn is surely not the user's after a turn ended without a new prompt, or after an
+    event's prompt; before any prompt nothing is known (decision 0026).
+
+    Args:
+        trail_dir: Where the trail marks are kept.
+    """
+    unknown = trail.human_turn("s1")
+    trail.prompt_arrived("s1", "fix the export")
+    typed = trail.human_turn("s1")
+    trail.turn_ended("s1")
+    after_stop = trail.human_turn("s1")
+    trail.prompt_arrived("s1", "<task-notification>\n<task-id>x</task-id>")
+    event = trail.human_turn("s1")
+    trail.prompt_arrived("s1", "and the import too")
+    typed_again = trail.human_turn("s1")
+
+    assert (unknown, typed, after_stop, event, typed_again) == (None, True, False, False, True)
+
+
+def test_the_prompt_and_stop_hooks_keep_the_marks(
+    config: Path, project: Path, server: type[FakeApi], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The prompt hook notes the prompt; the stop hook the end of the turn.
+
+    Args:
+        config: The configuration directory.
+        project: The project directory.
+        server: The fake server.
+        monkeypatch: Patching helper from pytest.
+    """
+    monkeypatch.setattr(hooks, "_input", lambda: {"session_id": "s1", "prompt": "fix it"})
+    hooks.user_prompt_submit()
+    during = trail.human_turn("s1")
+    monkeypatch.setattr(hooks, "_input", lambda: {"session_id": "s1"})
+    hooks.stop()
+
+    assert during is True
+    assert trail.human_turn("s1") is False
+    assert server.sessions == ["s1"]
+
+
+@pytest.mark.parametrize(
+    ("turn", "posted"),
+    [(None, True), (True, True), (False, False)],
+    ids=["unknown", "the user's", "an event's"],
+)
+def test_marks_of_the_user_s_part_need_the_user_s_turn(
+    trail_dir: Path, monkeypatch: pytest.MonkeyPatch, turn: bool | None, posted: bool
+) -> None:
+    """ "With" and "words" are refused only in a turn surely not started by the user.
+
+    Args:
+        trail_dir: Where the trail marks are kept.
+        monkeypatch: Patching helper from pytest.
+        turn: What the marks say of the turn.
+        posted: Whether the message goes out.
+    """
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "s1")
+    monkeypatch.setattr(mcp_server, "_client", ServerAnswers)
+    monkeypatch.setattr(trail, "human_turn", lambda session: turn)
+
+    def attempt(**marks: bool) -> bool:
+        """Try to post with marks; return whether it went out.
+
+        Args:
+            **marks: ``with_human`` or ``as_human``.
+        """
+        try:
+            mcp_server.post_message("T-3", 6, "Done.", **marks)
+        except ToolError as error:
+            assert "not started by your user" in str(error)
+            return False
+        return True
+
+    assert attempt(with_human=True) is posted
+    assert attempt(as_human=True) is posted
+    assert attempt() is True
+
+
+def test_session_start_registers_the_hook_s_session(
+    config: Path, project: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The session start registers the session Claude Code names in the hook's input.
+
+    Args:
+        config: The configuration directory.
+        project: The project directory.
+        monkeypatch: Patching helper from pytest.
+        capsys: Captured output from pytest.
+    """
+
+    class Briefed(FakeApi):
+        """Answers the briefing too."""
+
+        def request(self, method: str, path: str, **kwargs: Any) -> object:
+            """Answer the briefing, then the Inbox.
+
+            Args:
+                method: HTTP method.
+                path: API path.
+                **kwargs: Ignored.
+            """
+            if path == "/briefing":
+                return {"text": "Coloqo: briefed.", "team": "acme"}
+            return []
+
+    monkeypatch.setattr(hooks, "Api", Briefed)
+    monkeypatch.setattr(hooks, "_input", lambda: {"session_id": "s7"})
+    Briefed.sessions = []
+
+    hooks.session_start()
+
+    assert Briefed.sessions == ["s7"]
+    assert "Coloqo: briefed." in capsys.readouterr().out

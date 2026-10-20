@@ -10,10 +10,11 @@ import pytest
 
 from coloqo import config, mcp_server
 from coloqo.api import Project, _file_name
-from coloqo.render import size, topic_ref, topic_text
-from coloqo.watch import describe, frames
+from coloqo.render import file_ref, size, topic_ref, topic_text
+from coloqo.watch import Me, describe, frames
 
-ME, MY_ASSISTANT, OTHER = 1, 10, 20
+ME = Me(pseudonym="alice", assistant="k-mine", project="p-mine")
+OTHER = "k-other"
 
 
 @pytest.mark.parametrize("value", ["T-12", "t12", "12", " T-12 ", 12])
@@ -23,13 +24,52 @@ def test_topic_ref_accepts_common_forms(value: str | int) -> None:
     Args:
         value: A reference.
     """
-    assert topic_ref(value) == 12
+    assert topic_ref(value, "acme") == ("acme", 12)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "globex/T-12",
+        "globex/12",
+        "https://app.coloqo.team/team/globex/topic/12",
+        "see https://app.coloqo.team/team/globex/topic/12#m-5",
+    ],
+)
+def test_topic_ref_names_another_team(value: str) -> None:
+    """Another Team's Topic is named with its slug, or by its address (decision 0025).
+
+    Args:
+        value: A reference.
+    """
+    assert topic_ref(value, "acme") == ("globex", 12)
 
 
 def test_topic_ref_refuses_other_text() -> None:
-    """A reference that is not a Topic raises ``ValueError``."""
+    """A reference that is not a Topic, or names no Team when none is linked, raises."""
     with pytest.raises(ValueError):
-        topic_ref("Q-3")
+        topic_ref("Q-3", "acme")
+    with pytest.raises(ValueError):
+        topic_ref("T-3", None)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("3", ("acme", 3)),
+        ("file 3", ("acme", 3)),
+        ("globex/file 3", ("globex", 3)),
+        (3, ("acme", 3)),
+    ],
+)
+def test_file_ref(value: str | int, expected: tuple[str, int]) -> None:
+    """A file is named by its number in the Team, or with another Team's slug.
+
+    Args:
+        value: A reference.
+        expected: The Team and the number.
+    """
+    assert file_ref(value, "acme") == expected
 
 
 def test_size() -> None:
@@ -63,25 +103,24 @@ def _message(**data: object) -> dict:
         **data: Fields to override.
     """
     base = {
+        "team": "acme",
         "ref": "T-3",
         "title": "Rename",
         "number": 4,
         "author": "bob",
-        "assistant": "bob · web",
-        "author_assistant_id": OTHER,
-        "to_user_id": None,
-        "to_assistant_id": None,
-        "assistant_ids": [],
+        "assistant": "bob · web · vega",
+        "author_assistant": OTHER,
+        "to": None,
+        "to_assistant": None,
+        "assistants": [],
     }
     return {**base, **data}
 
 
 def test_watch_reports_messages_to_me() -> None:
     """A Message addressed to the user or to this Assistant is reported."""
-    to_user = describe("message", _message(to_user_id=ME), ME, MY_ASSISTANT)
-    to_assistant = describe(
-        "message", _message(to_user_id=ME, to_assistant_id=MY_ASSISTANT), ME, MY_ASSISTANT
-    )
+    to_user = describe("message", _message(to="alice"), ME)
+    to_assistant = describe("message", _message(to="alice", to_assistant="k-mine"), ME)
 
     assert to_user is not None and "to you" in to_user and "after=3" in to_user
     assert to_assistant is not None and "to you" in to_assistant
@@ -89,36 +128,54 @@ def test_watch_reports_messages_to_me() -> None:
 
 def test_watch_reports_topics_i_take_part_in() -> None:
     """A Message for everyone in a Topic this Assistant holds or wrote in is reported."""
-    line = describe("message", _message(assistant_ids=[MY_ASSISTANT, OTHER]), ME, MY_ASSISTANT)
+    line = describe("message", _message(assistants=["k-mine", OTHER]), ME)
 
     assert line is not None and "to you" not in line
 
 
 def test_watch_ignores_the_rest() -> None:
     """Own Messages, Messages to someone else and unrelated Topics are not reported."""
-    own = _message(author_assistant_id=MY_ASSISTANT, to_user_id=ME)
-    to_other = _message(assistant_ids=[MY_ASSISTANT], to_user_id=99)
-    to_my_other_assistant = _message(to_user_id=ME, to_assistant_id=OTHER + 1)
+    own = _message(author_assistant="k-mine", to="alice")
+    to_other = _message(assistants=["k-mine"], to="carol")
+    to_my_other_session = _message(to="alice", to_assistant="k-sibling")
     unrelated = _message()
-    opening = _message(number=1, to_user_id=ME)
+    opening = _message(number=1, to="alice")
+    before_slugs = {k: v for k, v in _message(to="alice").items() if k != "team"}
 
-    for data in (own, to_other, to_my_other_assistant, unrelated, opening):
-        assert describe("message", data, ME, MY_ASSISTANT) is None
+    for data in (own, to_other, to_my_other_session, unrelated, opening, before_slugs):
+        assert describe("message", data, ME) is None
+
+
+def test_watch_tells_the_former_holder_its_topic_was_taken() -> None:
+    """Taking a Topic over is told to the session that held it, and to nobody else (0024)."""
+    taken = _message(kind="taken", **{"from": "k-mine"})
+
+    assert "took T-3 «Rename» over from you" in (describe("message", taken, ME) or "")
+    assert describe("message", _message(kind="taken", **{"from": OTHER}), ME) is None
+
+
+def test_watch_tells_a_sibling_of_an_idle_topic() -> None:
+    """An idle notice reaches the holder and the other sessions of its project (0024)."""
+    idle = {"team": "acme", "ref": "T-3", "title": "Rename", "closes_at": "2026-11-20T00:00"}
+
+    mine = describe("topic_idle", {**idle, "holder": "k-mine", "holder_project": "p-mine"}, ME)
+    sibling = describe("topic_idle", {**idle, "holder": "k-gone", "holder_project": "p-mine"}, ME)
+    foreign = describe("topic_idle", {**idle, "holder": OTHER, "holder_project": "p-x"}, ME)
+
+    assert mine is not None and "another session" not in mine
+    assert sibling is not None and "held by another session of this project" in sibling
+    assert foreign is None
 
 
 def test_watch_reports_new_topics_except_own() -> None:
     """New Topics are reported, addressed ones as such; not the Assistant's own."""
-    topic = {"ref": "T-3", "title": "Rename", "area": "Canon", "author": "bob"}
+    topic = {"team": "acme", "ref": "T-3", "title": "Rename", "area": "Canon", "author": "bob"}
 
-    assert "new topic" in describe(
-        "topic", {**topic, "author_assistant_id": OTHER}, ME, MY_ASSISTANT
+    assert "new topic" in (describe("topic", {**topic, "author_assistant": OTHER}, ME) or "")
+    assert "addressed to you" in (
+        describe("topic", {**topic, "author_assistant": OTHER, "to": "alice"}, ME) or ""
     )
-    assert "addressed to you" in describe(
-        "topic", {**topic, "author_assistant_id": OTHER, "to_user_id": ME}, ME, MY_ASSISTANT
-    )
-    assert (
-        describe("topic", {**topic, "author_assistant_id": MY_ASSISTANT}, ME, MY_ASSISTANT) is None
-    )
+    assert describe("topic", {**topic, "author_assistant": "k-mine"}, ME) is None
 
 
 def test_project_key_hides_the_path(tmp_path: Path) -> None:
@@ -209,6 +266,7 @@ def test_topic_text_says_how_to_reply() -> None:
                     "to": None,
                     "to_assistant": None,
                     "reply_to": 1,
+                    "human_part": "with",
                     "body": "Yes.",
                     "files": [],
                     "created_at": "2026-10-19T08:05:00+00:00",
@@ -218,7 +276,7 @@ def test_topic_text_says_how_to_reply() -> None:
     )
 
     assert "#1 alice (human) → bob" in text
-    assert "#2 bob · web ↪ #1" in text
+    assert "#2 bob · web ↪ #1 [with bob]" in text
     assert text.endswith("To reply, post with number=3.")
 
 
@@ -227,11 +285,13 @@ class RecordingApi:
 
     Attributes:
         sent: ``(method, path, json)`` of every request.
+        team: The Team the project is linked to.
     """
 
     def __init__(self) -> None:
         """Start with nothing sent."""
         self.sent: list[tuple[str, str, Any]] = []
+        self.team = "acme"
 
     def request(self, method: str, path: str, json: Any = None) -> dict[str, Any]:
         """Record a request and answer with a posted Message.
@@ -260,18 +320,34 @@ def test_post_message_sends_the_reply(monkeypatch: pytest.MonkeyPatch) -> None:
     assert api.sent == [
         (
             "POST",
-            "/topics/3/messages",
+            "/team/acme/topic/3/message",
             {
                 "number": 5,
                 "body": "Yes.",
                 "to": None,
-                "file_ids": [],
+                "files": [],
                 "kind": "message",
                 "as_human": False,
+                "with_human": False,
                 "reply_to": 2,
             },
         )
     ]
+
+
+def test_post_message_in_another_team_names_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Topic of another Team is written to by its slug, and the answer names it so.
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = RecordingApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    result = mcp_server.post_message("globex/T-3", 5, "Yes.")
+
+    assert result == "Posted #5 in globex/T-3."
+    assert api.sent[0][1] == "/team/globex/topic/3/message"
 
 
 class AnsweringApi(RecordingApi):
@@ -304,8 +380,12 @@ def test_stage_and_closing_send_what_the_server_expects(
     closed = mcp_server.close_topic("T-3", "Fixed in ACME-42, MR !17")
 
     assert api.sent == [
-        ("POST", "/topics/3/stage", {"text": "Testing"}),
-        ("PATCH", "/topics/3", {"status": "closed", "outcome": "Fixed in ACME-42, MR !17"}),
+        ("POST", "/team/acme/topic/3/stage", {"text": "Testing"}),
+        (
+            "PATCH",
+            "/team/acme/topic/3",
+            {"status": "closed", "outcome": "Fixed in ACME-42, MR !17"},
+        ),
     ]
     assert staged == "Stage noted as #6."
     assert closed.endswith("deleted on 2026-10-27.")
