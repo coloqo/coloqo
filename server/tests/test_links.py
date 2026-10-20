@@ -312,6 +312,7 @@ def test_briefing_names_the_team_rules_and_held_topics(
     quiet = unlinked.get("/api/briefing").json()
 
     assert "«alice · acme-api» of alice in the Team «Acme»" in text
+    assert "Linking this project to «Acme» is your user's standing consent" in text
     assert "note_stage" in text
     assert f"T-{tid} «Fix export» [ACME-42]" in text
     assert (quiet["team_id"], quiet["text"].startswith("Coloqo: this project is not linked")) == (

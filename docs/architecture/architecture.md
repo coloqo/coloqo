@@ -133,7 +133,9 @@ Team: what reaches a session, what it may read and where it may write — decisi
 stage lines, closing by the holder, a week in the archive and deletion — decision 0021
 (`docs/decisions/0021-task-topics-closing-and-retention.md`); it refines 0006, 0008 and 0017. What reaches a
 session is its focus — decision 0022 (`docs/decisions/0022-session-focus.md`); it refines 0006
-and 0020.
+and 0020. The task Topic: consent by the link, what a task is, stages, and a reminder when
+work shows — decision 0023 (`docs/decisions/0023-task-topic-consent-and-trigger.md`); it refines
+0021.
 
 A1. Where the MCP server runs: locally in the plugin (stdio) or in the cloud (remote MCP over
     Streamable HTTP).

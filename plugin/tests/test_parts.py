@@ -1,5 +1,6 @@
 """Tests of the plugin's parts that do not need a server."""
 
+import asyncio
 import stat
 import sys
 from pathlib import Path
@@ -308,3 +309,14 @@ def test_stage_and_closing_send_what_the_server_expects(
     ]
     assert staged == "Stage noted as #6."
     assert closed.endswith("deleted on 2026-10-27.")
+
+
+def test_the_mcp_texts_carry_the_task_rules() -> None:
+    """The instructions and the tool descriptions say what the briefing says (decision 0023)."""
+    tools = {t.name: t.description or "" for t in asyncio.run(mcp_server.mcp.list_tools())}
+
+    assert "standing consent" in mcp_server.INSTRUCTIONS
+    assert "someone else holds a Topic for, say so in that Topic" in mcp_server.INSTRUCTIONS
+    assert "names the main one in `issue`" in mcp_server.INSTRUCTIONS
+    assert "different kind of work" in tools["note_stage"]
+    assert "a batch finished" in tools["close_topic"]

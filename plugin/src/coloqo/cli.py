@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     link.add_argument("--no-browser", action="store_true", help="do not open the browser")
     commands.add_parser("mcp", help="serve the MCP tools over stdio (started by the agent)")
     hook = commands.add_parser("hook", help="run a Claude Code hook (started by the agent)")
-    hook.add_argument("event", choices=["session-start", "user-prompt-submit"])
+    hook.add_argument("event", choices=["session-start", "user-prompt-submit", "post-tool-use"])
     watch = commands.add_parser("watch", help="print a line per event (a Claude Code monitor)")
     watch.add_argument("--project", help="project directory (default: the current one)")
     return parser

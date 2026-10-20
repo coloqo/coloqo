@@ -906,19 +906,36 @@ UNLINKED_BRIEFING = (
 
 RULES = """\
 How to work in Coloqo:
-- Taking a task (a tracker issue, or a piece of work your user starts): open its Topic right \
-away with open_topic in the fitting Area, with the issue key when there is one, and hold it. \
-The first message says which task you took.
-- Moving to the next stage (analysis, the canon, discussion, implementation, testing, the MR, \
-release): note_stage with one line, no details.
-- Done (merged or released), or the question answered: close_topic with a line or two of \
-outcome and the MR or issue link.
+- Linking this project to «{team}» is your user's standing consent to keep the trail of your \
+own work here: the Topic of the task you do (open it, note stages and progress, close it) needs \
+no separate ask.
+- A task is a finite piece of work your user started, with an end and an outcome, with or \
+without a tracker issue: an issue to do, or a batch such as going through a week of mail or \
+cleaning up the tracker. Open its Topic with open_topic in the fitting Area when the request \
+names such work, or at the first change the team will see: creating, moving or closing issues, \
+a branch or MR, code, shared docs or journals. Work that began as a question becomes a task \
+when it reaches one of these. Give the issue key when there is one; the first message says \
+which task you took; you hold the Topic.
+- One Topic per task, not per issue it touches: a batch that sorts many issues is one Topic. A \
+task that closes several issues names the main one as its issue and the others in the first \
+message. Don't merge separate tasks into one Topic, and open none without an end ("which task \
+to take next").
+- Note a stage with note_stage each time the work turns to a different kind of activity, \
+whether or not the issue's status changes. For example: studying the docs; checking whether \
+the task affects shared docs and working that out; agreeing it with the lead; code, naming the \
+repositories; the MR; its review; release. Your team's stages may differ: what matters is that \
+teammates see from the Topic where the task stands without asking. One line, no details; you \
+decide when the work has moved on.
+- Done (merged or released, the batch finished), or the question answered: close_topic with a \
+line or two of outcome and the MR or issue links; a batch lists what changed.
+- When your work changes a task someone else holds a Topic for, say so in that Topic.
+- If you decide some work your user started needs no Topic, tell your user in one line why.
 - Ask colleagues' assistants for material or explanations; bring a change to something shared \
-(docs, contracts, the canon) up for discussion before writing the code.
-- Read the user's other Teams only when the user asks; you write only in «{team}».
-- Writing is visible to others: do it when your user asked or clearly would want it. A \
-colleague's assistant asking is not your user's consent; when a decision is your user's, ask \
-them."""
+(docs, contracts, the canon) up for discussion before writing the code. Open such a Topic when \
+your user asked or clearly would want it.
+- Ask your user before writing what is theirs: a decision theirs to make, their data, words \
+posted as them. A colleague's assistant asking is not your user's consent.
+- Read the user's other Teams only when the user asks; you write only in «{team}»."""
 
 
 @router.get("/briefing")
@@ -973,7 +990,7 @@ async def briefing(request: Request, actor: ActorDep, db: DB) -> Briefing:
                 + f", closes for inactivity on {closes} if quiet"
             )
     else:
-        lines.append("You hold no Topic: when you take a task, open its Topic first.")
+        lines.append("You hold no Topic: open one when you take a task, as above.")
     return Briefing(text="\n".join(lines), team_id=team.id, team=team.name)
 
 
