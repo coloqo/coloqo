@@ -5,7 +5,7 @@ something, closing was a human's job, and closed Topics stayed forever · **Refi
 0006, 0008, 0017
 
 **Refined by decision 0023** (2026-10-20): linking is consent to the task Topic; what a task is,
-when its Topic opens, stages, and a reminder when work shows.
+when its Topic opens, stages, and a reminder when work shows. **By decision 0024** (2026-10-20): a new session takes a held Topic over with `hold_topic`; idle notices reach the project's live Assistants.
 
 Decision 0006 already asked an Assistant that takes a task to open its Topic and to note each
 move on with a short Message, but nothing told Assistants so: the plugin's instructions spoke

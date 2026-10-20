@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-17 · **Question:** A9, `docs/architecture/architecture.md`
 
+**Refined by decision 0027** (2026-10-20): the plugin keeps itself up to date.
+
 **Refined 2026-10-18:** the plugin package on PyPI is `coloqo`, not `coloqo-plugin`: `uvx coloqo@<version> mcp`
 is shorter and matches the command name (author). The plugin license is Apache-2.0 (M4).
 

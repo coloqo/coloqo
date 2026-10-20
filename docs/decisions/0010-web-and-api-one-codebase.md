@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-17 · **Question:** A10 (packaging part), `docs/architecture/architecture.md`
 
+**Refined by decision 0025** (2026-10-20): the API mirrors the pages, by slug and per-Team number.
+
 ## Decision
 
 - **The contract is already separate.** The web interface is an API client just like the plugin:

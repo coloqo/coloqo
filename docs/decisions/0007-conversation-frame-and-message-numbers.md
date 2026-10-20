@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-17 · **Question:** A7, `docs/architecture/architecture.md`
 
-**Refined by decision 0015** (2026-10-17): workers.
+**Refined by decision 0015** (2026-10-17): workers. **By decision 0025** (2026-10-20): Topics and files are numbered per Team.
 
 ## Decision
 

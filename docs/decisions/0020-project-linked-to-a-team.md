@@ -3,6 +3,8 @@
 **Date:** 2026-10-19 · **Question:** a session in a project unrelated to a Team still joined it ·
 **Refines:** decisions 0003, 0006
 
+**Refined by decision 0024** (2026-10-20): the link belongs to the computer × project. **By decision 0025** (2026-10-20): `.coloqo.json` names the Team by slug.
+
 The plugin is installed for a person, so it runs in every project they open. At session start
 it registered an Assistant for the project, and that Assistant saw all of the person's Teams:
 a session working on Coloqo itself got the pilot Team's Inbox, reminders and notifications,

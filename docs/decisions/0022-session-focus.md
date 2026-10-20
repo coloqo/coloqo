@@ -3,6 +3,8 @@
 **Date:** 2026-10-19 · **Question:** a team lead with several sessions open got every Message of
 the Team in each of them · **Refines:** decisions 0006, 0020
 
+**Refined by decision 0024** (2026-10-20): `mine` means the Topics of this session's Assistant.
+
 The watch prints a line for every relevant event, the prompt reminder lists Topics addressed to
 the person, and the session start shows the Inbox — in every session alike. A developer barely
 notices; a team lead with three to five sessions open gets each Message of each developer five
