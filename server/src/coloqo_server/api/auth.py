@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from coloqo_server.api.avatars import avatar_url
 from coloqo_server.models import DeviceLogin, Identity, Installation, User, WebSession
+from coloqo_server.naming import new_key
 from coloqo_server.providers import LoginProvider, ProviderError
 from coloqo_server.security import (
     DB,
@@ -38,7 +39,8 @@ class Me(BaseModel):
     """The caller.
 
     Attributes:
-        id: User id.
+        id: User id, only for plugins older than 0.5.0, which compare it with event data
+            (decision 0025).
         pseudonym: The chosen name, ``None`` until chosen.
         via: ``web`` for the browser, ``plugin`` for an installation token.
         assistant: Name of the calling Assistant, if the plugin named one.
@@ -47,7 +49,7 @@ class Me(BaseModel):
         github: The person logs in with GitHub, so their GitHub avatar can be taken.
     """
 
-    id: int
+    id: int | None = None
     pseudonym: str | None
     via: str
     assistant: str | None = None
@@ -147,14 +149,14 @@ class InstallationOut(BaseModel):
     """An installation of the plugin.
 
     Attributes:
-        id: Identifier.
+        key: Its public key (decision 0025).
         name: Name given at login.
         created_at: When login was confirmed.
         last_seen_at: The last request.
         revoked: The token no longer works.
     """
 
-    id: int
+    key: str
     name: str
     created_at: str
     last_seen_at: str | None
@@ -386,7 +388,7 @@ async def me(request: Request, actor: AnyActorDep, db: DB) -> Me:
         select(Identity.id).where(Identity.user_id == actor.user.id, Identity.provider == "github")
     )
     return Me(
-        id=actor.user.id,
+        id=actor.user.id if actor.legacy else None,
         pseudonym=actor.user.pseudonym,
         via="web" if actor.is_human else "plugin",
         assistant=actor.assistant.name if actor.assistant else None,
@@ -566,7 +568,7 @@ async def device_approve(user_code: str, actor: AnyHumanDep, db: DB) -> DeviceLo
         raise HTTPException(status.HTTP_409_CONFLICT, f"This login is {_device_state(login)}")
     token = new_token()
     installation = Installation(
-        user_id=actor.user.id, name=login.name, token_hash=token_hash(token)
+        key=new_key(), user_id=actor.user.id, name=login.name, token_hash=token_hash(token)
     )
     db.add(installation)
     await db.flush()
@@ -595,7 +597,7 @@ async def device_deny(user_code: str, actor: AnyHumanDep, db: DB) -> DeviceLogin
     return DeviceLoginOut(user_code=login.user_code, name=login.name, state="denied")
 
 
-@router.get("/installations")
+@router.get("/installation")
 async def installations(actor: AnyHumanDep, db: DB) -> list[InstallationOut]:
     """List the human's plugin installations (decision 0003).
 
@@ -610,7 +612,7 @@ async def installations(actor: AnyHumanDep, db: DB) -> list[InstallationOut]:
     )
     return [
         InstallationOut(
-            id=row.id,
+            key=row.key,
             name=row.name,
             created_at=row.created_at.isoformat(),
             last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else None,
@@ -620,19 +622,19 @@ async def installations(actor: AnyHumanDep, db: DB) -> list[InstallationOut]:
     ]
 
 
-@router.delete("/installations/{installation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_installation(installation_id: int, actor: AnyHumanDep, db: DB) -> Response:
+@router.delete("/installation/{key}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_installation(key: str, actor: AnyHumanDep, db: DB) -> Response:
     """Revoke an installation: its token stops working.
 
     Args:
-        installation_id: The installation.
+        key: The installation's key.
         actor: The logged-in human.
         db: Database session.
 
     Raises:
         HTTPException: 404 when it is not the human's installation.
     """
-    installation = await db.get(Installation, installation_id)
+    installation = await db.scalar(select(Installation).where(Installation.key == key))
     if installation is None or installation.user_id != actor.user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such installation")
     installation.revoked_at = installation.revoked_at or now()

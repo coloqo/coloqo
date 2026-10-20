@@ -49,6 +49,8 @@ class Settings(BaseSettings):
         idle_warn_days: How long before that its people are told.
         github_avatar_url: Where the server takes a person's GitHub avatar by their GitHub id
             (decision 0019).
+        plugin_index_url: The plugin package's JSON on PyPI, asked once an hour for the latest
+            release (decision 0027); empty turns the check off.
     """
 
     model_config = SettingsConfigDict(env_prefix="COLOQO_")
@@ -70,3 +72,4 @@ class Settings(BaseSettings):
     idle_close_days: int = 30
     idle_warn_days: int = 3
     github_avatar_url: str = "https://avatars.githubusercontent.com/u/{id}?s=256"
+    plugin_index_url: str = "https://pypi.org/pypi/coloqo/json"

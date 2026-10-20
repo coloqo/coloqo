@@ -36,12 +36,14 @@ def test_github_login_twice_finds_the_same_user(app: FastAPI) -> None:
         app: The application.
     """
     ids = []
-    for _ in range(2):
+    for index in range(2):
         with TestClient(app, base_url=ORIGIN) as client:
             start = client.get("/api/auth/github/start", follow_redirects=False)
             state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
             client.get(f"/api/auth/github/callback?code=id-7&state={state}")
-            ids.append(client.get("/api/me").json()["id"])
+            if index == 0:
+                client.put("/api/me/pseudonym", json={"pseudonym": "seven"})
+            ids.append(client.get("/api/me").json()["pseudonym"])
 
     assert ids[0] == ids[1]
 
@@ -83,10 +85,10 @@ def test_cookie_request_from_another_origin_is_refused(
     """
     alice = human("alice")
 
-    forged = alice.post("/api/teams", json={"name": "Acme"}, headers={"Origin": "https://evil"})
+    forged = alice.post("/api/team", json={"name": "Acme"}, headers={"Origin": "https://evil"})
 
     assert forged.status_code == 403
-    assert alice.post("/api/teams", json={"name": "Acme"}).status_code == 201
+    assert alice.post("/api/team", json={"name": "Acme"}).status_code == 201
 
 
 def test_device_login_gives_a_token_once(
@@ -104,10 +106,10 @@ def test_device_login_gives_a_token_once(
     me = installed.client.get("/api/me").json()
 
     assert me == {
-        "id": me["id"],
+        "id": None,
         "pseudonym": "alice",
         "via": "plugin",
-        "assistant": "alice · billing-api",
+        "assistant": installed.assistant,
         "providers": ["github"],
         "avatar": None,
         "github": False,
@@ -146,9 +148,9 @@ def test_revoked_installation_is_refused(
     """
     alice = human("alice")
     installed = plugin(alice, "api")
-    (installation,) = alice.get("/api/installations").json()
+    (installation,) = alice.get("/api/installation").json()
 
-    assert alice.delete(f"/api/installations/{installation['id']}").status_code == 204
+    assert alice.delete(f"/api/installation/{installation['key']}").status_code == 204
     assert installed.client.get("/api/me").status_code == 401
 
 
@@ -164,11 +166,11 @@ def test_plugin_cannot_take_human_actions(
     alice = human("alice")
     installed = plugin(alice, "api")
 
-    assert installed.client.post("/api/teams", json={"name": "Acme"}).status_code == 403
-    assert installed.client.get("/api/installations").status_code == 403
+    assert installed.client.post("/api/team", json={"name": "Acme"}).status_code == 403
+    assert installed.client.get("/api/installation").status_code == 403
 
 
-def test_foreign_assistant_id_is_refused(
+def test_foreign_assistant_key_is_refused(
     human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """An installation cannot act as another installation's Assistant.
@@ -180,8 +182,6 @@ def test_foreign_assistant_id_is_refused(
     alice_plugin = plugin(human("alice"), "api")
     bob_plugin = plugin(human("bob"), "web")
 
-    response = bob_plugin.client.get(
-        "/api/me", headers={"X-Coloqo-Assistant": str(alice_plugin.assistant_id)}
-    )
+    response = bob_plugin.client.get("/api/me", headers={"X-Coloqo-Assistant": alice_plugin.key})
 
     assert response.status_code == 403

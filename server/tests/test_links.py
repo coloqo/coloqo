@@ -17,38 +17,30 @@ from tests.conftest import Plugin
 
 @dataclass
 class Two:
-    """Alice and Bob in two Teams, Acme and Globex, with an Area each.
+    """Alice and Bob in two Teams, Acme and Globex, with an Area ``dev`` each.
 
     Attributes:
         alice: Alice's web client.
         bob: Bob's web client.
-        acme: The first Team.
-        globex: The second Team.
-        acme_area: An Area of Acme.
-        globex_area: An Area of Globex.
     """
 
     alice: TestClient
     bob: TestClient
-    acme: int
-    globex: int
-    acme_area: int
-    globex_area: int
 
 
-def _team(owner: TestClient, member: TestClient, name: str) -> tuple[int, int]:
-    """Create a Team with an Area and bring a member in.
+def _team(owner: TestClient, member: TestClient, name: str) -> str:
+    """Create a Team with an Area ``dev`` and bring a member in; return its slug.
 
     Args:
         owner: Its owner.
         member: Who joins.
         name: Its name.
     """
-    team = owner.post("/api/teams", json={"name": name}).json()["id"]
-    token = owner.post(f"/api/teams/{team}/invites").json()["url"].rsplit("/", 1)[1]
-    assert member.post(f"/api/invites/{token}/accept").status_code == 200
-    area = owner.post(f"/api/teams/{team}/areas", json={"name": "Dev"}).json()["id"]
-    return team, area
+    team = owner.post("/api/team", json={"name": name}).json()["slug"]
+    token = owner.post(f"/api/team/{team}/invite").json()["url"].rsplit("/", 1)[1]
+    assert member.post(f"/api/invite/{token}/accept").status_code == 200
+    assert owner.post(f"/api/team/{team}/area", json={"name": "Dev"}).json()["slug"] == "dev"
+    return team
 
 
 @pytest.fixture
@@ -59,21 +51,24 @@ def two(human: Callable[[str], TestClient]) -> Two:
         human: Factory of logged-in web clients.
     """
     alice, bob = human("alice"), human("bob")
-    acme, acme_area = _team(alice, bob, "Acme")
-    globex, globex_area = _team(alice, bob, "Globex")
-    return Two(alice, bob, acme, globex, acme_area, globex_area)
+    assert _team(alice, bob, "Acme") == "acme"
+    assert _team(alice, bob, "Globex") == "globex"
+    return Two(alice, bob)
 
 
-def _topic(client: TestClient, area: int) -> int:
-    """Open a Topic and return its id.
+def _topic(client: TestClient, team: str, to: str | None = None) -> int:
+    """Open a Topic in the Team's Area ``dev`` and return its number.
 
     Args:
         client: Who opens it.
-        area: The Area.
+        team: The Team's slug.
+        to: Addressee of the first Message.
     """
-    response = client.post(f"/api/areas/{area}/topics", json={"title": "Q", "body": "Hi"})
+    response = client.post(
+        f"/api/team/{team}/topic", json={"area": "dev", "title": "Q", "body": "Hi", "to": to}
+    )
     assert response.status_code == 201, response.text
-    return response.json()["id"]
+    return response.json()["number"]
 
 
 def test_unlinked_assistant_reads_but_does_not_write(
@@ -85,12 +80,12 @@ def test_unlinked_assistant_reads_but_does_not_write(
         two: The Teams.
         plugin: Factory of plugin installations.
     """
-    tid = _topic(two.bob, two.acme_area)
+    number = _topic(two.bob, "acme")
     alice = plugin(two.alice, "notes").client
 
-    read = alice.get(f"/api/topics/{tid}")
-    post = alice.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "x"})
-    opened = alice.post(f"/api/areas/{two.acme_area}/topics", json={"title": "Q", "body": "x"})
+    read = alice.get(f"/api/team/acme/topic/{number}")
+    post = alice.post(f"/api/team/acme/topic/{number}/message", json={"number": 2, "body": "x"})
+    opened = alice.post("/api/team/acme/topic", json={"area": "dev", "title": "Q", "body": "x"})
 
     assert read.status_code == 200
     assert post.status_code == 403
@@ -106,18 +101,31 @@ def test_linked_assistant_writes_only_in_its_team(two: Two, plugin: Callable[...
         two: The Teams.
         plugin: Factory of plugin installations.
     """
-    acme_topic = _topic(two.bob, two.acme_area)
-    globex_topic = _topic(two.bob, two.globex_area)
-    alice = plugin(two.alice, "acme-api", two.acme).client
+    acme_topic = _topic(two.bob, "acme")
+    globex_topic = _topic(two.bob, "globex")
+    alice = plugin(two.alice, "acme-api", "acme").client
+    message = {"number": 2, "body": "x"}
 
-    here = alice.post(f"/api/topics/{acme_topic}/messages", json={"number": 2, "body": "x"})
-    there = alice.post(f"/api/topics/{globex_topic}/messages", json={"number": 2, "body": "x"})
-    looked = alice.get(f"/api/topics/{globex_topic}")
+    here = alice.post(f"/api/team/acme/topic/{acme_topic}/message", json=message)
+    there = alice.post(f"/api/team/globex/topic/{globex_topic}/message", json=message)
+    looked = alice.get(f"/api/team/globex/topic/{globex_topic}")
 
     assert here.status_code == 201
     assert there.status_code == 403
     assert there.json()["detail"]["code"] == "other_team"
     assert looked.status_code == 200
+
+
+def test_topics_are_numbered_per_team(two: Two) -> None:
+    """Each Team numbers its Topics from 1, whatever other Teams open (decision 0025).
+
+    Args:
+        two: The Teams.
+    """
+    numbers = [_topic(two.bob, team) for team in ("acme", "globex", "acme", "globex", "acme")]
+
+    assert numbers == [1, 1, 2, 2, 3]
+    assert two.alice.get("/api/team/globex/topic/2").json()["ref"] == "T-2"
 
 
 def test_reading_another_team_leaves_its_inbox(two: Two, plugin: Callable[..., Plugin]) -> None:
@@ -127,20 +135,20 @@ def test_reading_another_team_leaves_its_inbox(two: Two, plugin: Callable[..., P
         two: The Teams.
         plugin: Factory of plugin installations.
     """
-    tid = two.bob.post(
-        f"/api/areas/{two.globex_area}/topics", json={"title": "Q", "body": "Hi", "to": "alice"}
-    ).json()["id"]
-    acme_assistant = plugin(two.alice, "acme-api", two.acme).client
-    globex_assistant = plugin(two.alice, "globex-api", two.globex).client
+    number = _topic(two.bob, "globex", to="alice")
+    acme_assistant = plugin(two.alice, "acme-api", "acme").client
+    globex_assistant = plugin(two.alice, "globex-api", "globex").client
 
-    acme_assistant.post(f"/api/topics/{tid}/read", json={"number": 1})
+    acme_assistant.post(f"/api/team/globex/topic/{number}/read", json={"number": 1})
 
-    assert [t["id"] for t in two.alice.get("/api/inbox").json()] == [tid]
-    assert [t["id"] for t in globex_assistant.get("/api/inbox").json()] == [tid]
+    assert [(t["team"], t["number"]) for t in two.alice.get("/api/inbox").json()] == [
+        ("globex", number)
+    ]
+    assert [t["number"] for t in globex_assistant.get("/api/inbox").json()] == [number]
     assert acme_assistant.get("/api/inbox").json() == []
 
 
-def test_file_links_only_an_unlinked_assistant_of_a_member(
+def test_file_links_only_an_unlinked_project_of_a_member(
     two: Two, human: Callable[[str], TestClient], plugin: Callable[..., Plugin]
 ) -> None:
     """``.coloqo.json`` links when nothing is linked yet and the person is in the Team.
@@ -151,46 +159,69 @@ def test_file_links_only_an_unlinked_assistant_of_a_member(
         plugin: Factory of plugin installations.
     """
     carol = human("carol")
-    foreign = plugin(carol, "api", two.acme)
-    linked = plugin(two.alice, "api", two.acme)
+    foreign = plugin(carol, "api", "acme")
+    linked = plugin(two.alice, "api", "acme")
 
     again = linked.client.post(
-        "/api/assistants",
+        "/api/assistant",
         json={
             "project_key": hashlib.sha256(b"api").hexdigest(),
             "project_name": "api",
-            "team_id": two.globex,
+            "team": "globex",
+            "session_id": "s2",
         },
     )
 
-    assert foreign.client.get(f"/api/assistants/{foreign.assistant_id}").json()["team_id"] is None
-    assert linked.client.get(f"/api/assistants/{linked.assistant_id}").json()["team"] == "Acme"
-    assert again.json()["team_id"] == two.acme
+    assert foreign.client.get(f"/api/assistant/{foreign.key}").json()["team"] is None
+    assert linked.client.get(f"/api/assistant/{linked.key}").json()["team_name"] == "Acme"
+    assert again.json()["team"] == "acme"
 
 
 def test_person_links_in_the_web_not_the_plugin(two: Two, plugin: Callable[..., Plugin]) -> None:
-    """Only the person, from the web, links or unlinks an Assistant, and only to their Team.
+    """Only the person, from the web, links or unlinks a project, and only to their Team.
 
     Args:
         two: The Teams.
         plugin: Factory of plugin installations.
     """
     assistant = plugin(two.alice, "notes")
-    path = f"/api/assistants/{assistant.assistant_id}/team"
+    path = f"/api/project/{assistant.project_key}/team"
 
-    by_plugin = assistant.client.put(path, json={"team_id": two.acme})
-    by_bob = two.bob.put(path, json={"team_id": two.acme})
-    after_bob = two.alice.get(f"/api/assistants/{assistant.assistant_id}").json()["team_id"]
-    linked = two.alice.put(path, json={"team_id": two.globex})
-    listed = two.alice.get("/api/assistants").json()
-    unlinked = two.alice.put(path, json={"team_id": None})
+    by_plugin = assistant.client.put(path, json={"team": "acme"})
+    by_bob = two.bob.put(path, json={"team": "acme"})
+    after_bob = assistant.client.get(f"/api/assistant/{assistant.key}").json()["team"]
+    linked = two.alice.put(path, json={"team": "globex"})
+    listed = two.alice.get("/api/project").json()
+    unlinked = two.alice.put(path, json={"team": None})
 
     assert by_plugin.status_code == 403
     assert by_bob.status_code == 404
     assert after_bob is None
-    assert linked.json()["team"] == "Globex"
-    assert [(a["name"], a["team"]) for a in listed] == [("alice · notes", "Globex")]
-    assert unlinked.json()["team_id"] is None
+    assert linked.json()["team_name"] == "Globex"
+    assert [(p["name"], p["team"], [a["name"] for a in p["assistants"]]) for p in listed] == [
+        ("notes", "globex", [assistant.assistant])
+    ]
+    assert unlinked.json()["team"] is None
+
+
+def test_a_link_holds_for_every_session_of_the_project(
+    two: Two, plugin: Callable[..., Plugin], sibling: Callable[..., Plugin]
+) -> None:
+    """A link chosen in the browser belongs to the project, not to one session (0024).
+
+    Args:
+        two: The Teams.
+        plugin: Factory of plugin installations.
+        sibling: Opens another session of a project on the same computer.
+    """
+    first = plugin(two.alice, "notes", session="one")
+    two.alice.put(f"/api/project/{first.project_key}/team", json={"team": "acme"})
+
+    second = sibling(first, "notes", "two")
+
+    assert second.project_key == first.project_key
+    assert second.key != first.key
+    assert second.client.get(f"/api/assistant/{second.key}").json()["team"] == "acme"
 
 
 def test_installation_without_assistant_reads_nothing(
@@ -202,10 +233,10 @@ def test_installation_without_assistant_reads_nothing(
         two: The Teams.
         plugin: Factory of plugin installations.
     """
-    client = plugin(two.alice, "notes", two.acme).client
+    client = plugin(two.alice, "notes", "acme").client
     del client.headers["X-Coloqo-Assistant"]
 
-    assert client.get("/api/teams").status_code == 403
+    assert client.get("/api/team").status_code == 403
     assert client.get("/api/inbox").status_code == 403
 
 
@@ -218,17 +249,17 @@ def test_team_lists_and_addresses_only_its_assistants(
         two: The Teams.
         plugin: Factory of plugin installations.
     """
-    plugin(two.bob, "acme-web", two.acme)
-    plugin(two.bob, "globex-web", two.globex)
-    team = two.alice.get(f"/api/teams/{two.acme}").json()
+    acme_web = plugin(two.bob, "acme-web", "acme")
+    globex_web = plugin(two.bob, "globex-web", "globex")
+    team = two.alice.get("/api/team/acme").json()
     bob = next(m for m in team["members"] if m["pseudonym"] == "bob")
 
     addressed = two.alice.post(
-        f"/api/areas/{two.acme_area}/topics",
-        json={"title": "Q", "body": "Hi", "to": "bob · globex-web"},
+        "/api/team/acme/topic",
+        json={"area": "dev", "title": "Q", "body": "Hi", "to": globex_web.assistant},
     )
 
-    assert [a["name"] for a in bob["assistants"]] == ["bob · acme-web"]
+    assert [a["name"] for a in bob["assistants"]] == [acme_web.assistant]
     assert addressed.status_code == 422
 
 
@@ -242,10 +273,12 @@ def test_stream_brings_only_the_linked_team(
         plugin: Factory of plugin installations.
         live_url: Address of the same application served by uvicorn.
     """
-    client = plugin(two.alice, "acme-api", two.acme).client
-    headers = {k: client.headers[k] for k in ("Authorization", "X-Coloqo-Assistant")}
-    globex = _topic(two.bob, two.globex_area)
-    acme = _topic(two.bob, two.acme_area)
+    client = plugin(two.alice, "acme-api", "acme").client
+    headers = {
+        k: client.headers[k] for k in ("Authorization", "X-Coloqo-Assistant", "X-Coloqo-Plugin")
+    }
+    _topic(two.bob, "globex")
+    _topic(two.bob, "acme")
 
     frames = []
     with (
@@ -254,42 +287,41 @@ def test_stream_brings_only_the_linked_team(
     ):
         for line in stream.iter_lines():
             frames.append(line)
-            if line.startswith("data:") and f'"topic_id": {acme}' in line:
+            if line.startswith("data:") and '"team": "acme"' in line:
                 break
 
     data = "\n".join(f for f in frames if f.startswith("data:"))
-    assert f'"topic_id": {acme}' in data
-    assert f'"topic_id": {globex}' not in data
+    assert '"team": "acme"' in data
+    assert '"team": "globex"' not in data
+    assert "_team_id" not in data
 
 
-def test_migration_links_assistants_that_worked_in_one_team(
+def test_migration_links_projects_that_worked_in_one_team(
     two: Two, plugin: Callable[..., Plugin], settings: Settings
 ) -> None:
-    """Existing Assistants are linked to the one Team they wrote in; the rest stay unlinked.
+    """Migrating up again links the project that wrote in one Team; the rest stay unlinked.
 
     Args:
         two: The Teams.
         plugin: Factory of plugin installations.
         settings: Instance settings.
     """
-    worker = plugin(two.alice, "acme-api", two.acme)
-    _topic(worker.client, two.acme_area)
-    both = plugin(two.alice, "both", two.acme)
-    _topic(both.client, two.acme_area)
-    idle = plugin(two.alice, "idle", two.acme)
-    two.alice.put(f"/api/assistants/{both.assistant_id}/team", json={"team_id": two.globex})
-    _topic(both.client, two.globex_area)
+    worker = plugin(two.alice, "acme-api", "acme")
+    _topic(worker.client, "acme")
+    both = plugin(two.alice, "both", "acme")
+    _topic(both.client, "acme")
+    plugin(two.alice, "idle", "acme")
+    two.alice.put(f"/api/project/{both.project_key}/team", json={"team": "globex"})
+    _topic(both.client, "globex")
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS_DIR))
     config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
     command.downgrade(config, "0005")
 
     migrate(settings.database_url, settings.files_dir)
-    teams = {a["name"]: a["team_id"] for a in two.alice.get("/api/assistants").json()}
+    teams = {p["name"]: p["team"] for p in two.alice.get("/api/project").json()}
 
-    assert teams[worker.assistant] == two.acme
-    assert teams[both.assistant] is None
-    assert teams[idle.assistant] is None
+    assert teams == {"acme-api": "acme", "both": None, "idle": None}
 
 
 def test_briefing_names_the_team_rules_and_held_topics(
@@ -301,21 +333,22 @@ def test_briefing_names_the_team_rules_and_held_topics(
         two: The Teams.
         plugin: Factory of plugin installations.
     """
-    linked = plugin(two.alice, "acme-api", two.acme).client
-    tid = linked.post(
-        f"/api/areas/{two.acme_area}/topics",
-        json={"title": "Fix export", "body": "Took ACME-42", "issue": "ACME-42"},
-    ).json()["id"]
+    linked = plugin(two.alice, "acme-api", "acme")
+    number = linked.client.post(
+        "/api/team/acme/topic",
+        json={"area": "dev", "title": "Fix export", "body": "Took ACME-42", "issue": "ACME-42"},
+    ).json()["number"]
     unlinked = plugin(two.alice, "notes").client
 
-    text = linked.get("/api/briefing").json()["text"]
+    text = linked.client.get("/api/briefing").json()["text"]
     quiet = unlinked.get("/api/briefing").json()
 
-    assert "«alice · acme-api» of alice in the Team «Acme»" in text
+    assert f"«{linked.assistant}» of alice in the Team «Acme» (acme)" in text
     assert "Linking this project to «Acme» is your user's standing consent" in text
     assert "note_stage" in text
-    assert f"T-{tid} «Fix export» [ACME-42]" in text
-    assert (quiet["team_id"], quiet["text"].startswith("Coloqo: this project is not linked")) == (
+    assert f"T-{number} «Fix export» [ACME-42]" in text
+    assert "https://testserver/team/acme/topic/12" in text
+    assert (quiet["team"], quiet["text"].startswith("Coloqo: this project is not linked")) == (
         None,
         True,
     )

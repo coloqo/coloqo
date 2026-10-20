@@ -22,8 +22,13 @@ def _open(setup: Setup, to: str | None = None) -> dict:
         to: Addressee of the first Message.
     """
     response = setup.alice_api.client.post(
-        f"/api/areas/{setup.area_id}/topics",
-        json={"title": "Rename field amount", "body": "Can we rename it?", "to": to},
+        f"/api/team/{setup.team}/topic",
+        json={
+            "area": setup.area,
+            "title": "Rename field amount",
+            "body": "Can we rename it?",
+            "to": to,
+        },
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -36,14 +41,14 @@ def test_invite_works_once(setup: Setup, human: Callable[[str], TestClient]) -> 
         setup: The Team.
         human: Factory of logged-in web clients.
     """
-    url = setup.alice.post(f"/api/teams/{setup.team_id}/invites").json()["url"]
+    url = setup.alice.post(f"/api/team/{setup.team}/invite").json()["url"]
     token = url.rsplit("/", 1)[1]
     carol, dave = human("carol"), human("dave")
 
-    assert carol.post(f"/api/invites/{token}/accept").status_code == 200
-    assert dave.get(f"/api/invites/{token}").json()["valid"] is False
-    assert dave.post(f"/api/invites/{token}/accept").status_code == 410
-    assert dave.get(f"/api/teams/{setup.team_id}").status_code == 404
+    assert carol.post(f"/api/invite/{token}/accept").status_code == 200
+    assert dave.get(f"/api/invite/{token}").json()["valid"] is False
+    assert dave.post(f"/api/invite/{token}/accept").status_code == 410
+    assert dave.get(f"/api/team/{setup.team}").status_code == 404
 
 
 def test_only_owner_configures(setup: Setup) -> None:
@@ -52,10 +57,8 @@ def test_only_owner_configures(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    assert (
-        setup.bob.post(f"/api/teams/{setup.team_id}/areas", json={"name": "X"}).status_code == 403
-    )
-    assert setup.bob.post(f"/api/teams/{setup.team_id}/invites").status_code == 403
+    assert setup.bob.post(f"/api/team/{setup.team}/area", json={"name": "X"}).status_code == 403
+    assert setup.bob.post(f"/api/team/{setup.team}/invite").status_code == 403
 
 
 def test_team_shows_members_and_assistants(setup: Setup) -> None:
@@ -64,13 +67,13 @@ def test_team_shows_members_and_assistants(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    team = setup.bob_web.client.get(f"/api/teams/{setup.team_id}").json()
+    team = setup.bob_web.client.get(f"/api/team/{setup.team}").json()
 
     assert [(m["pseudonym"], m["role"]) for m in team["members"]] == [
         ("alice", "owner"),
         ("bob", "member"),
     ]
-    assert [a["name"] for a in team["members"][0]["assistants"]] == ["alice · billing-api"]
+    assert [a["name"] for a in team["members"][0]["assistants"]] == [setup.alice_api.assistant]
     assert team["areas"][0]["name"] == "Contracts"
 
 
@@ -82,11 +85,11 @@ def test_topic_opened_by_assistant_is_held_by_it(setup: Setup) -> None:
     """
     topic = _open(setup)
 
-    assert topic["ref"] == f"T-{topic['id']}"
-    assert topic["holder"] == "alice · billing-api"
+    assert topic["ref"] == f"T-{topic['number']}"
+    assert topic["holder"] == setup.alice_api.assistant
     assert topic["last_number"] == 1
     assert topic["turns_since_human"] == 0
-    assert topic["messages"][0]["assistant"] == "alice · billing-api"
+    assert topic["messages"][0]["assistant"] == setup.alice_api.assistant
 
 
 def test_addressed_topic_lands_in_inbox_until_read(setup: Setup) -> None:
@@ -99,8 +102,8 @@ def test_addressed_topic_lands_in_inbox_until_read(setup: Setup) -> None:
     bob = setup.bob_web.client
 
     (entry,) = bob.get("/api/inbox").json()
-    assert (entry["id"], entry["unread"], entry["addressed"]) == (topic["id"], 1, True)
-    bob.post(f"/api/topics/{topic['id']}/read", json={"number": 1})
+    assert (entry["number"], entry["unread"], entry["addressed"]) == (topic["number"], 1, True)
+    bob.post(f"/api/team/{setup.team}/topic/{topic['number']}/read", json={"number": 1})
     assert bob.get("/api/inbox").json() == []
 
 
@@ -113,12 +116,14 @@ def test_reply_with_taken_number_returns_unread(setup: Setup) -> None:
     topic = _open(setup)
     bob = setup.bob_web.client
     first = bob.post(
-        f"/api/topics/{topic['id']}/messages", json={"number": 2, "body": "Yes", "to": "alice"}
+        f"/api/team/{setup.team}/topic/{topic['number']}/message",
+        json={"number": 2, "body": "Yes", "to": "alice"},
     )
     assert first.status_code == 201, first.text
 
     late = setup.alice_api.client.post(
-        f"/api/topics/{topic['id']}/messages", json={"number": 2, "body": "Also..."}
+        f"/api/team/{setup.team}/topic/{topic['number']}/message",
+        json={"number": 2, "body": "Also..."},
     )
 
     assert late.status_code == 409
@@ -134,19 +139,22 @@ def test_reply_points_to_an_earlier_message(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     bob = setup.bob_web.client
 
     reply = bob.post(
-        f"/api/topics/{tid}/messages", json={"number": 2, "body": "Yes", "reply_to": 1}
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 2, "body": "Yes", "reply_to": 1},
     )
     to_itself = bob.post(
-        f"/api/topics/{tid}/messages", json={"number": 3, "body": "?", "reply_to": 3}
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 3, "body": "?", "reply_to": 3},
     )
     to_none = bob.post(
-        f"/api/topics/{tid}/messages", json={"number": 3, "body": "?", "reply_to": 0}
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 3, "body": "?", "reply_to": 0},
     )
-    topic = setup.alice.get(f"/api/topics/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
 
     assert reply.status_code == 201, reply.text
     assert reply.json()["reply_to"] == 1
@@ -161,22 +169,26 @@ def test_messages_of_the_holder_are_marked(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     alice, bob = setup.alice_api.client, setup.bob_web.client
-    bob.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "Before"})
-    bob.post(f"/api/topics/{tid}/hold")
-    bob.post(f"/api/topics/{tid}/messages", json={"number": 3, "body": "Holding"})
-    alice.post(f"/api/topics/{tid}/messages", json={"number": 4, "body": "Not any more"})
-    setup.alice.post(f"/api/topics/{tid}/messages", json={"number": 5, "body": "Human"})
+    bob.post(f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "Before"})
+    bob.post(f"/api/team/{setup.team}/topic/{tid}/hold")
+    bob.post(f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 3, "body": "Holding"})
+    alice.post(
+        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 4, "body": "Not any more"}
+    )
+    setup.alice.post(
+        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 5, "body": "Human"}
+    )
 
-    messages = setup.alice.get(f"/api/topics/{tid}").json()["messages"]
+    messages = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()["messages"]
 
     assert [m["by_holder"] for m in messages] == [True, False, True, False, False]
-    assert [m["assistant_id"] for m in messages] == [
-        setup.alice_api.assistant_id,
-        setup.bob_web.assistant_id,
-        setup.bob_web.assistant_id,
-        setup.alice_api.assistant_id,
+    assert [m["assistant_key"] for m in messages] == [
+        setup.alice_api.key,
+        setup.bob_web.key,
+        setup.bob_web.key,
+        setup.alice_api.key,
         None,
     ]
 
@@ -188,15 +200,17 @@ def test_migration_marks_messages_of_the_current_holder(setup: Setup, settings: 
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["id"]
-    setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "Hi"})
+    tid = _open(setup)["number"]
+    setup.bob_web.client.post(
+        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "Hi"}
+    )
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS_DIR))
     config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
     command.downgrade(config, "0004")
 
     migrate(settings.database_url, settings.files_dir)
-    messages = setup.alice.get(f"/api/topics/{tid}").json()["messages"]
+    messages = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()["messages"]
 
     assert [m["by_holder"] for m in messages] == [True, False]
 
@@ -210,11 +224,12 @@ def test_unknown_addressee_lists_names(setup: Setup) -> None:
     topic = _open(setup)
 
     response = setup.bob_web.client.post(
-        f"/api/topics/{topic['id']}/messages", json={"number": 2, "body": "Hi", "to": "carol"}
+        f"/api/team/{setup.team}/topic/{topic['number']}/message",
+        json={"number": 2, "body": "Hi", "to": "carol"},
     )
 
     assert response.status_code == 422
-    assert "alice · billing-api" in response.json()["detail"]
+    assert setup.alice_api.assistant in response.json()["detail"]
 
 
 def test_message_to_an_assistant_by_name(setup: Setup) -> None:
@@ -226,13 +241,13 @@ def test_message_to_an_assistant_by_name(setup: Setup) -> None:
     topic = _open(setup)
 
     response = setup.bob_web.client.post(
-        f"/api/topics/{topic['id']}/messages",
-        json={"number": 2, "body": "Hi", "to": "alice · billing-api"},
+        f"/api/team/{setup.team}/topic/{topic['number']}/message",
+        json={"number": 2, "body": "Hi", "to": setup.alice_api.assistant},
     )
 
     assert (response.json()["to"], response.json()["to_assistant"]) == (
         "alice",
-        "alice · billing-api",
+        setup.alice_api.assistant,
     )
 
 
@@ -242,33 +257,44 @@ def test_turn_limit_waits_for_a_human(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    setup.alice.patch(f"/api/teams/{setup.team_id}", json={"turn_limit": 2})
+    setup.alice.patch(f"/api/team/{setup.team}", json={"turn_limit": 2})
     topic = _open(setup)
-    tid = topic["id"]
+    tid = topic["number"]
     alice, bob = setup.alice_api.client, setup.bob_web.client
 
     assert (
-        bob.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "a"}).status_code == 201
-    )
-    assert (
-        alice.post(f"/api/topics/{tid}/messages", json={"number": 3, "body": "b"}).status_code
-        == 201
-    )
-    blocked = bob.post(f"/api/topics/{tid}/messages", json={"number": 4, "body": "c"})
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"]["code"] == "turn_limit"
-    progress = alice.post(
-        f"/api/topics/{tid}/messages", json={"number": 4, "body": "working", "kind": "progress"}
-    )
-    assert progress.status_code == 201
-    assert (
-        setup.bob.post(
-            f"/api/topics/{tid}/messages", json={"number": 5, "body": "go on"}
+        bob.post(
+            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "a"}
         ).status_code
         == 201
     )
     assert (
-        bob.post(f"/api/topics/{tid}/messages", json={"number": 6, "body": "c"}).status_code == 201
+        alice.post(
+            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 3, "body": "b"}
+        ).status_code
+        == 201
+    )
+    blocked = bob.post(
+        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 4, "body": "c"}
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "turn_limit"
+    progress = alice.post(
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 4, "body": "working", "kind": "progress"},
+    )
+    assert progress.status_code == 201
+    assert (
+        setup.bob.post(
+            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 5, "body": "go on"}
+        ).status_code
+        == 201
+    )
+    assert (
+        bob.post(
+            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 6, "body": "c"}
+        ).status_code
+        == 201
     )
 
 
@@ -278,18 +304,19 @@ def test_relayed_human_words_reset_the_turns(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    setup.alice.patch(f"/api/teams/{setup.team_id}", json={"turn_limit": 1})
-    tid = _open(setup)["id"]
+    setup.alice.patch(f"/api/team/{setup.team}", json={"turn_limit": 1})
+    tid = _open(setup)["number"]
     bob = setup.bob_web.client
-    bob.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "a"})
+    bob.post(f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "a"})
 
     relayed = bob.post(
-        f"/api/topics/{tid}/messages", json={"number": 3, "body": "Bob says: go", "as_human": True}
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 3, "body": "Bob says: go", "as_human": True},
     )
 
     assert relayed.status_code == 201
-    assert relayed.json()["relayed"] is True
-    assert bob.get(f"/api/topics/{tid}").json()["turns_since_human"] == 0
+    assert relayed.json()["human_part"] == "words"
+    assert bob.get(f"/api/team/{setup.team}/topic/{tid}").json()["turns_since_human"] == 0
 
 
 def test_holder_closes_and_a_new_turn_reopens(setup: Setup) -> None:
@@ -298,16 +325,24 @@ def test_holder_closes_and_a_new_turn_reopens(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     closing = {"status": "closed", "outcome": "Renamed in ACME-42"}
 
-    by_other = setup.bob_web.client.patch(f"/api/topics/{tid}", json=closing)
-    no_outcome = setup.alice_api.client.patch(f"/api/topics/{tid}", json={"status": "closed"})
-    closed = setup.alice_api.client.patch(f"/api/topics/{tid}", json=closing).json()
-    reopen_by_patch = setup.alice_api.client.patch(f"/api/topics/{tid}", json={"status": "open"})
-    line = setup.alice.get(f"/api/topics/{tid}").json()["messages"][-1]
-    setup.bob_web.client.post(f"/api/topics/{tid}/messages", json={"number": 3, "body": "One more"})
-    reopened = setup.alice.get(f"/api/topics/{tid}").json()
+    by_other = setup.bob_web.client.patch(f"/api/team/{setup.team}/topic/{tid}", json=closing)
+    no_outcome = setup.alice_api.client.patch(
+        f"/api/team/{setup.team}/topic/{tid}", json={"status": "closed"}
+    )
+    closed = setup.alice_api.client.patch(
+        f"/api/team/{setup.team}/topic/{tid}", json=closing
+    ).json()
+    reopen_by_patch = setup.alice_api.client.patch(
+        f"/api/team/{setup.team}/topic/{tid}", json={"status": "open"}
+    )
+    line = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()["messages"][-1]
+    setup.bob_web.client.post(
+        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 3, "body": "One more"}
+    )
+    reopened = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
 
     assert by_other.json()["detail"]["code"] == "not_holder"
     assert no_outcome.status_code == 422
@@ -317,7 +352,7 @@ def test_holder_closes_and_a_new_turn_reopens(setup: Setup) -> None:
     assert (line["kind"], line["body"], line["assistant"]) == (
         "closed",
         "Renamed in ACME-42",
-        "alice · billing-api",
+        setup.alice_api.assistant,
     )
     assert (reopened["status"], reopened["outcome"], reopened["closed_at"]) == (
         "open",
@@ -332,10 +367,14 @@ def test_human_closes_and_reopens(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
 
-    closed = setup.bob.patch(f"/api/topics/{tid}", json={"status": "closed"}).json()
-    reopened = setup.bob.patch(f"/api/topics/{tid}", json={"status": "open"}).json()
+    closed = setup.bob.patch(
+        f"/api/team/{setup.team}/topic/{tid}", json={"status": "closed"}
+    ).json()
+    reopened = setup.bob.patch(
+        f"/api/team/{setup.team}/topic/{tid}", json={"status": "open"}
+    ).json()
 
     assert closed["status"] == "closed"
     assert (reopened["status"], reopened["closed_at"], reopened["deletes_at"]) == (
@@ -351,14 +390,19 @@ def test_stage_is_a_line_of_the_holder_without_a_number(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
 
-    stage = setup.alice_api.client.post(f"/api/topics/{tid}/stage", json={"text": "Testing"})
-    not_holder = setup.bob_web.client.post(f"/api/topics/{tid}/stage", json={"text": "Mine"})
-    as_message = setup.alice_api.client.post(
-        f"/api/topics/{tid}/messages", json={"number": 3, "body": "x", "kind": "stage"}
+    stage = setup.alice_api.client.post(
+        f"/api/team/{setup.team}/topic/{tid}/stage", json={"text": "Testing"}
     )
-    topic = setup.alice.get(f"/api/topics/{tid}").json()
+    not_holder = setup.bob_web.client.post(
+        f"/api/team/{setup.team}/topic/{tid}/stage", json={"text": "Mine"}
+    )
+    as_message = setup.alice_api.client.post(
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 3, "body": "x", "kind": "stage"},
+    )
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
 
     assert stage.status_code == 201, stage.text
     assert (stage.json()["number"], stage.json()["kind"], stage.json()["body"]) == (
@@ -377,11 +421,11 @@ def test_hold_moves_the_topic_to_another_assistant(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
 
-    held = setup.bob_web.client.post(f"/api/topics/{tid}/hold").json()
+    held = setup.bob_web.client.post(f"/api/team/{setup.team}/topic/{tid}/hold").json()
 
-    assert held["holder"] == "bob · web"
+    assert held["holder"] == setup.bob_web.assistant
 
 
 def test_outsider_sees_nothing(
@@ -394,14 +438,17 @@ def test_outsider_sees_nothing(
         human: Factory of logged-in web clients.
         plugin: Factory of plugin installations.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     eve = plugin(human("eve"), "x").client
 
-    assert eve.get(f"/api/topics/{tid}").status_code == 404
+    assert eve.get(f"/api/team/{setup.team}/topic/{tid}").status_code == 404
     assert (
-        eve.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "hi"}).status_code == 404
+        eve.post(
+            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "hi"}
+        ).status_code
+        == 404
     )
-    assert eve.get(f"/api/teams/{setup.team_id}/topics").status_code == 404
+    assert eve.get(f"/api/team/{setup.team}/topic").status_code == 404
 
 
 def test_file_upload_attach_download(setup: Setup) -> None:
@@ -410,10 +457,10 @@ def test_file_upload_attach_download(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     alice = setup.alice_api.client
     uploaded = alice.post(
-        f"/api/topics/{tid}/files",
+        f"/api/team/{setup.team}/topic/{tid}/file",
         content=b"select 1;\n",
         headers={"X-File-Name": "query%20one.sql", "Content-Type": "text/plain"},
     )
@@ -421,13 +468,13 @@ def test_file_upload_attach_download(setup: Setup) -> None:
     file = uploaded.json()
 
     message = alice.post(
-        f"/api/topics/{tid}/messages",
-        json={"number": 2, "body": "The script", "file_ids": [file["id"]]},
+        f"/api/team/{setup.team}/topic/{tid}/message",
+        json={"number": 2, "body": "The script", "files": [file["number"]]},
     ).json()
-    download = setup.bob_web.client.get(f"/api/files/{file['id']}")
+    download = setup.bob_web.client.get(f"/api/team/{setup.team}/file/{file['number']}")
 
     assert file["name"] == "query one.sql"
-    assert message["files"][0]["id"] == file["id"]
+    assert message["files"][0]["number"] == file["number"]
     assert download.content == b"select 1;\n"
     assert "attachment" in download.headers["content-disposition"]
     assert download.headers["content-type"] == "application/octet-stream"
@@ -438,18 +485,18 @@ def test_file_upload_attach_download(setup: Setup) -> None:
 PNG = b"\x89PNG\r\n\x1a\n" + bytes(24)
 
 
-def _upload(client: TestClient, topic_id: int, name: str, content: bytes, kind: str) -> dict:
-    """Upload a file into a Topic.
+def _upload(client: TestClient, topic: int, name: str, content: bytes, kind: str) -> dict:
+    """Upload a file into a Topic of Acme.
 
     Args:
         client: The uploader.
-        topic_id: The Topic.
+        topic: The Topic's number.
         name: File name.
         content: The content.
         kind: The media type the uploader declares.
     """
     response = client.post(
-        f"/api/topics/{topic_id}/files",
+        f"/api/team/acme/topic/{topic}/file",
         content=content,
         headers={"X-File-Name": name, "Content-Type": kind},
     )
@@ -463,11 +510,11 @@ def test_image_is_shown_inline(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     file = _upload(setup.alice_api.client, tid, "shot.png", PNG, "application/octet-stream")
 
-    shown = setup.bob.get(f"/api/files/{file['id']}")
-    saved = setup.bob.get(f"/api/files/{file['id']}", params={"download": 1})
+    shown = setup.bob.get(f"/api/team/{setup.team}/file/{file['number']}")
+    saved = setup.bob.get(f"/api/team/{setup.team}/file/{file['number']}", params={"download": 1})
 
     assert file["preview"]
     assert shown.headers["content-type"] == "image/png"
@@ -497,10 +544,10 @@ def test_non_raster_file_is_only_downloaded(
         content: The content.
         kind: The media type the uploader declares.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     file = _upload(setup.alice, tid, name, content, kind)
 
-    download = setup.bob.get(f"/api/files/{file['id']}")
+    download = setup.bob.get(f"/api/team/{setup.team}/file/{file['number']}")
 
     assert not file["preview"]
     assert download.headers["content-type"] == "application/octet-stream"
@@ -518,10 +565,11 @@ def test_signature_across_chunks(setup: Setup, live_url: str) -> None:
         setup: The Team.
         live_url: Address of the same application served by uvicorn.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     headers = {
         "Authorization": setup.alice_api.client.headers["Authorization"],
         "X-Coloqo-Assistant": setup.alice_api.client.headers["X-Coloqo-Assistant"],
+        "X-Coloqo-Plugin": "0.5.0",
         "X-File-Name": "shot.png",
     }
 
@@ -532,7 +580,9 @@ def test_signature_across_chunks(setup: Setup, live_url: str) -> None:
             time.sleep(0.05)
 
     with httpx.Client(base_url=live_url, timeout=10) as client:
-        response = client.post(f"/api/topics/{tid}/files", content=body(), headers=headers)
+        response = client.post(
+            f"/api/team/{setup.team}/topic/{tid}/file", content=body(), headers=headers
+        )
 
     assert response.status_code == 201, response.text
     assert response.json()["preview"]
@@ -544,14 +594,17 @@ def test_large_image_is_not_previewed(setup: Setup) -> None:
     Args:
         setup: The Team; the test settings preview images up to 512 bytes.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     file = _upload(setup.alice, tid, "big.png", PNG + bytes(600), "image/png")
 
-    topic = setup.bob.get(f"/api/topics/{tid}").json()
+    topic = setup.bob.get(f"/api/team/{setup.team}/topic/{tid}").json()
 
     assert not file["preview"]
     assert not topic["files"][0]["preview"]
-    assert setup.bob.get(f"/api/files/{file['id']}").headers["content-type"] == "image/png"
+    assert (
+        setup.bob.get(f"/api/team/{setup.team}/file/{file['number']}").headers["content-type"]
+        == "image/png"
+    )
 
 
 def test_migration_recognises_earlier_images(setup: Setup, settings: Settings) -> None:
@@ -561,7 +614,7 @@ def test_migration_recognises_earlier_images(setup: Setup, settings: Settings) -
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     image = _upload(setup.alice_api.client, tid, "shot.png", PNG, "application/octet-stream")
     text = _upload(setup.alice_api.client, tid, "notes.txt", b"notes", "text/plain")
     config = Config()
@@ -570,10 +623,11 @@ def test_migration_recognises_earlier_images(setup: Setup, settings: Settings) -
     command.downgrade(config, "0002")
 
     migrate(settings.database_url, settings.files_dir)
-    files = {f["id"]: f for f in setup.bob.get(f"/api/topics/{tid}").json()["files"]}
+    topic = setup.bob.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    files = {f["number"]: f for f in topic["files"]}
 
-    assert files[image["id"]]["preview"]
-    assert not files[text["id"]]["preview"]
+    assert files[image["number"]]["preview"]
+    assert not files[text["number"]]["preview"]
 
 
 def test_file_limits(setup: Setup) -> None:
@@ -582,21 +636,27 @@ def test_file_limits(setup: Setup) -> None:
     Args:
         setup: The Team; the test settings allow 1 KB per file and 4 KB per Team.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     alice = setup.alice_api.client
     headers = {"X-File-Name": "f.bin"}
 
     assert (
-        alice.post(f"/api/topics/{tid}/files", content=b"x" * 2000, headers=headers).status_code
+        alice.post(
+            f"/api/team/{setup.team}/topic/{tid}/file", content=b"x" * 2000, headers=headers
+        ).status_code
         == 413
     )
     for _ in range(4):
         assert (
-            alice.post(f"/api/topics/{tid}/files", content=b"x" * 1000, headers=headers).status_code
+            alice.post(
+                f"/api/team/{setup.team}/topic/{tid}/file", content=b"x" * 1000, headers=headers
+            ).status_code
             == 201
         )
     assert (
-        alice.post(f"/api/topics/{tid}/files", content=b"x" * 200, headers=headers).status_code
+        alice.post(
+            f"/api/team/{setup.team}/topic/{tid}/file", content=b"x" * 200, headers=headers
+        ).status_code
         == 413
     )
 
@@ -607,14 +667,15 @@ def test_file_of_another_topic_cannot_be_attached(setup: Setup) -> None:
     Args:
         setup: The Team.
     """
-    first, second = _open(setup)["id"], _open(setup)["id"]
+    first, second = _open(setup)["number"], _open(setup)["number"]
     alice = setup.alice_api.client
     file_id = alice.post(
-        f"/api/topics/{first}/files", content=b"a", headers={"X-File-Name": "a.txt"}
-    ).json()["id"]
+        f"/api/team/{setup.team}/topic/{first}/file", content=b"a", headers={"X-File-Name": "a.txt"}
+    ).json()["number"]
 
     response = alice.post(
-        f"/api/topics/{second}/messages", json={"number": 2, "body": "x", "file_ids": [file_id]}
+        f"/api/team/{setup.team}/topic/{second}/message",
+        json={"number": 2, "body": "x", "files": [file_id]},
     )
 
     assert response.status_code == 422
@@ -627,8 +688,11 @@ def test_events_reach_every_member(setup: Setup, live_url: str) -> None:
         setup: The Team.
         live_url: Address of the same application served by uvicorn.
     """
-    tid = _open(setup, to="bob")["id"]
-    headers = {k: setup.bob_web.client.headers[k] for k in ("Authorization", "X-Coloqo-Assistant")}
+    tid = _open(setup, to="bob")["number"]
+    headers = {
+        k: setup.bob_web.client.headers[k]
+        for k in ("Authorization", "X-Coloqo-Assistant", "X-Coloqo-Plugin")
+    }
 
     frames = []
     with (
@@ -643,8 +707,9 @@ def test_events_reach_every_member(setup: Setup, live_url: str) -> None:
     assert "event: ready" in frames
     assert "event: topic" in frames
     data = next(f for f in frames[frames.index("event: message") :] if f.startswith("data:"))
-    assert f'"topic_id": {tid}' in data
-    assert '"to_user_id"' in data
+    assert f'"topic": {tid}' in data
+    assert '"to": "bob"' in data
+    assert '"topic_id"' not in data
 
 
 def test_stream_wakes_on_new_message(setup: Setup, live_url: str) -> None:
@@ -654,8 +719,11 @@ def test_stream_wakes_on_new_message(setup: Setup, live_url: str) -> None:
         setup: The Team.
         live_url: Address of the same application served by uvicorn.
     """
-    tid = _open(setup)["id"]
-    headers = {k: setup.bob_web.client.headers[k] for k in ("Authorization", "X-Coloqo-Assistant")}
+    tid = _open(setup)["number"]
+    headers = {
+        k: setup.bob_web.client.headers[k]
+        for k in ("Authorization", "X-Coloqo-Assistant", "X-Coloqo-Plugin")
+    }
 
     with (
         httpx.Client(base_url=live_url, headers=headers, timeout=10) as client,
@@ -666,7 +734,9 @@ def test_stream_wakes_on_new_message(setup: Setup, live_url: str) -> None:
         assert next(lines) == "event: ready"
         assert next(lines).startswith("data: ")
         with httpx.Client(base_url=live_url, headers=headers) as writer:
-            posted = writer.post(f"/api/topics/{tid}/messages", json={"number": 2, "body": "hi"})
+            posted = writer.post(
+                f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "hi"}
+            )
             assert posted.status_code == 201
         frame = [next(lines) for _ in range(3)]
 

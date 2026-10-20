@@ -31,19 +31,19 @@ def _tend(settings: Settings) -> set[int]:
     return asyncio.run(run())
 
 
-def _age(settings: Settings, topic_id: int, column: str, days: float) -> None:
+def _age(settings: Settings, number: int, column: str, days: float) -> None:
     """Move a Topic's time back, as if that much time had passed.
 
     Args:
         settings: Instance settings.
-        topic_id: The Topic.
+        number: The Topic's number; the tests have one Team.
         column: ``updated_at`` or ``closed_at``.
         days: How far back.
     """
     with _connect(settings.database_url) as connection:
         connection.execute(
-            f"UPDATE topics SET {column} = now() - %s WHERE id = %s",
-            (timedelta(days=days), topic_id),
+            f"UPDATE topics SET {column} = now() - %s WHERE number = %s",
+            (timedelta(days=days), number),
         )
 
 
@@ -54,11 +54,11 @@ def test_idle_topic_is_announced_once(setup: Setup, settings: Settings) -> None:
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup, to="bob")["id"]
+    tid = _open(setup, to="bob")["number"]
     _age(settings, tid, "updated_at", 28)
 
     first, second = _tend(settings), _tend(settings)
-    topic = setup.alice.get(f"/api/topics/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
 
     assert len(first) == 2
     assert second == set()
@@ -72,11 +72,11 @@ def test_idle_topic_closes_with_a_line(setup: Setup, settings: Settings) -> None
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     _age(settings, tid, "updated_at", 31)
 
     told = _tend(settings)
-    topic = setup.alice.get(f"/api/topics/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
     line = topic["messages"][-1]
 
     assert topic["status"] == "closed"
@@ -93,27 +93,32 @@ def test_archive_keeps_the_card_and_drops_the_rest(setup: Setup, settings: Setti
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["id"]
+    tid = _open(setup)["number"]
     file = _upload(setup.alice_api.client, tid, "shot.png", PNG, "image/png")
     setup.alice_api.client.patch(
-        f"/api/topics/{tid}", json={"status": "closed", "outcome": "Done in ACME-42"}
+        f"/api/team/{setup.team}/topic/{tid}",
+        json={"status": "closed", "outcome": "Done in ACME-42"},
     )
-    path = Path(settings.files_dir) / str(setup.team_id) / str(file["id"])
+    with _connect(settings.database_url) as connection:
+        team_id, file_id = connection.execute(
+            "SELECT team_id, id FROM files WHERE number = %s", (file["number"],)
+        ).fetchone()
+    path = Path(settings.files_dir) / str(team_id) / str(file_id)
     _age(settings, tid, "closed_at", 8)
 
     _tend(settings)
-    card = setup.alice.get(f"/api/topics/{tid}").json()
-    listed = setup.alice.get(f"/api/teams/{setup.team_id}/topics").json()
+    card = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    listed = setup.alice.get(f"/api/team/{setup.team}/topic").json()
     write = setup.bob_web.client.post(
-        f"/api/topics/{tid}/messages", json={"number": 9, "body": "x"}
+        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 9, "body": "x"}
     )
 
     assert (card["title"], card["outcome"]) == ("Rename field amount", "Done in ACME-42")
     assert card["deleted_at"] is not None
     assert (card["messages"], card["files"]) == ([], [])
     assert not path.exists()
-    assert setup.alice.get(f"/api/files/{file['id']}").status_code == 404
-    assert tid not in [t["id"] for t in listed]
+    assert setup.alice.get(f"/api/team/{setup.team}/file/{file['number']}").status_code == 404
+    assert tid not in [t["number"] for t in listed]
     assert write.status_code == 410
 
 
@@ -124,14 +129,14 @@ def test_team_keeps_its_own_archive_time(setup: Setup, settings: Settings) -> No
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["id"]
-    setup.alice.patch(f"/api/topics/{tid}", json={"status": "closed"})
+    tid = _open(setup)["number"]
+    setup.alice.patch(f"/api/team/{setup.team}/topic/{tid}", json={"status": "closed"})
     with _connect(settings.database_url) as connection:
-        connection.execute("UPDATE teams SET archive_days = 30 WHERE id = %s", (setup.team_id,))
+        connection.execute("UPDATE teams SET archive_days = 30 WHERE slug = %s", (setup.team,))
     _age(settings, tid, "closed_at", 8)
 
     _tend(settings)
-    topic = setup.alice.get(f"/api/topics/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
 
     assert topic["deleted_at"] is None
     assert len(topic["messages"]) == 2

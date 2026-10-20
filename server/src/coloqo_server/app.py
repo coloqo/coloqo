@@ -11,11 +11,22 @@ from fastapi import APIRouter, FastAPI
 from sqlalchemy import delete
 
 from coloqo_server import retention
-from coloqo_server.api import auth, avatars, files, stream, teams, topics
+from coloqo_server.api import (
+    assistants,
+    auth,
+    avatars,
+    briefing,
+    files,
+    legacy,
+    stream,
+    teams,
+    topics,
+)
 from coloqo_server.db import Database, migrate
 from coloqo_server.events import EventBus
 from coloqo_server.models import DeviceLogin, Event, WebSession
 from coloqo_server.providers import GitHub, LoginProvider
+from coloqo_server.releases import watch_releases
 from coloqo_server.security import now
 from coloqo_server.settings import Settings
 from coloqo_server.web import SinglePageApp
@@ -33,7 +44,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-for module in (auth, avatars, teams, topics, files, stream):
+for module in (auth, avatars, teams, topics, files, stream, assistants, briefing, legacy):
     api.include_router(module.router)
 
 
@@ -94,9 +105,12 @@ def create_app(
             app: The application.
         """
         await asyncio.to_thread(migrate, settings.database_url, settings.files_dir)
-        task = asyncio.create_task(cleanup(database, settings, app.state.bus))
+        tasks = [asyncio.create_task(cleanup(database, settings, app.state.bus))]
+        if settings.plugin_index_url:
+            tasks.append(asyncio.create_task(watch_releases(app, settings.plugin_index_url)))
         yield
-        task.cancel()
+        for task in tasks:
+            task.cancel()
         await database.dispose()
 
     app = FastAPI(
@@ -111,6 +125,7 @@ def create_app(
     app.state.database = database
     app.state.bus = EventBus()
     app.state.providers = providers
+    app.state.latest_plugin = None
     app.include_router(api)
     if settings.web_dir is not None:
         app.mount("/", SinglePageApp(directory=str(settings.web_dir)), name="web")

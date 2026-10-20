@@ -58,6 +58,20 @@ class TopicStatus(enum.StrEnum):
     Closed = "closed"
 
 
+class HumanPart(enum.StrEnum):
+    """A human's part in a reply of an Assistant (decision 0026).
+
+    Attributes:
+        Without: The Assistant wrote on its own.
+        With: Its human asked for this Message or saw its text in the session.
+        Words: Its human's words verbatim (``as_human``).
+    """
+
+    Without = "without"
+    With = "with"
+    Words = "words"
+
+
 class MessageKind(enum.StrEnum):
     """Kind of a Message (decision 0007).
 
@@ -66,12 +80,15 @@ class MessageKind(enum.StrEnum):
         Progress: The holding Assistant's note on its own work; not a turn.
         Stage: The holder moved to the next stage of its task, one line (decision 0021).
         Closed: The Topic was closed; the body is the outcome (decision 0021).
+        Taken: An Assistant took the Topic over; the body names the former holder, if any
+            (decision 0024).
     """
 
     Message = "message"
     Progress = "progress"
     Stage = "stage"
     Closed = "closed"
+    Taken = "taken"
 
 
 class User(Base):
@@ -137,6 +154,7 @@ class Installation(Base):
 
     Attributes:
         id: Identifier.
+        key: Public identifier in addresses (decision 0025).
         user_id: Whose computer.
         name: Shown to the human, e.g. the host name.
         token_hash: SHA-256 of the installation token.
@@ -148,6 +166,7 @@ class Installation(Base):
     __tablename__ = "installations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(16), unique=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
@@ -188,32 +207,90 @@ class DeviceLogin(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class Assistant(Base):
-    """An Assistant: the User's agent working in one project on one installation.
+class Project(Base):
+    """A project folder on one computer: its sessions are its Assistants (decision 0024).
 
     Attributes:
         id: Identifier.
+        key: Public identifier, sent to the project's sessions to tell them apart from others.
+        user_id: Whose project.
+        installation_id: The computer.
+        project_key: Hash of the project path; the path itself is not sent.
+        name: The folder's name, part of its Assistants' names.
+        team_id: The Team the project is linked to (decision 0020); ``None`` while unlinked,
+            when its Assistants may read but neither write nor be told anything.
+        created_at: First registration.
+    """
+
+    __tablename__ = "projects"
+    __table_args__ = (UniqueConstraint("installation_id", "project_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(16), unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    installation_id: Mapped[int] = mapped_column(ForeignKey("installations.id", ondelete="CASCADE"))
+    project_key: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(60))
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Assistant(Base):
+    """An Assistant: one Claude Code session of the User's agent in a project (decision 0024).
+
+    Attributes:
+        id: Identifier.
+        key: Public identifier the plugin sends in ``X-Coloqo-Assistant`` (decision 0025).
         user_id: On whose behalf it acts.
         installation_id: The computer it runs on.
-        project_key: Hash of the project path; the path itself is not sent.
-        name: Shown to the Team, ``alice · billing-api``.
-        team_id: The Team its project is linked to (decision 0020); ``None`` while unlinked,
-            when it may read but neither write nor be told anything.
+        project_id: The project.
+        session_key: Hash of the Claude Code session id; empty for the one Assistant a plugin
+            without sessions (0.4.0 and older) registers per project.
+        session_id: The Claude Code session id, shown to its owner only.
+        word: Its own word, unique among the project's live Assistants.
+        name: Shown to the Team, ``alice · billing-api · vega``.
         created_at: First registration.
         last_seen_at: The last request it made.
     """
 
     __tablename__ = "assistants"
-    __table_args__ = (UniqueConstraint("installation_id", "project_key"),)
+    __table_args__ = (UniqueConstraint("project_id", "session_key"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(16), unique=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     installation_id: Mapped[int] = mapped_column(ForeignKey("installations.id", ondelete="CASCADE"))
-    project_key: Mapped[str] = mapped_column(String(64))
-    name: Mapped[str] = mapped_column(String(100))
-    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"))
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    session_key: Mapped[str] = mapped_column(String(64), default="")
+    session_id: Mapped[str | None] = mapped_column(String(100))
+    word: Mapped[str] = mapped_column(String(32))
+    name: Mapped[str] = mapped_column(String(130))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LinkRequest(Base):
+    """A one-time link that lets a person choose a project's Team in the browser (0025).
+
+    Attributes:
+        id: Identifier.
+        token_hash: SHA-256 of the token in the link.
+        project_id: The project to link.
+        installation_id: The computer that asked, shown on the page.
+        created_at: Creation time.
+        expires_at: After this the link does not work.
+        used_at: When the person chose; a used link does not work again.
+    """
+
+    __tablename__ = "link_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    installation_id: Mapped[int] = mapped_column(ForeignKey("installations.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Team(Base):
@@ -221,20 +298,40 @@ class Team(Base):
 
     Attributes:
         id: Identifier.
+        slug: Its only public identifier, ``acme`` (decision 0025).
         name: Shown name.
         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
         archive_days: Days a closed Topic stays before deletion; ``None`` takes the instance's
             setting (decision 0021).
+        last_topic: Number of its newest Topic; the next one gets ``last_topic + 1``.
+        last_file: Number of its newest file, the same way.
         created_at: Creation time.
     """
 
     __tablename__ = "teams"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
     name: Mapped[str] = mapped_column(String(100))
     turn_limit: Mapped[int] = mapped_column(Integer, default=10)
     archive_days: Mapped[int | None] = mapped_column(Integer)
+    last_topic: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_file: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FormerTeamSlug(Base):
+    """A slug a Team had before; it keeps leading to the Team (decision 0025).
+
+    Attributes:
+        slug: The former slug, taken by nobody else.
+        team_id: The Team.
+    """
+
+    __tablename__ = "former_team_slugs"
+
+    slug: Mapped[str] = mapped_column(String(40), primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
 
 
 class Member(Base):
@@ -291,27 +388,48 @@ class Area(Base):
     Attributes:
         id: Identifier.
         team_id: The Team.
+        slug: Its public identifier within the Team, ``releases`` (decision 0025).
         name: Shown name, unique in the Team.
         description: What the Area is about.
         created_at: Creation time.
     """
 
     __tablename__ = "areas"
-    __table_args__ = (UniqueConstraint("team_id", "name"),)
+    __table_args__ = (UniqueConstraint("team_id", "name"), UniqueConstraint("team_id", "slug"))
 
     id: Mapped[int] = mapped_column(primary_key=True)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
+    slug: Mapped[str] = mapped_column(String(40))
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FormerAreaSlug(Base):
+    """A slug an Area had before within its Team; it keeps leading to the Area (0025).
+
+    Attributes:
+        team_id: The Team.
+        slug: The former slug, taken by no other Area of the Team.
+        area_id: The Area.
+    """
+
+    __tablename__ = "former_area_slugs"
+
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True
+    )
+    slug: Mapped[str] = mapped_column(String(40), primary_key=True)
+    area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"))
 
 
 class Topic(Base):
     """A discussion of one question in an Area.
 
     Attributes:
-        id: Identifier, shown as ``T-<id>``.
+        id: Identifier, never shown (decision 0025).
         team_id: The Team, denormalised for access checks.
+        number: Its number in the Team, from 1 without gaps, shown as ``T-<number>``.
         area_id: The Area.
         title: One line: the question.
         issue: Tracker issue key or link, if the Topic is for one.
@@ -330,9 +448,11 @@ class Topic(Base):
     """
 
     __tablename__ = "topics"
+    __table_args__ = (UniqueConstraint("team_id", "number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    number: Mapped[int] = mapped_column(Integer)
     area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     issue: Mapped[str] = mapped_column(String(300), default="")
@@ -366,6 +486,8 @@ class Message(Base):
         to_user_id: The Member it is addressed to; ``None`` for everyone in the Topic.
         to_assistant_id: The Assistant it is addressed to, if a specific one.
         relayed: An Assistant posted its human's own words (``as_human``).
+        human_part: The human's part in an Assistant's reply (decision 0026); ``None`` for a
+            human's own Message, a stage or progress line, and replies written before the marks.
         reply_to: Number of the earlier Message of the same Topic it answers, if any.
         by_holder: Its Assistant held the Topic when it was written.
         system: Written by Coloqo itself, e.g. closing a Topic for inactivity; the author is
@@ -390,6 +512,7 @@ class Message(Base):
         ForeignKey("assistants.id", ondelete="SET NULL")
     )
     relayed: Mapped[bool] = mapped_column(default=False, server_default="false")
+    human_part: Mapped[HumanPart | None] = mapped_column(_enum(HumanPart, "human_part"))
     reply_to: Mapped[int | None] = mapped_column(Integer)
     by_holder: Mapped[bool] = mapped_column(default=False, server_default="false")
     system: Mapped[bool] = mapped_column(default=False, server_default="false")
@@ -401,7 +524,10 @@ class File(Base):
     """A non-secret file shared in a Topic (decision 0008).
 
     Attributes:
-        id: Identifier.
+        id: Identifier; also names the content on disk.
+        team_id: The Team.
+        number: Its number in the Team, ``file 3`` (decision 0025); numbers of deleted files
+            stay taken.
         topic_id: The Topic it was shared in.
         message_id: The Message it is attached to, once one refers to it.
         name: Original file name.
@@ -416,8 +542,11 @@ class File(Base):
     """
 
     __tablename__ = "files"
+    __table_args__ = (UniqueConstraint("team_id", "number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
+    number: Mapped[int] = mapped_column(Integer)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id", ondelete="CASCADE"), index=True)
     message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"))
     name: Mapped[str] = mapped_column(String(255))

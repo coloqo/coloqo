@@ -130,17 +130,22 @@ def app(settings: Settings) -> Iterator[FastAPI]:
 
 @dataclass
 class Plugin:
-    """A plugin installation acting as one Assistant.
+    """A plugin installation acting as one session's Assistant.
 
     Attributes:
-        client: Client sending the installation token and the Assistant id.
-        assistant_id: The Assistant.
+        client: Client sending the installation token, the plugin's version and the
+            Assistant's key.
+        key: The Assistant's key.
         assistant: Its shown name.
+        project_key: Its project's public key.
+        word: Its word.
     """
 
     client: TestClient
-    assistant_id: int
+    key: str
     assistant: str
+    project_key: str
+    word: str
 
 
 @pytest.fixture
@@ -179,15 +184,18 @@ def plugin(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
     """
     clients: list[TestClient] = []
 
-    def install(web: TestClient, project: str, team_id: int | None = None) -> Plugin:
+    def install(
+        web: TestClient, project: str, team: str | None = None, session: str | None = "s1"
+    ) -> Plugin:
         """Log a plugin in through the device code, confirmed by ``web``'s human.
 
         Args:
             web: The human's web client.
             project: Project name of the Assistant.
-            team_id: The Team its project is linked to, as a ``.coloqo.json`` would name it.
+            team: The Team's slug its project is linked to, as a ``.coloqo.json`` names it.
+            session: The Claude Code session the Assistant is.
         """
-        client = TestClient(app, base_url=ORIGIN)
+        client = TestClient(app, base_url=ORIGIN, headers={"X-Coloqo-Plugin": "0.5.0"})
         client.__enter__()
         clients.append(client)
         start = client.post("/api/device/start", json={"name": "laptop"}).json()
@@ -195,17 +203,73 @@ def plugin(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
         token = client.post("/api/device/token", json={"device_code": start["device_code"]})
         client.headers["Authorization"] = f"Bearer {token.json()['token']}"
         registered = client.post(
-            "/api/assistants",
+            "/api/assistant",
             json={
                 "project_key": hashlib.sha256(project.encode()).hexdigest(),
                 "project_name": project,
-                "team_id": team_id,
+                "team": team,
+                "session_id": session,
             },
         ).json()
-        client.headers["X-Coloqo-Assistant"] = str(registered["id"])
-        return Plugin(client=client, assistant_id=registered["id"], assistant=registered["name"])
+        client.headers["X-Coloqo-Assistant"] = registered["key"]
+        return Plugin(
+            client=client,
+            key=registered["key"],
+            assistant=registered["name"],
+            project_key=registered["project_key"],
+            word=registered["word"],
+        )
 
     yield install
+    for client in clients:
+        client.__exit__(None, None, None)
+
+
+@pytest.fixture
+def sibling(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
+    """Open another Claude Code session of the same project on the same computer (0024).
+
+    Args:
+        app: The application.
+    """
+    clients: list[TestClient] = []
+
+    def open_session(first: Plugin, project: str, session: str) -> Plugin:
+        """Register another session's Assistant with the first one's installation token.
+
+        Args:
+            first: An Assistant of the project, whose computer the new session runs on.
+            project: The project's folder name.
+            session: The new session's id.
+        """
+        client = TestClient(
+            app,
+            base_url=ORIGIN,
+            headers={
+                "Authorization": first.client.headers["Authorization"],
+                "X-Coloqo-Plugin": "0.5.0",
+            },
+        )
+        client.__enter__()
+        clients.append(client)
+        registered = client.post(
+            "/api/assistant",
+            json={
+                "project_key": hashlib.sha256(project.encode()).hexdigest(),
+                "project_name": project,
+                "session_id": session,
+            },
+        ).json()
+        client.headers["X-Coloqo-Assistant"] = registered["key"]
+        return Plugin(
+            client=client,
+            key=registered["key"],
+            assistant=registered["name"],
+            project_key=registered["project_key"],
+            word=registered["word"],
+        )
+
+    yield open_session
     for client in clients:
         client.__exit__(None, None, None)
 
@@ -244,16 +308,16 @@ class Setup:
         bob: Bob's web client.
         alice_api: Alice's Assistant.
         bob_web: Bob's Assistant.
-        team_id: The Team.
-        area_id: The Area.
+        team: The Team's slug, ``acme``.
+        area: The Area's slug, ``contracts``.
     """
 
     alice: TestClient
     bob: TestClient
     alice_api: Plugin
     bob_web: Plugin
-    team_id: int
-    area_id: int
+    team: str
+    area: str
 
 
 @pytest.fixture
@@ -266,18 +330,18 @@ def setup(human: Callable[[str], TestClient], plugin: Callable[..., Plugin]) -> 
     """
     alice = human("alice")
     bob = human("bob")
-    team_id = alice.post("/api/teams", json={"name": "Acme"}).json()["id"]
-    url = alice.post(f"/api/teams/{team_id}/invites").json()["url"]
+    team = alice.post("/api/team", json={"name": "Acme"}).json()["slug"]
+    url = alice.post(f"/api/team/{team}/invite").json()["url"]
     token = url.rsplit("/", 1)[1]
-    assert bob.post(f"/api/invites/{token}/accept").json()["role"] == "member"
-    area_id = alice.post(
-        f"/api/teams/{team_id}/areas", json={"name": "Contracts", "description": "API contracts"}
-    ).json()["id"]
+    assert bob.post(f"/api/invite/{token}/accept").json()["role"] == "member"
+    area = alice.post(
+        f"/api/team/{team}/area", json={"name": "Contracts", "description": "API contracts"}
+    ).json()["slug"]
     return Setup(
         alice=alice,
         bob=bob,
-        alice_api=plugin(alice, "billing-api", team_id),
-        bob_web=plugin(bob, "web", team_id),
-        team_id=team_id,
-        area_id=area_id,
+        alice_api=plugin(alice, "billing-api", team),
+        bob_web=plugin(bob, "web", team),
+        team=team,
+        area=area,
     )

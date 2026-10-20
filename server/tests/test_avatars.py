@@ -58,7 +58,7 @@ def test_members_see_avatars_and_strangers_do_not(
         human: Factory of logged-in web clients.
     """
     setup.bob.put("/api/me/avatar", content=_photo(300, 300))
-    team = setup.alice.get(f"/api/teams/{setup.team_id}").json()
+    team = setup.alice.get(f"/api/team/{setup.team}").json()
     bob = next(m for m in team["members"] if m["pseudonym"] == "bob")
 
     assert bob["avatar"] is not None
@@ -128,8 +128,8 @@ def test_github_avatar_is_taken_once_by_the_server(
     me = setup.alice.get("/api/me").json()
     with _connect(settings.database_url) as connection:
         connection.execute(
-            "INSERT INTO identities (user_id, provider, subject) VALUES (%s, 'github', '583231')",
-            (me["id"],),
+            "INSERT INTO identities (user_id, provider, subject) "
+            "SELECT id, 'github', '583231' FROM users WHERE pseudonym = 'alice'"
         )
 
     taken = setup.alice.post("/api/me/avatar/github")

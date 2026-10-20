@@ -1,4 +1,4 @@
-"""Non-secret files shared in Topics (decision 0008)."""
+"""Non-secret files shared in Topics, numbered per Team (decisions 0008, 0025)."""
 
 import hashlib
 import os
@@ -9,11 +9,13 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.topics import FileOut, get_topic
+from coloqo_server.api.teams import team_for
+from coloqo_server.api.topics import FileOut, check_topic, file_outs, topic_for
 from coloqo_server.images import SIGNATURE_BYTES, image_type
-from coloqo_server.models import File, Topic
-from coloqo_server.security import DB, ActorDep
+from coloqo_server.models import File, Team, Topic
+from coloqo_server.security import DB, Actor, ActorDep, require_reader
 
 router = APIRouter(tags=["files"])
 
@@ -37,36 +39,33 @@ def _path(files_dir: Path, file: File, team_id: int) -> Path:
     return files_dir / str(team_id) / str(file.id)
 
 
-@router.post("/topics/{topic_id}/files", status_code=status.HTTP_201_CREATED)
-async def upload_file(
+async def store_upload(
     request: Request,
-    topic_id: int,
-    actor: ActorDep,
-    db: DB,
-    x_file_name: Annotated[str, Header()],
-    content_type: Annotated[str, Header()] = "application/octet-stream",
-) -> FileOut:
-    """Upload a file into a Topic; the request body is the content.
+    db: AsyncSession,
+    actor: Actor,
+    topic: Topic,
+    x_file_name: str,
+    content_type: str,
+) -> File:
+    """Keep an uploaded file of a Topic; the request body is the content.
 
-    Attach it to a Message by its id. Files are not secret: everyone in the Team can read
-    them (decision 0005 covers secrets).
+    The file takes the next number of its Team under a lock on the Team's row (decision 0025).
+    Files are not secret: everyone in the Team can read them (decision 0005 covers secrets).
 
     Args:
         request: The incoming request with the content as its body.
-        topic_id: The Topic.
-        actor: The caller.
         db: Database session.
+        actor: The caller, already allowed to write in the Topic.
+        topic: The Topic.
         x_file_name: File name, percent-encoded.
         content_type: Media type of the content.
 
     Raises:
-        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
-            there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when
-            the file or the Team's storage is over the limit.
+        HTTPException: 422 for an empty name; 413 when the file or the Team's storage is over
+            the limit.
         OSError: The file cannot be written.
     """
     settings = request.app.state.settings
-    topic = await get_topic(db, topic_id, actor, write=True)
     name = os.path.basename(unquote(x_file_name).replace("\\", "/")).strip()[:255]
     if not name:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "The file needs a name")
@@ -93,7 +92,12 @@ async def upload_file(
                     head += chunk[: SIGNATURE_BYTES - len(head)]
                 digest.update(chunk)
                 out.write(chunk)
+        team = await db.scalar(select(Team).where(Team.id == topic.team_id).with_for_update())
+        assert team is not None
+        team.last_file += 1
         file = File(
+            team_id=team.id,
+            number=team.last_file,
             topic_id=topic.id,
             name=name,
             size=size,
@@ -111,20 +115,45 @@ async def upload_file(
         await db.commit()
     finally:
         temp.unlink(missing_ok=True)
-    return FileOut(
-        id=file.id,
-        name=file.name,
-        size=file.size,
-        sha256=file.sha256,
-        content_type=file.content_type,
-        preview=file.image_type is not None and file.size <= settings.preview_max_bytes,
-        uploaded_by=actor.user.pseudonym,
-        message_number=None,
-        created_at=file.created_at,
-    )
+    return file
 
 
-async def _team_usage(db: DB, team_id: int) -> int:
+@router.post("/team/{team}/topic/{number}/file", status_code=status.HTTP_201_CREATED)
+async def upload_file(
+    request: Request,
+    team: str,
+    number: int,
+    actor: ActorDep,
+    db: DB,
+    x_file_name: Annotated[str, Header()],
+    content_type: Annotated[str, Header()] = "application/octet-stream",
+) -> FileOut:
+    """Upload a file into a Topic; the request body is the content.
+
+    Attach it to a Message by its number.
+
+    Args:
+        request: The incoming request with the content as its body.
+        team: The Team's slug.
+        number: The Topic's number.
+        actor: The caller.
+        db: Database session.
+        x_file_name: File name, percent-encoded.
+        content_type: Media type of the content.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+            there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when
+            the file or the Team's storage is over the limit.
+        OSError: The file cannot be written.
+    """
+    topic, _ = await topic_for(db, team, number, actor, write=True)
+    file = await store_upload(request, db, actor, topic, x_file_name, content_type)
+    (out,) = await file_outs(db, [file], request.app.state.settings.preview_max_bytes)
+    return out
+
+
+async def _team_usage(db: AsyncSession, team_id: int) -> int:
     """Return the bytes of files a Team keeps.
 
     Args:
@@ -133,46 +162,30 @@ async def _team_usage(db: DB, team_id: int) -> int:
     """
     return int(
         await db.scalar(
-            select(func.coalesce(func.sum(File.size), 0))
-            .join(Topic, Topic.id == File.topic_id)
-            .where(Topic.team_id == team_id)
+            select(func.coalesce(func.sum(File.size), 0)).where(File.team_id == team_id)
         )
         or 0
     )
 
 
-@router.get("/files/{file_id}")
-async def download_file(
-    request: Request,
-    file_id: int,
-    actor: ActorDep,
-    db: DB,
-    download: Annotated[bool, Query()] = False,
-) -> FileResponse:
-    """Download a file of one of the caller's Teams.
+def serve(request: Request, file: File) -> FileResponse:
+    """Serve a file's content: an image inline with its own type, anything else as an attachment.
 
     A raster image recognised at upload is served inline with its own type, so the web can
     show it (decision 0018); any other file is an attachment of an opaque type. Either way
     the browser never renders it as a page.
 
     Args:
-        request: The incoming request.
-        file_id: The file.
-        actor: The caller.
-        db: Database session.
-        download: Serve an image as an attachment too, to save it under its name.
+        request: The incoming request, for the instance's file directory and ``download``.
+        file: The file.
 
     Raises:
-        HTTPException: 404 when there is no such file for the caller; 403 for a plugin
-            request without an Assistant.
+        HTTPException: 404 when the content is missing on disk.
     """
-    file = await db.get(File, file_id)
-    if file is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such file")
-    topic = await get_topic(db, file.topic_id, actor)
-    path = _path(Path(request.app.state.settings.files_dir), file, topic.team_id)
+    path = _path(Path(request.app.state.settings.files_dir), file, file.team_id)
     if not path.is_file():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The file's content is missing")
+    download = request.query_params.get("download", "").lower() in ("1", "true", "yes")
     inline = file.image_type is not None and not download
     return FileResponse(
         path,
@@ -181,3 +194,37 @@ async def download_file(
         headers={"X-Content-SHA256": file.sha256, **FILE_HEADERS},
         content_disposition_type="inline" if inline else "attachment",
     )
+
+
+@router.get("/team/{team}/file/{number}")
+async def download_file(
+    request: Request,
+    team: str,
+    number: int,
+    actor: ActorDep,
+    db: DB,
+    download: Annotated[bool, Query()] = False,
+) -> FileResponse:
+    """Download a file of one of the caller's Teams by its number in the Team.
+
+    Only those who may read its Topic get it.
+
+    Args:
+        request: The incoming request.
+        team: The Team's slug.
+        number: The file's number.
+        actor: The caller.
+        db: Database session.
+        download: Serve an image as an attachment too, to save it under its name.
+
+    Raises:
+        HTTPException: 404 when there is no such file for the caller; 403 for a plugin
+            request without an Assistant.
+    """
+    require_reader(actor)
+    found, _ = await team_for(db, team, actor.user.id)
+    file = await db.scalar(select(File).where(File.team_id == found.id, File.number == number))
+    if file is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such file")
+    await check_topic(db, await db.get(Topic, file.topic_id), actor, f"file {number}", False)
+    return serve(request, file)

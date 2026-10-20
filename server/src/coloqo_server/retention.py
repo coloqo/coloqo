@@ -3,12 +3,13 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.topics import ref
+from coloqo_server.api.topics import assistants_by_id, stored, topic_head
 from coloqo_server.events import add_events
 from coloqo_server.models import (
+    Area,
     Assistant,
     Event,
     File,
@@ -39,6 +40,31 @@ async def _people(db: AsyncSession, topic: Topic) -> set[int]:
     return people | ({holder.user_id} if holder else set())
 
 
+async def _head(db: AsyncSession, topic: Topic) -> tuple[dict, dict]:
+    """Return what an event about a Topic carries, in both shapes, with its holder.
+
+    The holder's project goes with it, so the project's other sessions hear about the Topic
+    when its holder is gone (decision 0024).
+
+    Args:
+        db: Database session.
+        topic: The Topic.
+    """
+    team = await db.get(Team, topic.team_id)
+    area = await db.get(Area, topic.area_id)
+    assert team is not None
+    new, old = topic_head(topic, team, area)
+    holder = (await assistants_by_id(db, {topic.holder_assistant_id})).get(
+        topic.holder_assistant_id or 0
+    )
+    new |= {
+        "holder": holder.key if holder else None,
+        "holder_project": holder.project if holder else None,
+    }
+    old |= {"holder_assistant_id": topic.holder_assistant_id}
+    return new, old
+
+
 async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> set[int]:
     """Tell the people of Topics about to close for inactivity, once per quiet spell.
 
@@ -67,18 +93,10 @@ async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> s
     for topic in topics:
         topic.idle_warned_at = moment
         closes_at = topic.updated_at + timedelta(days=settings.idle_close_days)
+        new, old = await _head(db, topic)
+        new["closes_at"] = old["closes_at"] = closes_at.isoformat()
         recipients |= add_events(
-            db,
-            await _people(db, topic),
-            "topic_idle",
-            {
-                "topic_id": topic.id,
-                "ref": ref(topic.id),
-                "title": topic.title,
-                "team_id": topic.team_id,
-                "holder_assistant_id": topic.holder_assistant_id,
-                "closes_at": closes_at.isoformat(),
-            },
+            db, await _people(db, topic), "topic_idle", stored(new, old, topic.team_id)
         )
     return recipients
 
@@ -124,21 +142,15 @@ async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> 
         topic.outcome = topic.outcome or outcome
         topic.closed_at = moment
         team = list(await db.scalars(select(Member.user_id).where(Member.team_id == topic.team_id)))
+        new, old = await _head(db, topic)
+        closing = {
+            "status": TopicStatus.Closed.value,
+            "author": "Coloqo",
+            "outcome": topic.outcome,
+            "automatic": True,
+        }
         recipients |= add_events(
-            db,
-            team,
-            "topic_status",
-            {
-                "topic_id": topic.id,
-                "ref": ref(topic.id),
-                "title": topic.title,
-                "team_id": topic.team_id,
-                "status": TopicStatus.Closed.value,
-                "author": "Coloqo",
-                "holder_assistant_id": topic.holder_assistant_id,
-                "outcome": topic.outcome,
-                "automatic": True,
-            },
+            db, team, "topic_status", stored(new | closing, old | closing, topic.team_id)
         )
     return recipients
 
@@ -178,7 +190,14 @@ async def delete_archived(db: AsyncSession, settings: Settings, moment: datetime
         await db.execute(delete(File).where(File.topic_id == topic.id))
         await db.execute(delete(Message).where(Message.topic_id == topic.id))
         await db.execute(delete(Participant).where(Participant.topic_id == topic.id))
-        await db.execute(delete(Event).where(Event.data["topic_id"].astext == str(topic.id)))
+        await db.execute(
+            delete(Event).where(
+                or_(
+                    Event.data["topic_id"].astext == str(topic.id),
+                    Event.data["legacy"]["topic_id"].astext == str(topic.id),
+                )
+            )
+        )
         topic.deleted_at = moment
     return gone
 

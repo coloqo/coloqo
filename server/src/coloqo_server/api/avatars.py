@@ -42,7 +42,7 @@ def avatar_url(user: User) -> str | None:
     """
     if user.avatar_version is None:
         return None
-    return f"/api/avatars/{user.id}?v={user.avatar_version}"
+    return f"/api/avatar/{user.pseudonym}?v={user.avatar_version}"
 
 
 def _path(request: Request, user_id: int) -> Path:
@@ -207,10 +207,10 @@ async def remove_avatar(request: Request, actor: HumanDep, db: DB) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/avatars/{user_id}")
+@router.get("/avatar/{pseudonym}")
 async def get_avatar(
     request: Request,
-    user_id: int,
+    pseudonym: str,
     actor: AnyActorDep,
     db: DB,
     v: int | None = Query(default=None),
@@ -219,7 +219,7 @@ async def get_avatar(
 
     Args:
         request: The incoming request.
-        user_id: Whose avatar.
+        pseudonym: Whose avatar, by the name the Team sees (decision 0025).
         actor: The caller.
         db: Database session.
         v: The avatar's version; only makes the address change with it.
@@ -227,6 +227,9 @@ async def get_avatar(
     Raises:
         HTTPException: 404 when there is no avatar, or the caller shares no Team with them.
     """
+    user_id = await db.scalar(select(User.id).where(User.pseudonym == pseudonym))
+    if user_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such avatar")
     if user_id != actor.user.id:
         theirs, mine = aliased(Member), aliased(Member)
         shared = await db.scalar(
