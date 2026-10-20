@@ -1,9 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 
-import { ApiError, api, call, type Area, type Invite, type TeamDetail } from '../api/client'
+import {
+  ApiError,
+  api,
+  areaPath,
+  call,
+  teamPath,
+  topicPath,
+  type Area,
+  type Invite,
+  type TeamDetail,
+} from '../api/client'
 import { useTeam, useTopics } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
 import { Page } from '../components/Layout'
@@ -26,32 +36,32 @@ import { errorText } from '../lib/format'
 
 type StatusFilter = 'open' | 'closed' | 'all'
 
-function useTeamFilter() {
-  const [params, setParams] = useSearchParams()
-  const areaParam = Number(params.get('area'))
-  const areaId = Number.isInteger(areaParam) && areaParam > 0 ? areaParam : undefined
+/** The Area is part of the address, `/team/acme/area/releases`; the status is a query (0025). */
+function useTeamFilter(team: string) {
+  const [params] = useSearchParams()
+  const navigate = useNavigate()
+  const area = useParams().area
   const statusParam = params.get('status')
   const status: StatusFilter = statusParam === 'closed' || statusParam === 'all' ? statusParam : 'open'
-  const set = (next: { areaId?: number | null; status?: StatusFilter }) => {
+  const set = (next: { area?: string | null; status?: StatusFilter }) => {
     const updated = new URLSearchParams(params)
-    if (next.areaId !== undefined) {
-      if (next.areaId === null) updated.delete('area')
-      else updated.set('area', String(next.areaId))
-    }
     if (next.status !== undefined) {
       if (next.status === 'open') updated.delete('status')
       else updated.set('status', next.status)
     }
-    setParams(updated, { replace: true })
+    const chosen = next.area === undefined ? area : next.area
+    const path = chosen ? areaPath(team, chosen) : teamPath(team)
+    const query = updated.toString()
+    void navigate(query ? `${path}?${query}` : path, { replace: true })
   }
-  return { areaId, status, set }
+  return { area, status, set }
 }
 
-function NewTopic({ team, defaultAreaId, onClose }: { team: TeamDetail; defaultAreaId?: number; onClose: () => void }) {
+function NewTopic({ team, defaultArea, onClose }: { team: TeamDetail; defaultArea?: string; onClose: () => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [areaId, setAreaId] = useState(defaultAreaId ?? team.areas[0]?.id ?? 0)
+  const [area, setArea] = useState(defaultArea ?? team.areas[0]?.slug ?? '')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [issue, setIssue] = useState('')
@@ -59,16 +69,15 @@ function NewTopic({ team, defaultAreaId, onClose }: { team: TeamDetail; defaultA
   const create = useMutation({
     mutationFn: () =>
       call(
-        api.POST('/api/areas/{area_id}/topics', {
-          params: { path: { area_id: areaId } },
-          body: { title: title.trim(), body, issue: issue.trim(), to: to || null },
+        api.POST('/api/team/{team}/topic', {
+          params: { path: { team: team.slug } },
+          body: { area, title: title.trim(), body, issue: issue.trim(), to: to || null },
         }),
       ),
     onSuccess: (topic) => {
-      void queryClient.invalidateQueries({ queryKey: ['topics', team.id] })
-      void queryClient.invalidateQueries({ queryKey: ['team', team.id] })
-      queryClient.setQueryData(['topic', topic.id], topic)
-      void navigate(`/topics/${topic.id}`)
+      void queryClient.invalidateQueries({ queryKey: ['topics', team.slug] })
+      void queryClient.invalidateQueries({ queryKey: ['team', team.slug] })
+      void navigate(topicPath(topic.team, topic.number))
     },
   })
   return (
@@ -82,15 +91,15 @@ function NewTopic({ team, defaultAreaId, onClose }: { team: TeamDetail; defaultA
         className="flex flex-col gap-4 p-4"
         onSubmit={(event) => {
           event.preventDefault()
-          if (areaId && title.trim() && body.trim()) create.mutate()
+          if (area && title.trim() && body.trim()) create.mutate()
         }}
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t('topic.area')}>
-            <Select value={areaId} onChange={(event) => setAreaId(Number(event.target.value))} required>
-              {team.areas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
+            <Select value={area} onChange={(event) => setArea(event.target.value)} required>
+              {team.areas.map((option) => (
+                <option key={option.slug} value={option.slug}>
+                  {option.name}
                 </option>
               ))}
             </Select>
@@ -121,17 +130,17 @@ function NewTopic({ team, defaultAreaId, onClose }: { team: TeamDetail; defaultA
 
 function Topics({ team }: { team: TeamDetail }) {
   const { t } = useTranslation()
-  const filter = useTeamFilter()
+  const filter = useTeamFilter(team.slug)
   const [creating, setCreating] = useState(false)
-  const topics = useTopics(team.id, {
-    areaId: filter.areaId,
+  const topics = useTopics(team.slug, {
+    area: filter.area,
     status: filter.status === 'all' ? undefined : filter.status,
   })
   const statuses: StatusFilter[] = ['open', 'closed', 'all']
   return (
     <>
       {creating && (
-        <NewTopic team={team} defaultAreaId={filter.areaId} onClose={() => setCreating(false)} />
+        <NewTopic team={team} defaultArea={filter.area} onClose={() => setCreating(false)} />
       )}
       <Card>
         <CardHeader title={t('team.topics')}>
@@ -144,13 +153,13 @@ function Topics({ team }: { team: TeamDetail }) {
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-4 py-2.5 dark:border-stone-800">
           <div className="w-full sm:w-64">
             <Select
-              value={filter.areaId ?? ''}
-              onChange={(event) => filter.set({ areaId: event.target.value ? Number(event.target.value) : null })}
+              value={filter.area ?? ''}
+              onChange={(event) => filter.set({ area: event.target.value || null })}
               aria-label={t('topic.area')}
             >
               <option value="">{t('team.allAreas')}</option>
               {team.areas.map((area) => (
-                <option key={area.id} value={area.id}>
+                <option key={area.slug} value={area.slug}>
                   {area.name}
                 </option>
               ))}
@@ -187,28 +196,34 @@ function Topics({ team }: { team: TeamDetail }) {
 }
 
 function AreaForm({
-  teamId,
+  team,
   area,
   onDone,
 }: {
-  teamId: number
+  team: string
   area?: Area
   onDone: () => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const viewed = useParams().area
   const [name, setName] = useState(area?.name ?? '')
   const [description, setDescription] = useState(area?.description ?? '')
+  const [slug, setSlug] = useState(area?.slug ?? '')
   const save = useMutation({
     mutationFn: () => {
-      const body = { name: name.trim(), description: description.trim() }
+      const body = { name: name.trim(), description: description.trim(), slug: slug.trim() || null }
       return area
-        ? call(api.PATCH('/api/areas/{area_id}', { params: { path: { area_id: area.id } }, body }))
-        : call(api.POST('/api/teams/{team_id}/areas', { params: { path: { team_id: teamId } }, body }))
+        ? call(api.PATCH('/api/team/{team}/area/{area}', { params: { path: { team, area: area.slug } }, body }))
+        : call(api.POST('/api/team/{team}/area', { params: { path: { team } }, body }))
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['team', teamId] })
-      void queryClient.invalidateQueries({ queryKey: ['topics', teamId] })
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ['team', team] })
+      void queryClient.invalidateQueries({ queryKey: ['topics', team] })
+      if (area && viewed === area.slug && saved.slug !== area.slug) {
+        void navigate(areaPath(team, saved.slug), { replace: true })
+      }
       onDone()
     },
   })
@@ -227,6 +242,15 @@ function AreaForm({
       <Field label={t('area.description')} hint={t('area.descriptionHint')}>
         <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} maxLength={2000} />
       </Field>
+      <Field label={t('area.slug')} hint={area ? t('area.slugHint') : t('area.slugNewHint')}>
+        <Input
+          value={slug}
+          onChange={(event) => setSlug(event.target.value.toLowerCase())}
+          maxLength={40}
+          pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+          className="font-mono"
+        />
+      </Field>
       <ErrorNote>
         {error && (error instanceof ApiError && error.status === 409 ? t('area.taken') : errorText(error, t))}
       </ErrorNote>
@@ -244,8 +268,8 @@ function AreaForm({
 
 function Areas({ team }: { team: TeamDetail }) {
   const { t } = useTranslation()
-  const filter = useTeamFilter()
-  const [editing, setEditing] = useState<number | 'new' | null>(null)
+  const filter = useTeamFilter(team.slug)
+  const [editing, setEditing] = useState<string | 'new' | null>(null)
   const owner = team.role === 'owner'
   return (
     <Card>
@@ -256,23 +280,23 @@ function Areas({ team }: { team: TeamDetail }) {
           </Button>
         )}
       </CardHeader>
-      {editing === 'new' && <AreaForm teamId={team.id} onDone={() => setEditing(null)} />}
+      {editing === 'new' && <AreaForm team={team.slug} onDone={() => setEditing(null)} />}
       {team.areas.length === 0 && editing !== 'new' && (
         <Empty>{owner ? t('team.noAreasOwner') : t('team.noAreasMember')}</Empty>
       )}
       <ul className="divide-y divide-stone-200 dark:divide-stone-800">
         {team.areas.map((area) =>
-          editing === area.id ? (
-            <li key={area.id}>
-              <AreaForm teamId={team.id} area={area} onDone={() => setEditing(null)} />
+          editing === area.slug ? (
+            <li key={area.slug}>
+              <AreaForm team={team.slug} area={area} onDone={() => setEditing(null)} />
             </li>
           ) : (
-            <li key={area.id} className={filter.areaId === area.id ? 'bg-amber-50/60 dark:bg-amber-950/20' : undefined}>
+            <li key={area.slug} className={filter.area === area.slug ? 'bg-amber-50/60 dark:bg-amber-950/20' : undefined}>
               <div className="flex items-start gap-2 px-4 py-3">
                 <button
                   type="button"
                   className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left"
-                  onClick={() => filter.set({ areaId: filter.areaId === area.id ? null : area.id })}
+                  onClick={() => filter.set({ area: filter.area === area.slug ? null : area.slug })}
                   title={t('team.filterByArea')}
                 >
                   <span className="font-medium">{area.name}</span>
@@ -284,7 +308,7 @@ function Areas({ team }: { team: TeamDetail }) {
                   </span>
                 </button>
                 {owner && (
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(area.id)}>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(area.slug)}>
                     {t('common.edit')}
                   </Button>
                 )}
@@ -304,7 +328,7 @@ function Members({ team }: { team: TeamDetail }) {
       <CardHeader title={t('team.members')} />
       <ul className="divide-y divide-stone-200 dark:divide-stone-800">
         {team.members.map((member) => (
-          <li key={member.user_id} className="flex flex-col gap-1.5 px-4 py-3">
+          <li key={member.pseudonym} className="flex flex-col gap-1.5 px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium">{member.pseudonym ?? t('team.noName')}</span>
               <RoleBadge role={member.role} />
@@ -314,8 +338,13 @@ function Members({ team }: { team: TeamDetail }) {
             ) : (
               <ul className="flex flex-col gap-0.5">
                 {member.assistants.map((assistant) => (
-                  <li key={assistant.id} className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-                    <span className="text-stone-700 dark:text-stone-300">{assistant.name}</span>
+                  <li key={assistant.key} className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
+                    <span
+                      className="text-stone-700 dark:text-stone-300"
+                      title={assistant.session_id ? t('sessions.id', { id: assistant.session_id }) : undefined}
+                    >
+                      {assistant.name}
+                    </span>
                     {assistant.last_seen_at && (
                       <span className="text-xs text-stone-500 dark:text-stone-400">
                         {t('team.lastSeen')} <Time value={assistant.last_seen_at} />
@@ -336,7 +365,7 @@ function InviteCard({ team }: { team: TeamDetail }) {
   const { t } = useTranslation()
   const [invite, setInvite] = useState<Invite | null>(null)
   const create = useMutation({
-    mutationFn: () => call(api.POST('/api/teams/{team_id}/invites', { params: { path: { team_id: team.id } } })),
+    mutationFn: () => call(api.POST('/api/team/{team}/invite', { params: { path: { team: team.slug } } })),
     onSuccess: setInvite,
   })
   return (
@@ -369,25 +398,28 @@ function InviteCard({ team }: { team: TeamDetail }) {
 function TeamSettings({ team }: { team: TeamDetail }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [name, setName] = useState(team.name)
+  const [slug, setSlug] = useState(team.slug)
   const [limit, setLimit] = useState(String(team.turn_limit))
   const save = useMutation({
     mutationFn: () =>
       call(
-        api.PATCH('/api/teams/{team_id}', {
-          params: { path: { team_id: team.id } },
-          body: { name: name.trim(), turn_limit: Number(limit) },
+        api.PATCH('/api/team/{team}', {
+          params: { path: { team: team.slug } },
+          body: { name: name.trim(), slug: slug.trim(), turn_limit: Number(limit) },
         }),
       ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['team', team.id] })
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ['team'] })
       void queryClient.invalidateQueries({ queryKey: ['teams'] })
-      void queryClient.invalidateQueries({ queryKey: ['topics', team.id] })
+      void queryClient.invalidateQueries({ queryKey: ['topics'] })
+      if (saved.slug !== team.slug) void navigate(teamPath(saved.slug), { replace: true })
     },
   })
   const limitNumber = Number(limit)
-  const valid = name.trim() && Number.isInteger(limitNumber) && limitNumber >= 1 && limitNumber <= 100
-  const changed = name.trim() !== team.name || limitNumber !== team.turn_limit
+  const valid = name.trim() && slug.trim() && Number.isInteger(limitNumber) && limitNumber >= 1 && limitNumber <= 100
+  const changed = name.trim() !== team.name || slug.trim() !== team.slug || limitNumber !== team.turn_limit
   return (
     <Card>
       <CardHeader title={t('team.settings')} />
@@ -401,6 +433,16 @@ function TeamSettings({ team }: { team: TeamDetail }) {
         <Field label={t('team.name')}>
           <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required />
         </Field>
+        <Field label={t('team.slug')} hint={t('team.slugHint')}>
+          <Input
+            value={slug}
+            onChange={(event) => setSlug(event.target.value.toLowerCase())}
+            maxLength={40}
+            pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+            className="font-mono"
+            required
+          />
+        </Field>
         <Field label={t('team.turnLimit')} hint={t('team.turnLimitHint')}>
           <Input
             type="number"
@@ -412,7 +454,9 @@ function TeamSettings({ team }: { team: TeamDetail }) {
             required
           />
         </Field>
-        <ErrorNote>{save.error && errorText(save.error, t)}</ErrorNote>
+        <ErrorNote>
+          {save.error && (save.error instanceof ApiError && save.error.status === 409 ? t('team.slugTaken') : errorText(save.error, t))}
+        </ErrorNote>
         {save.isSuccess && !changed && <p className="text-sm text-emerald-700 dark:text-emerald-400">{t('common.saved')}</p>}
         <div>
           <Button type="submit" size="sm" variant="primary" disabled={save.isPending || !valid || !changed}>
@@ -426,8 +470,17 @@ function TeamSettings({ team }: { team: TeamDetail }) {
 
 export function TeamPage() {
   const { t } = useTranslation()
-  const teamId = Number(useParams().teamId)
-  const team = useTeam(teamId)
+  const { team: slug = '', area } = useParams()
+  const team = useTeam(slug)
+  const navigate = useNavigate()
+  const current = team.data?.slug
+  useEffect(() => {
+    // A former slug answers with the current one: the address follows it (decision 0025).
+    if (current && current !== slug) {
+      const path = area ? areaPath(current, area) : teamPath(current)
+      void navigate(`${path}${window.location.search}`, { replace: true })
+    }
+  }, [current, slug, area, navigate])
 
   if (team.isPending) return <Page><Loading /></Page>
   if (team.error || !team.data) {
@@ -457,7 +510,7 @@ export function TeamPage() {
           {data.role === 'owner' && (
             <>
               <InviteCard team={data} />
-              <TeamSettings key={`${data.name}-${data.turn_limit}`} team={data} />
+              <TeamSettings key={`${data.name}-${data.slug}-${data.turn_limit}`} team={data} />
             </>
           )}
         </div>

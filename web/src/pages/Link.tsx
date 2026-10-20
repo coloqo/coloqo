@@ -1,63 +1,68 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 
-import { api, call } from '../api/client'
-import { useOwnAssistant, useTeams } from '../api/queries'
+import { ApiError, api, call } from '../api/client'
+import { useTeams } from '../api/queries'
 import { Page } from '../components/Layout'
 import { Button, Card, ErrorNote, Field, Loading, Notice, Select } from '../components/ui'
 import { errorText } from '../lib/format'
 
-/** Link an Assistant's project to one of the person's Teams; `coloqo link` sends people here (0020). */
+/**
+ * Choose the Team a project is linked to, by the one-time link `coloqo link` hands out
+ * (decisions 0020, 0025).
+ */
 export function LinkPage() {
   const { t } = useTranslation()
-  const assistantId = Number(useParams().assistantId)
-  const assistant = useOwnAssistant(assistantId)
+  const token = useParams().token ?? ''
   const teams = useTeams()
   const queryClient = useQueryClient()
-  const [teamId, setTeamId] = useState<number | null>(null)
+  const page = useQuery({
+    queryKey: ['link', token],
+    queryFn: () => call(api.GET('/api/link/{token}', { params: { path: { token } } })),
+  })
+  const [team, setTeam] = useState<string | null>(null)
   const link = useMutation({
-    mutationFn: (team: number) =>
-      call(
-        api.PUT('/api/assistants/{assistant_id}/team', {
-          params: { path: { assistant_id: assistantId } },
-          body: { team_id: team },
-        }),
-      ),
+    mutationFn: (slug: string) =>
+      call(api.PUT('/api/link/{token}', { params: { path: { token } }, body: { team: slug } })),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['assistant', assistantId], updated)
-      void queryClient.invalidateQueries({ queryKey: ['assistants'] })
+      queryClient.setQueryData(['link', token], updated)
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
   })
 
-  if (assistant.isPending || teams.isPending) return <Page><Loading /></Page>
-  if (assistant.error || !assistant.data) {
+  if (page.isPending || teams.isPending) return <Page><Loading /></Page>
+  if (page.error || !page.data) {
     return (
       <Page title={t('link.title')}>
-        <ErrorNote>{errorText(assistant.error, t)}</ErrorNote>
+        <ErrorNote>
+          {page.error instanceof ApiError && page.error.status === 404 ? t('link.unknown') : errorText(page.error, t)}
+        </ErrorNote>
       </Page>
     )
   }
-  const current = assistant.data
-  const chosen = teamId ?? current.team_id ?? teams.data?.[0]?.id ?? null
+  const current = page.data
+  const chosen = team ?? current.team ?? teams.data?.[0]?.slug ?? null
   return (
     <Page title={t('link.title')}>
       <Card className="flex max-w-xl flex-col gap-4 p-5">
         <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300">
-          {t('link.lead', { name: current.name, computer: current.installation })}
+          {t('link.lead', { name: current.project, computer: current.installation })}
         </p>
         {link.isSuccess ? (
-          <Notice>{t('link.done', { team: current.team })}</Notice>
+          <Notice>{t('link.done', { team: current.team_name })}</Notice>
+        ) : !current.valid ? (
+          <ErrorNote>{t('link.expired')}</ErrorNote>
         ) : (
           <>
-            {current.team && <p className="text-sm">{t('link.current', { team: current.team })}</p>}
+            {current.team_name && <p className="text-sm">{t('link.current', { team: current.team_name })}</p>}
             {teams.data && teams.data.length > 0 ? (
               <Field label={t('link.team')}>
-                <Select value={chosen ?? ''} onChange={(event) => setTeamId(Number(event.target.value))}>
-                  {teams.data.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
+                <Select value={chosen ?? ''} onChange={(event) => setTeam(event.target.value)}>
+                  {teams.data.map((option) => (
+                    <option key={option.slug} value={option.slug}>
+                      {option.name}
                     </option>
                   ))}
                 </Select>
@@ -67,12 +72,28 @@ export function LinkPage() {
             )}
             <ErrorNote>{link.error && errorText(link.error, t)}</ErrorNote>
             <div>
-              <Button variant="primary" disabled={chosen === null || link.isPending} onClick={() => chosen !== null && link.mutate(chosen)}>
+              <Button
+                variant="primary"
+                disabled={chosen === null || link.isPending}
+                onClick={() => chosen !== null && link.mutate(chosen)}
+              >
                 {t('link.confirm')}
               </Button>
             </div>
           </>
         )}
+      </Card>
+    </Page>
+  )
+}
+
+/** The page plugins older than 0.5.0 open to link a project; it lives no more (decision 0025). */
+export function OldLinkPage() {
+  const { t } = useTranslation()
+  return (
+    <Page title={t('link.title')}>
+      <Card className="flex max-w-xl flex-col gap-3 p-5">
+        <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300">{t('link.oldPlugin')}</p>
       </Card>
     </Page>
   )

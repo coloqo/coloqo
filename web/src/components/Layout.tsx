@@ -30,7 +30,8 @@ export function Header({ me }: { me: Me }) {
   const inbox = useInbox()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const unread = inbox.data?.reduce((sum, topic) => sum + topic.unread, 0) ?? 0
+  // The bell counts the Topics where someone calls me, not every unread Message (decision 0026).
+  const calling = inbox.data?.filter((topic) => topic.addressed).length ?? 0
   const logout = useMutation({
     mutationFn: () => call(api.POST('/api/auth/logout')),
     onSuccess: () => {
@@ -53,11 +54,14 @@ export function Header({ me }: { me: Me }) {
           <NavLink to="/" end className={navClass}>
             {t('nav.teams')}
           </NavLink>
-          <NavLink to="/inbox" className={navClass}>
-            {t('nav.inbox')}
-            {unread > 0 && (
+          <NavLink to="/for-you" className={navClass}>
+            <span className="inline-flex items-center gap-1">
+              <Bell className="size-4" />
+              {t('nav.forYou')}
+            </span>
+            {calling > 0 && (
               <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white dark:bg-amber-500 dark:text-stone-950">
-                {unread}
+                {calling}
               </span>
             )}
           </NavLink>

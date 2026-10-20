@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 
-type EventData = { topic_id?: number; team_id?: number }
+/** What an event names: the Team by slug and the Topic by its number (decision 0025). */
+type EventData = { team?: string; topic?: number }
 
 /**
  * Keep the cached data fresh from the server's event stream (`/api/events`).
@@ -29,16 +30,16 @@ export function useEventStream(enabled: boolean) {
       }
     }
     const refreshLists = (data: EventData) => {
-      if (data.team_id !== undefined) {
-        void queryClient.invalidateQueries({ queryKey: ['topics', data.team_id] })
-        void queryClient.invalidateQueries({ queryKey: ['team', data.team_id] })
+      if (data.team !== undefined) {
+        void queryClient.invalidateQueries({ queryKey: ['topics', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['team', data.team] })
       }
       void queryClient.invalidateQueries({ queryKey: ['inbox'] })
     }
     const onTopicChange = (event: MessageEvent<string>) => {
       const data = parse(event)
-      if (data.topic_id !== undefined) {
-        void queryClient.invalidateQueries({ queryKey: ['topic', data.topic_id] })
+      if (data.team !== undefined && data.topic !== undefined) {
+        void queryClient.invalidateQueries({ queryKey: ['topic', data.team, data.topic] })
       }
       refreshLists(data)
     }

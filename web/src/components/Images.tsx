@@ -5,16 +5,18 @@ import { downloadUrl, fileUrl, type FileInfo } from '../api/client'
 import { fileSize } from '../lib/format'
 
 /** Images attached to a Message, reduced; a click opens them over the page (decision 0018). */
-export function MessageImages({ images }: { images: FileInfo[] }) {
+export function MessageImages({ images, team }: { images: FileInfo[]; team: string }) {
   const [open, setOpen] = useState<number | null>(null)
   return (
     <>
       <div className="mt-2 flex flex-wrap gap-3">
         {images.map((file, index) => (
-          <Thumbnail key={file.id} file={file} onOpen={() => setOpen(index)} />
+          <Thumbnail key={file.number} file={file} team={team} onOpen={() => setOpen(index)} />
         ))}
       </div>
-      {open !== null && <ImageViewer images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
+      {open !== null && (
+        <ImageViewer images={images} team={team} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+      )}
     </>
   )
 }
@@ -31,7 +33,7 @@ function frameOf(width: number, height: number): Frame | null {
   return null
 }
 
-function Thumbnail({ file, onOpen }: { file: FileInfo; onOpen: () => void }) {
+function Thumbnail({ file, team, onOpen }: { file: FileInfo; team: string; onOpen: () => void }) {
   const { t, i18n } = useTranslation()
   const [frame, setFrame] = useState<Frame | null>(null)
   const wide = frame !== null && !frame.tall
@@ -45,7 +47,7 @@ function Thumbnail({ file, onOpen }: { file: FileInfo; onOpen: () => void }) {
         aria-label={t('images.open', { name: file.name })}
       >
         <img
-          src={fileUrl(file)}
+          src={fileUrl(team, file)}
           alt={file.name}
           loading="lazy"
           onLoad={(event) => setFrame(frameOf(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight))}
@@ -58,7 +60,7 @@ function Thumbnail({ file, onOpen }: { file: FileInfo; onOpen: () => void }) {
       <figcaption className="flex min-w-0 items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
         <span className="truncate">{file.name}</span>
         <span className="shrink-0">· {fileSize(file.size, i18n.resolvedLanguage ?? 'ru')} ·</span>
-        <a href={downloadUrl(file)} download={file.name} className="shrink-0 text-amber-700 hover:underline dark:text-amber-400">
+        <a href={downloadUrl(team, file)} download={file.name} className="shrink-0 text-amber-700 hover:underline dark:text-amber-400">
           {t('images.download')}
         </a>
       </figcaption>
@@ -72,11 +74,13 @@ const control =
 
 function ImageViewer({
   images,
+  team,
   index,
   onIndex,
   onClose,
 }: {
   images: FileInfo[]
+  team: string
   index: number
   onIndex: (index: number) => void
   onClose: () => void
@@ -126,7 +130,7 @@ function ImageViewer({
             if (event.target === event.currentTarget) onClose()
           }}
         >
-          <img key={file.id} src={fileUrl(file)} alt={file.name} className="max-h-full max-w-full object-contain" />
+          <img key={file.number} src={fileUrl(team, file)} alt={file.name} className="max-h-full max-w-full object-contain" />
           {many && (
             <>
               <button
@@ -153,10 +157,10 @@ function ImageViewer({
             {file.name} · {fileSize(file.size, i18n.resolvedLanguage ?? 'ru')}
           </span>
           <span className="flex gap-2">
-            <a href={fileUrl(file)} target="_blank" rel="noopener" className={`${control} min-h-11 px-3`}>
+            <a href={fileUrl(team, file)} target="_blank" rel="noopener" className={`${control} min-h-11 px-3`}>
               {t('images.original')}
             </a>
-            <a href={downloadUrl(file)} download={file.name} className={`${control} min-h-11 px-3`}>
+            <a href={downloadUrl(team, file)} download={file.name} className={`${control} min-h-11 px-3`}>
               {t('images.save')}
             </a>
           </span>

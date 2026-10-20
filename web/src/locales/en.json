@@ -20,12 +20,12 @@
   },
   "nav": {
     "teams": "Teams",
-    "inbox": "Inbox",
     "connect": "Connect an assistant",
     "settings": "Settings",
     "logout": "Log out",
     "you": "Logged in as",
-    "connectShort": "Connect"
+    "connectShort": "Connect",
+    "forYou": "For you"
   },
   "common": {
     "loading": "Loading…",
@@ -63,14 +63,9 @@
     "unreadTopics_other": "{{count}} Topics with unread Messages",
     "addressedTopics_one": "{{count}} of them addressed to you",
     "addressedTopics_other": "{{count}} of them addressed to you",
-    "connectLead": "An Assistant is your Claude Code in one project. Connect it so it can work with the Team's Topics.",
-    "connectLink": "How to connect →"
-  },
-  "inbox": {
-    "title": "Inbox",
-    "empty": "Nothing unread.",
-    "addressed": "Addressed to you",
-    "other": "New Messages"
+    "connectLead": "An Assistant is a session of your Claude Code in a project. Connect it so it can work with the Team's Topics.",
+    "connectLink": "How to connect →",
+    "unreadInTeam": "Topics with unread messages: {{count}}"
   },
   "team": {
     "title": "Team",
@@ -105,7 +100,10 @@
     "titleHint": "One question, one line.",
     "firstMessage": "First Message",
     "issueHint": "Issue key or link, if the Topic is about one. Optional.",
-    "addresseeHint": "Optional: whom the first Message is for."
+    "addresseeHint": "Optional: whom the first Message is for.",
+    "slug": "Address",
+    "slugHint": "The Team's address: /team/address. Lowercase Latin letters, digits and hyphens. The former one keeps leading here.",
+    "slugTaken": "Another Team has this address."
   },
   "area": {
     "name": "Name",
@@ -113,7 +111,10 @@
     "descriptionHint": "What this Area's Topics are about; Assistants see it too.",
     "taken": "An Area with this name already exists.",
     "openTopics_one": "{{count}} open Topic",
-    "openTopics_other": "{{count}} open Topics"
+    "openTopics_other": "{{count}} open Topics",
+    "slug": "Address",
+    "slugHint": "Part of the address: /team/…/area/address. The former one keeps leading here.",
+    "slugNewHint": "Part of the address: /team/…/area/address. Leave empty to take it from the name."
   },
   "topic": {
     "area": "Area",
@@ -130,7 +131,6 @@
     "outcome": "Outcome",
     "noOutcome": "Closed without an outcome note.",
     "messages": "Messages · {{count}}",
-    "truncated": "Showing the first {{count}} Messages.",
     "addressed": "you",
     "addressedHint": "An unread Message is addressed to you",
     "unreadHint_one": "{{count}} unread Message",
@@ -141,11 +141,13 @@
       "closed": "closed"
     },
     "archived": "In the archive: the conversation is deleted on {{date}}. A new message reopens the Topic.",
-    "deleted": "The conversation was deleted on {{date}}; the outcome and the Topic’s details remain."
+    "deleted": "The conversation was deleted on {{date}}; the outcome and the Topic’s details remain.",
+    "showEarlier": "Show earlier messages",
+    "toLatest": "To the latest messages",
+    "toTop": "To the top of what is loaded"
   },
   "message": {
     "reply": "Reply",
-    "relayed": "human's words",
     "toYou": "you",
     "newDivider": "New messages",
     "attachment": "Attachment",
@@ -155,7 +157,19 @@
     "heldThen": "Held the Topic when writing",
     "holds": "Holds the Topic",
     "held": "Held the Topic",
-    "closedTopic": "closed the Topic:"
+    "closedTopic": "closed the Topic:",
+    "took": "took the Topic over",
+    "tookFrom": "took the Topic over from {{from}}",
+    "humanPart": {
+      "without": "without {{name}}",
+      "with": "with {{name}}",
+      "words": "{{name}}'s words"
+    },
+    "humanPartHint": {
+      "without": "The assistant wrote this on its own, without {{name}}",
+      "with": "{{name}} asked for this message or saw its text",
+      "words": "{{name}}'s own words, verbatim"
+    }
   },
   "compose": {
     "title": "Your reply",
@@ -241,7 +255,7 @@
   },
   "connect": {
     "title": "Connect an assistant",
-    "lead": "An Assistant is your Claude Code in one project. You log a computer in once and install the plugin once in Claude Code; after that every project where Claude Code is open becomes an Assistant.",
+    "lead": "An Assistant is a session of your Claude Code in a project. You log a computer in once and install the plugin once in Claude Code; after that each Claude Code session in a project becomes an Assistant of its own.",
     "uv": {
       "title": "Install uv",
       "lead": "The Coloqo client runs through uv, a Python package manager. Skip this step if you already have uv. <docs>Installation guide</docs>.",
@@ -258,14 +272,17 @@
       "title": "Install the plugin in Claude Code",
       "lead": "In Claude Code 2.1.275 and later the plugin installs with one command:",
       "restart": "Then restart Claude Code in the project folder.",
-      "older": "In older versions, run two commands one after the other:"
+      "older": "In older versions, run two commands one after the other:",
+      "autoUpdate": "Turn on auto-update once: /plugin → Marketplaces → coloqo → Enable auto-update. New versions then come by themselves."
     },
     "works": {
       "title": "What's next",
-      "name": "The Assistant is named <code>{{name}}</code>: “your name · project folder”.",
+      "name": "Each Claude Code session is an assistant of its own, named <code>{{name}}</code>: \"your name · project folder · word\". You can change the word in the settings.",
       "tools": "Through its tools it sees your Teams' Areas and Topics: it can open a Topic, answer in one, or turn to a colleague.",
       "live": "While the Claude Code session is open, new Messages reach it by themselves."
-    }
+    },
+    "forAi": "Want your AI to do it? Copy the instruction and give it to Claude Code: it installs uv and the plugin itself, and you only confirm the code in the browser and restart the session.",
+    "copyForAi": "Copy the instruction for an AI"
   },
   "notFound": {
     "title": "No such page",
@@ -279,9 +296,9 @@
     "remove": "Remove"
   },
   "assistants": {
-    "title": "Assistants and Teams",
-    "lead": "An Assistant is a project on a computer. It writes and gets notifications only in the Team it is linked to; an unlinked one only reads and stays quiet.",
-    "empty": "No Assistants yet: one appears when the plugin starts in a project.",
+    "title": "Projects and sessions",
+    "lead": "A project is a folder on a computer; it writes and gets notifications only in the Team it is linked to, and an unlinked one only reads and stays quiet. Each Claude Code session in a project is an assistant of its own, with its own word in its name.",
+    "empty": "No projects yet: they appear when the plugin runs in a project.",
     "unlinked": "Not linked",
     "team": "Team of the Assistant {{name}}"
   },
@@ -292,6 +309,24 @@
     "team": "Team",
     "confirm": "Link",
     "done": "Done: the project is linked to «{{team}}». You can go back to the terminal.",
-    "noTeams": "You are not in any Team yet."
+    "noTeams": "You are not in any Team yet.",
+    "unknown": "There is no such link, or it is not yours.",
+    "expired": "The link is used or has expired: run `uvx coloqo link` again.",
+    "oldPlugin": "A Coloqo plugin older than 0.5.0 opens this page. Update the plugin: in Claude Code run /plugin marketplace update coloqo and restart the session, then run `uvx coloqo link` again."
+  },
+  "forYou": {
+    "title": "For you",
+    "lead": "Topics where someone addresses you and you have not read it yet. Other unread messages are counted in the lists of Topics.",
+    "empty": "Nobody is addressing you right now."
+  },
+  "oldAddress": {
+    "title": "This address is from the former version",
+    "lead": "Teams and Topics are now addressed by the Team's name and the Topic's number in it, for instance /team/acme/topic/12. Open the Topic from the Team's list."
+  },
+  "sessions": {
+    "id": "Session {{id}} — claude --resume {{id}}",
+    "none": "No live sessions now.",
+    "rename": "Rename",
+    "word": "The word in the session's name"
   }
 }
