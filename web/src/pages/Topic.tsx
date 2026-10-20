@@ -185,6 +185,7 @@ function MessageItem({
   grouped,
   narrow,
   onReply,
+  onJump,
   avatars,
 }: {
   message: Message
@@ -195,6 +196,7 @@ function MessageItem({
   grouped: boolean
   narrow: boolean
   onReply: (message: Message) => void
+  onJump: (number: number) => void
   avatars: Map<string, string | null | undefined>
 }) {
   const { t, i18n } = useTranslation()
@@ -214,7 +216,7 @@ function MessageItem({
       ? 'bg-emerald-50 shadow-sm dark:bg-emerald-950/40'
       : 'bg-white shadow-sm dark:bg-stone-800/80'
   return (
-    <li id={`m-${message.number}`} className={`group relative flex scroll-mt-4 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
+    <li id={`m-${message.number}`} className={`group relative flex scroll-mt-16 gap-2.5 ${grouped ? 'mt-1' : 'mt-3'}`}>
       <div className="shrink-0" style={{ width: size }}>
         {!grouped && (
           <AuthorAvatar
@@ -257,7 +259,7 @@ function MessageItem({
         )}
         {message.reply_to !== null && (
           <div className="mt-0.5 mb-1.5">
-            <Quote message={original} number={message.reply_to} onClick={() => jumpTo(message.reply_to!)} />
+            <Quote message={original} number={message.reply_to} onClick={() => onJump(message.reply_to!)} />
           </div>
         )}
         <div className={progress ? 'text-sm' : undefined}>
@@ -309,7 +311,7 @@ function ServiceLine({ message }: { message: Message }) {
   const closed = message.kind === 'closed'
   const taken = message.kind === 'taken'
   return (
-    <li id={`m-${message.number}`} className="mt-3 flex scroll-mt-4 justify-center">
+    <li id={`m-${message.number}`} className="mt-3 flex scroll-mt-16 justify-center">
       <span
         className={`inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-1.5 rounded-full px-3 py-1 text-center text-xs ${
           closed
@@ -592,7 +594,7 @@ function Settle({ topic }: { topic: TopicDetail }) {
   )
 }
 
-function Files({ files, team }: { files: FileInfo[]; team: string }) {
+function Files({ files, team, onJump }: { files: FileInfo[]; team: string; onJump: (number: number) => void }) {
   const { t } = useTranslation()
   if (files.length === 0) return null
   return (
@@ -606,7 +608,14 @@ function Files({ files, team }: { files: FileInfo[]; team: string }) {
               {file.uploaded_by ?? t('team.noName')} · <Time value={file.created_at} />
               {' · '}
               {file.message_number !== null ? (
-                <a href={`#m-${file.message_number}`} className="hover:underline">
+                <a
+                  href={`#m-${file.message_number}`}
+                  className="hover:underline"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    onJump(file.message_number!)
+                  }}
+                >
                   {t('files.inMessage', { number: file.message_number })}
                 </a>
               ) : (
@@ -729,17 +738,22 @@ function useTopicFeed(team: string, number: number) {
     },
     enabled: team !== '' && number > 0,
   })
-  const loadEarlier = async () => {
-    const first = query.data?.messages[0]
-    if (!first) return
-    const earlier = await call(
-      api.GET('/api/team/{team}/topic/{number}', {
-        params: { path: { team, number }, query: { before: first.number, limit: PAGE } },
-      }),
-    )
-    queryClient.setQueryData<TopicDetail>(key, (old) =>
-      old ? { ...old, messages: joined(earlier.messages, old.messages) } : old,
-    )
+  /** Load earlier Messages: a page of them, or as many as reach the given number. */
+  const loadEarlier = async (until?: number) => {
+    let first = queryClient.getQueryData<TopicDetail>(key)?.messages[0]?.number
+    while (first !== undefined && first > 1 && (until === undefined || first > until)) {
+      const limit = until === undefined ? PAGE : Math.min(first - until, 500)
+      const earlier = await call(
+        api.GET('/api/team/{team}/topic/{number}', {
+          params: { path: { team, number }, query: { before: first, limit } },
+        }),
+      )
+      queryClient.setQueryData<TopicDetail>(key, (old) =>
+        old ? { ...old, messages: joined(earlier.messages, old.messages) } : old,
+      )
+      if (until === undefined || earlier.messages.length === 0) break
+      first = earlier.messages[0].number
+    }
   }
   return { query, messages: query.data?.messages ?? [], loadEarlier }
 }
@@ -805,7 +819,9 @@ export function TopicPage({ me }: { me: Me }) {
     scrolled.current = true
     const first = data.last_number - data.unread + 1
     setNewFrom(first)
-    const target = data.unread > 0 ? `m-${first}` : `m-${messages[messages.length - 1].number}`
+    // More unread than a window holds starts at the first loaded Message instead.
+    const unreadTarget = document.getElementById(`m-${first}`) ? `m-${first}` : `m-${messages[0].number}`
+    const target = data.unread > 0 ? unreadTarget : `m-${messages[messages.length - 1].number}`
     window.requestAnimationFrame(() =>
       document.getElementById(target)?.scrollIntoView({ block: data.unread > 0 ? 'start' : 'end' }),
     )
@@ -869,6 +885,21 @@ export function TopicPage({ me }: { me: Me }) {
     setEarlierError(null)
     feed
       .loadEarlier()
+      .catch(setEarlierError)
+      .finally(() => setLoadingEarlier(false))
+  }
+
+  /** Show a Message, loading the earlier ones it is among when it is not loaded yet. */
+  const reveal = (target: number) => {
+    if (document.getElementById(`m-${target}`)) {
+      jumpTo(target)
+      return
+    }
+    setLoadingEarlier(true)
+    setEarlierError(null)
+    feed
+      .loadEarlier(target)
+      .then(() => window.requestAnimationFrame(() => jumpTo(target)))
       .catch(setEarlierError)
       .finally(() => setLoadingEarlier(false))
   }
@@ -946,6 +977,7 @@ export function TopicPage({ me }: { me: Me }) {
                         narrow={narrow}
                         original={message.reply_to !== null ? byNumber.get(message.reply_to) : undefined}
                         onReply={reply}
+                        onJump={reveal}
                         avatars={avatars}
                       />
                     )}
@@ -959,7 +991,7 @@ export function TopicPage({ me }: { me: Me }) {
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <Settle topic={data} />
-          <Files files={data.files} team={data.team} />
+          <Files files={data.files} team={data.team} onJump={reveal} />
         </div>
       </div>
       <div className="pointer-events-none fixed right-4 bottom-4 z-30 flex flex-col gap-2 sm:right-6 sm:bottom-6">
