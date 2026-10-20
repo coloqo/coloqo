@@ -827,14 +827,16 @@ export function TopicPage({ me }: { me: Me }) {
     )
   }, [data, messages])
 
+  const firstLoaded = messages[0]?.number
   useLayoutEffect(() => {
-    // After earlier Messages are inserted, the one above the button stays where it was.
+    // After earlier Messages are inserted, the one above the button stays where it was. Only
+    // an insertion above it moves it: a Message arriving below meanwhile leaves the anchor waiting.
     const kept = anchor.current
-    if (!kept) return
+    if (!kept || firstLoaded === undefined || firstLoaded >= kept.number) return
     const element = document.getElementById(`m-${kept.number}`)
     if (element) window.scrollBy(0, element.getBoundingClientRect().top - kept.top)
     anchor.current = null
-  }, [messages.length])
+  }, [firstLoaded])
 
   // Reading is recorded while the page is in front and the latest Messages are on screen.
   useEffect(() => {
