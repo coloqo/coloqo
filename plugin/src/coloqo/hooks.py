@@ -226,7 +226,8 @@ def post_tool_use() -> None:
     written to Coloqo (the MCP server marks each write, decision 0023). A subagent's or a fork's
     change is not reminded where it happens: parallel forks would each be told and could open a
     Topic each, and it is the conversation that holds the Topic and talks to the user. It is
-    marked pending instead, and the conversation hears it at its next tool call or prompt.
+    marked pending instead, and the conversation hears it at its next call of a tool the hook
+    watches (a file tool, `Bash`, an MCP tool) or at the next prompt.
     """
     data = _input()
     session = _session(data)

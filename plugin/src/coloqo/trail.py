@@ -2,8 +2,8 @@
 
 Two marks per Claude Code session. ``done``: the session wrote to Coloqo, was reminded, or needs
 no reminder. ``pending``: a subagent of the session changed what the team will see, and the
-conversation is to be reminded at its next tool call or prompt. The MCP server sets ``done`` on
-each write, so a write made by a subagent or a fork counts for the whole session.
+conversation is to be reminded at its next watched tool call or prompt. The MCP server sets
+``done`` on each write, so a write made by a subagent or a fork counts for the whole session.
 """
 
 import time

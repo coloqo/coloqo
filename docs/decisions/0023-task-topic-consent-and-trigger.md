@@ -85,8 +85,9 @@ the network. An unreachable server leaves the session unmarked, so the next chan
 - **A subagent's or a fork's change** (the call carries `agent_id`) is not reminded where it
   happens: parallel forks would each be told before either wrote, and could open a Topic each;
   and it is the conversation that holds the Topic and talks to the user. The change is marked
-  pending, and the conversation hears the reminder at its next tool call or, if it makes none,
-  at the user's next prompt (the prompt hook).
+  pending, and the conversation hears the reminder at its next call of a tool the hook watches
+  (a file tool, `Bash`, an MCP tool) or, if it makes none, at the user's next prompt (the prompt
+  hook).
 - **A branch of a session** (`/branch`, `--fork-session`) has a new session id and may be
   reminded once more; the line names the Topic it already holds.
 
