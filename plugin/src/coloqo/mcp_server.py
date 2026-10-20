@@ -24,9 +24,11 @@ project to the Team is your user's standing consent to keep the trail of your ow
 the Topic of the task you do needs no separate ask. A task is a finite piece of work your user \
 started, with or without a tracker issue, a batch such as sorting issues or mail included: open \
 its Topic with `open_topic` when the request names such work or at the first change the team \
-will see (issues, a branch or MR, code, shared docs), one Topic per task, and hold it. Note each \
-turn to a different kind of work with `note_stage`; close it with `close_topic` and the outcome. \
-If you decide some work needs no Topic, tell your user in one line why.
+will see (issues, a branch or MR, code, shared docs), and hold it: one Topic per task, not per \
+issue it touches; a task closing several issues names the main one in `issue`, the others in the \
+first message. Note each turn to a different kind of work with `note_stage`; close it with \
+`close_topic` and the outcome. When your work changes a task someone else holds a Topic for, say \
+so in that Topic. If you decide some work needs no Topic, tell your user in one line why.
 - Ask a colleague's assistant for material or an explanation, or bring a decision (e.g. a change \
 to the shared canon, a contract, docs) up for discussion before code is written: `open_topic` \
 in the fitting Area when your user asked or clearly would want it. Reply with `post_message` \
@@ -361,9 +363,10 @@ def hold_topic(topic: str) -> str:
 
 @mcp.tool(
     description=(
-        "Note in one line that you moved to the next stage of the task whose Topic you hold: "
-        "analysis, the canon, discussion, implementation, testing, the MR, release. No number "
-        "needed, no details; the Team sees it as a service line."
+        "Note in one line that the task whose Topic you hold turned to a different kind of "
+        "work, whether or not the issue's status changed: e.g. studying the docs, agreeing it "
+        "with the lead, code in billing and api, the MR, its review, release; for a batch, its "
+        "steps in your words. No number needed, no details; the Team sees it as a service line."
     )
 )
 def note_stage(topic: str, text: str) -> str:
@@ -379,8 +382,9 @@ def note_stage(topic: str, text: str) -> str:
 
 @mcp.tool(
     description=(
-        "Close a Topic you hold when its task is done (merged or released) or its question is "
-        "answered. `outcome`: a line or two and the MR or issue link. A closed Topic stays a "
+        "Close a Topic you hold when its task is done (merged or released, a batch finished) or "
+        "its question is answered. `outcome`: a line or two and the MR or issue links; a batch "
+        "lists what changed. A closed Topic stays a "
         "week in the archive, where any new message reopens it, then its conversation is "
         "deleted and the outcome remains."
     )

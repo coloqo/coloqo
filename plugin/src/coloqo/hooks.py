@@ -218,11 +218,12 @@ def post_tool_use() -> None:
     Fires on the first tool call that changes what the team will see, in a linked project, in a
     session that has not written to Coloqo; then the session is marked and the hook returns
     before the network. An unreachable server leaves the session unmarked, to try again on the
-    next change (decision 0023).
+    next change (decision 0023). A subagent's call (``agent_id``) is left alone: the reminder
+    would land in the subagent, and the conversation that keeps the Topic would never hear it.
     """
     data = _input()
     session = str(data.get("session_id") or focus.session_id() or "")
-    if not session or _reminded_mark(session).exists():
+    if not session or data.get("agent_id") or _reminded_mark(session).exists():
         return
     project = Project.directory(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd"))
     tool_input = data.get("tool_input")

@@ -224,6 +224,37 @@ def test_the_session_is_reminded_once_with_its_held_topics(
     assert len(server.asked) == 1
 
 
+def test_a_subagent_is_not_reminded_and_leaves_the_session_unmarked(
+    config: Path,
+    project: Path,
+    server: type[FakeApi],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A subagent's change neither gets the reminder nor uses up the conversation's one.
+
+    Args:
+        config: The configuration directory.
+        project: The project directory.
+        server: The fake server.
+        monkeypatch: Patching helper from pytest.
+        capsys: Captured output from pytest.
+    """
+    data = {
+        "session_id": "s1",
+        "agent_id": "a1",
+        "tool_name": "Bash",
+        "tool_input": {"command": "git push"},
+    }
+    monkeypatch.setattr(hooks, "_input", lambda: data)
+    hooks.post_tool_use()
+    in_subagent = capsys.readouterr().out
+    _call(monkeypatch, "Bash", {"command": "git push"})
+
+    assert in_subagent == ""
+    assert "you hold T-12" in capsys.readouterr().out
+
+
 def test_a_session_that_holds_nothing_is_told_to_open_a_topic() -> None:
     """Without held Topics the reminder says to open one, or say why none is needed."""
     line = hooks.reminder([])

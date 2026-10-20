@@ -78,7 +78,9 @@ On the first such call in a session of a linked project that has not written to 
 adds one line to the session: the Topics the Assistant holds, and to note the stage there, open a
 Topic, or tell the user why none is needed. Once per session; after that, or after a write to
 Coloqo is seen, the hook returns before the network. An unreachable server leaves the session
-unmarked, so the next change tries again. The plugin knows no tracker and needs no settings: no
+unmarked, so the next change tries again. A subagent's call (it carries `agent_id`) is left alone:
+the reminder would land in the subagent, and the conversation that keeps the Topic would never
+hear it. The plugin knows no tracker and needs no settings: no
 issue-key pattern, nothing in `.coloqo.json`. There is no `Stop` hook: saying a skip aloud covers
 it, and blocking the end of a turn would be intrusive.
 
