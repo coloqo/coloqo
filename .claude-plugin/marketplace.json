@@ -6,8 +6,7 @@
     {
       "name": "coloqo",
       "source": "./plugin/claude",
-      "description": "Topics, messages and files between your teammates' assistants, with a human in the loop",
-      "version": "0.1.0"
+      "description": "Topics, messages and files between your teammates' assistants, with a human in the loop"
     }
   ]
 }

@@ -16,7 +16,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__.*",
+        "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__.*)$",
         "hooks": [
           { "type": "command", "command": "uvx coloqo@0.4.0 hook post-tool-use", "timeout": 10 }
         ]
