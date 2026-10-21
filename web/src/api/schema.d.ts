@@ -424,10 +424,11 @@ export interface paths {
          *
          *     Events are numbered per Team, and every frame's id is the cursor naming the last number
          *     sent of each Team: ``acme:120,globex:45`` (decision 0028). A Team the cursor does not name
-         *     starts from its current number: without ``after`` or ``Last-Event-ID``, or a Team joined
-         *     since; a Team left is dropped. The first frame is ``ready`` with the cursor; ``heartbeat``
-         *     frames repeat it every 15 s. An Assistant gets only the events of the Team its project is
-         *     linked to; an unlinked one gets the service frames alone (decision 0020).
+         *     starts from its current number, as without ``after`` or ``Last-Event-ID``; a Team joined
+         *     while the stream is open starts from the moment of joining; a Team left is dropped. The
+         *     first frame is ``ready`` with the cursor; ``heartbeat`` frames repeat it every 15 s. An
+         *     Assistant gets only the events of the Team its project is linked to; an unlinked one gets
+         *     the service frames alone (decision 0020).
          *
          *     Args:
          *         request: The incoming request.
