@@ -16,8 +16,9 @@ author learned of it only at their next prompt. The working files are
 ## Decision
 
 **A session is online while its watch runs.** The watch lives as long as its session. It tells the
-server every 20 seconds, and a session that made a request within the last minute is online; the
-minute covers a missed call and a restart of the server. *Found while building it, 2026-10-21:* the
+server at each heartbeat of its stream, about every 15 seconds, and a session that made a request
+within the last minute is online; the minute covers a couple of missed calls and a restart of the
+server. *Found while building it, 2026-10-21:* the
 open stream alone cannot tell, because a laptop closed with a session running leaves the stream open
 on the server's side until TCP gives up, for many minutes, and a Message would go to the sleeping
 session all that time.

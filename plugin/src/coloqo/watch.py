@@ -23,9 +23,9 @@ SILENCE_SECONDS = 45
 NOTICE_AFTER_SECONDS = 180
 """A break longer than this is reported to the session once the stream is back."""
 
-ALIVE_SECONDS = 20
-"""The watch tells the server its session runs this often; a minute of silence means it does
-not (decision 0029)."""
+ALIVE_SECONDS = 15
+"""The watch tells the server its session runs this often, at the heartbeat that comes as often;
+a minute of silence means it does not (decision 0029)."""
 
 
 def say(line: str) -> None:
@@ -206,9 +206,9 @@ def watch(project_dir: str | None = None) -> None:
     """Hold the event stream for the project's Assistant until the session ends.
 
     Waits quietly while the computer is not logged in, and reconnects after breaks with the
-    last event id, so nothing is missed (decision 0006). Every 20 seconds it tells the server
-    the session runs: a closed laptop leaves the stream open on the server's side for minutes,
-    so the stream alone cannot tell (decision 0029).
+    last event id, so nothing is missed (decision 0006). About every 15 seconds it tells the
+    server the session runs: a closed laptop leaves the stream open on the server's side for
+    minutes, so the stream alone cannot tell (decision 0029).
 
     Args:
         project_dir: The project; Claude Code's project or the current directory when omitted.

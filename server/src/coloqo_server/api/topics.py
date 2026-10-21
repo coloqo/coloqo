@@ -375,7 +375,11 @@ def topic_head(topic: Topic, team: Team, area: Area | None) -> tuple[dict, dict]
 
 
 async def topic_outs(
-    db: AsyncSession, topics: list[Topic], user_id: int, archive_days: int
+    db: AsyncSession,
+    topics: list[Topic],
+    user_id: int,
+    archive_days: int,
+    assistant_id: int | None = None,
 ) -> list[TopicOut]:
     """Build the list view of Topics for a User.
 
@@ -384,6 +388,7 @@ async def topic_outs(
         topics: The Topics.
         user_id: The caller, for unread counts.
         archive_days: The instance's days in the archive, for Teams without their own.
+        assistant_id: The calling Assistant, whose own Messages are not another session's.
     """
     if not topics:
         return []
@@ -404,22 +409,30 @@ async def topic_outs(
     }
     users = await pseudonyms(db, {t.created_by for t in topics})
     holders = await assistants_by_id(db, {t.holder_assistant_id for t in topics})
-    # The newest unread Message addressed to the caller, by Topic: to whom of theirs it went.
-    newest = dict(
-        (
-            await db.execute(
-                select(Message.topic_id, Message.to_assistant_id)
-                .join(Participant, Participant.topic_id == Message.topic_id)
-                .where(
-                    Message.topic_id.in_([p.topic_id for p in reads.values() if p.addressed]),
-                    Participant.user_id == user_id,
-                    Message.to_user_id == user_id,
-                    Message.number > Participant.last_read,
-                )
-                .order_by(Message.topic_id, Message.number)
+    # Whom of the caller's the unread Messages addressed to them went to, by Topic, in order.
+    targets: dict[int, list[int | None]] = {}
+    addressed = [p.topic_id for p in reads.values() if p.addressed]
+    if addressed:
+        rows = await db.execute(
+            select(Message.topic_id, Message.to_assistant_id)
+            .join(Participant, Participant.topic_id == Message.topic_id)
+            .where(
+                Message.topic_id.in_(addressed),
+                Participant.user_id == user_id,
+                Message.to_user_id == user_id,
+                Message.number > Participant.last_read,
             )
-        ).all()
-    )
+            .order_by(Message.topic_id, Message.number)
+        )
+        for topic_id, target in rows:
+            targets.setdefault(topic_id, []).append(target)
+    # A question to the person, or to the calling session, is the caller's own; otherwise the
+    # newest one names the session that answers it (decision 0029).
+    newest = {
+        topic_id: found[-1]
+        for topic_id, found in targets.items()
+        if None not in found and (assistant_id is None or assistant_id not in found)
+    }
     via = await assistants_by_id(db, set(newest.values()))
     result = []
     for topic in topics:
@@ -1193,7 +1206,13 @@ async def topic_detail(
         await db.scalars(select(File).where(File.topic_id == topic.id).order_by(File.number))
     )
     files = await file_outs(db, file_rows, settings.preview_max_bytes)
-    (summary,) = await topic_outs(db, [topic], actor.user.id, settings.archive_days)
+    (summary,) = await topic_outs(
+        db,
+        [topic],
+        actor.user.id,
+        settings.archive_days,
+        actor.assistant.id if actor.assistant else None,
+    )
     return TopicDetail(
         **summary.model_dump(),
         messages=await message_outs(db, messages, files, file_rows),
@@ -1292,7 +1311,13 @@ async def list_topics(
     if status_filter is not None:
         query = query.where(Topic.status == status_filter)
     topics = list(await db.scalars(query.order_by(Topic.updated_at.desc()).limit(limit)))
-    return await topic_outs(db, topics, actor.user.id, request.app.state.settings.archive_days)
+    return await topic_outs(
+        db,
+        topics,
+        actor.user.id,
+        request.app.state.settings.archive_days,
+        actor.assistant.id if actor.assistant else None,
+    )
 
 
 @router.post("/team/{team}/topic", status_code=status.HTTP_201_CREATED)
@@ -1436,7 +1461,13 @@ async def hold_topic(request: Request, team: str, number: int, actor: ActorDep, 
     recipients = await hold(db, actor, topic)
     await db.commit()
     request.app.state.bus.wake(recipients)
-    (out,) = await topic_outs(db, [topic], actor.user.id, request.app.state.settings.archive_days)
+    (out,) = await topic_outs(
+        db,
+        [topic],
+        actor.user.id,
+        request.app.state.settings.archive_days,
+        actor.assistant.id if actor.assistant else None,
+    )
     return out
 
 
@@ -1496,7 +1527,13 @@ async def settle_topic(
     recipients = await settle(db, actor, topic, body, f"{found.slug}/{ref(topic.number)}")
     await db.commit()
     request.app.state.bus.wake(recipients)
-    (out,) = await topic_outs(db, [topic], actor.user.id, request.app.state.settings.archive_days)
+    (out,) = await topic_outs(
+        db,
+        [topic],
+        actor.user.id,
+        request.app.state.settings.archive_days,
+        actor.assistant.id if actor.assistant else None,
+    )
     return out
 
 
@@ -1520,7 +1557,13 @@ async def read_up_to(
     """
     topic, _ = await topic_for(db, team, number, actor)
     await mark_read(db, actor, topic, body.number)
-    (out,) = await topic_outs(db, [topic], actor.user.id, request.app.state.settings.archive_days)
+    (out,) = await topic_outs(
+        db,
+        [topic],
+        actor.user.id,
+        request.app.state.settings.archive_days,
+        actor.assistant.id if actor.assistant else None,
+    )
     return out
 
 
@@ -1579,4 +1622,10 @@ async def inbox(request: Request, actor: ActorDep, db: DB) -> list[TopicOut] | J
                 await legacy_topics(db, topics, actor.user.id, request.app.state.settings)
             )
         )
-    return await topic_outs(db, topics, actor.user.id, request.app.state.settings.archive_days)
+    return await topic_outs(
+        db,
+        topics,
+        actor.user.id,
+        request.app.state.settings.archive_days,
+        actor.assistant.id if actor.assistant else None,
+    )

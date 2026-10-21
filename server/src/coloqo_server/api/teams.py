@@ -45,8 +45,8 @@ LIVE = timedelta(hours=24)
 ONLINE = timedelta(seconds=60)
 """An Assistant whose session made a request this recently is online (decision 0029).
 
-The watch of a running session makes one every 20 seconds, so a minute covers a missed one and
-a restart of the server.
+The watch of a running session makes one at each heartbeat of its stream, about every 15
+seconds, so a minute covers a couple of missed ones and a restart of the server.
 """
 
 SHOWN = timedelta(minutes=20)

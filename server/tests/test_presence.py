@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from datetime import timedelta
 
+from fastapi.testclient import TestClient
+
 from coloqo_server.settings import Settings
 from tests.conftest import Plugin, Setup, _connect
 from tests.test_retention import _age, _tend
@@ -97,22 +99,60 @@ def test_a_message_to_an_offline_session_goes_to_its_person(
     )
 
 
-def test_a_message_to_an_online_session_is_that_session_s(setup: Setup) -> None:
+def test_a_message_to_an_online_session_is_that_session_s(setup: Setup, settings: Settings) -> None:
     """Addressed to a running session, a Message is that session's; the Inbox says which.
 
     Args:
         setup: The Team.
+        settings: Instance settings.
     """
     number = _open(setup)["number"]
 
     posted = _post(setup, number, setup.alice_api.assistant)
     (inbox,) = setup.alice.get("/api/inbox").json()
+    with _connect(settings.database_url) as connection:
+        (data,) = connection.execute(
+            "SELECT data FROM events WHERE kind = 'message' ORDER BY number DESC LIMIT 1"
+        ).fetchone()
 
     assert (posted["to_assistant"], posted["meant_for"]) == (setup.alice_api.assistant, None)
     assert (inbox["addressed_via"], inbox["addressed_via_key"]) == (
         setup.alice_api.assistant,
         setup.alice_api.key,
     )
+    assert (data["to_assistant"], data["to_assistant_name"]) == (
+        setup.alice_api.key,
+        setup.alice_api.assistant,
+    )
+
+
+def test_a_question_to_the_person_is_not_hidden_behind_a_session_s(
+    setup: Setup, sibling: Callable[..., Plugin]
+) -> None:
+    """The Inbox names another session only when no unread question is the caller's own.
+
+    Args:
+        setup: The Team.
+        sibling: Opens another session of a project on the same computer.
+    """
+    to_person = _open(setup)["number"]
+    to_this = _open(setup)["number"]
+    other = sibling(setup.alice_api, "billing-api", "s2")
+    _post(setup, to_person, "alice")
+    _post(setup, to_person, other.assistant)
+    _post(setup, to_this, setup.alice_api.assistant)
+    _post(setup, to_this, other.assistant)
+
+    def via(client: TestClient) -> dict[int, str | None]:
+        """Return the Inbox's session that answers, by Topic, as a client sees it.
+
+        Args:
+            client: Whose Inbox.
+        """
+        return {t["number"]: t["addressed_via"] for t in client.get("/api/inbox").json()}
+
+    assert via(setup.alice) == {to_person: None, to_this: other.assistant}
+    assert via(setup.alice_api.client) == {to_person: None, to_this: None}
 
 
 def test_a_topic_opened_for_an_offline_session_goes_to_its_person(

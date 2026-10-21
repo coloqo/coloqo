@@ -622,7 +622,7 @@ class StreamingApi:
 
 
 def test_watch_tells_the_server_its_session_runs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every 20 seconds the watch asks for its own Assistant, so the server sees it online.
+    """Every 15 seconds the watch asks for its own Assistant, so the server sees it online.
 
     Args:
         monkeypatch: Patching helper from pytest.
@@ -646,8 +646,4 @@ def test_watch_tells_the_server_its_session_runs(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(KeyboardInterrupt):
         watch_module.watch(".")
 
-    assert apis[0].sent == [
-        ("GET", "/me"),
-        ("GET", "/assistant/k-mine"),
-        ("GET", "/assistant/k-mine"),
-    ]
+    assert apis[0].sent == [("GET", "/me")] + [("GET", "/assistant/k-mine")] * 3

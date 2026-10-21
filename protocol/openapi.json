@@ -1967,7 +1967,7 @@
     },
     "/api/assistant/{key}": {
       "get": {
-        "description": "Return an Assistant to its person, or to its own session; the plugin waits here for a\nlink to be chosen, and the watch calls it every 20 seconds to show its session runs\n(decision 0029).\n\nArgs:\n    key: The Assistant's key.\n    actor: Its person in the web, or the session itself.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when it is not the caller's.",
+        "description": "Return an Assistant to its person, or to its own session; the plugin waits here for a\nlink to be chosen, and the watch calls it about every 15 seconds to show its session runs\n(decision 0029).\n\nArgs:\n    key: The Assistant's key.\n    actor: Its person in the web, or the session itself.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when it is not the caller's.",
         "operationId": "get_assistant_api_assistant__key__get",
         "parameters": [
           {

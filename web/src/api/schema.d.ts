@@ -45,7 +45,7 @@ export interface paths {
         /**
          * Get Assistant
          * @description Return an Assistant to its person, or to its own session; the plugin waits here for a
-         *     link to be chosen, and the watch calls it every 20 seconds to show its session runs
+         *     link to be chosen, and the watch calls it about every 15 seconds to show its session runs
          *     (decision 0029).
          *
          *     Args:
