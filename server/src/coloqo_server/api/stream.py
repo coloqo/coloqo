@@ -9,11 +9,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.teams import find_team
-from coloqo_server.models import Event, Member, Team
+from coloqo_server.models import Event, FormerTeamSlug, Member, Team
 from coloqo_server.security import ActorDep, pushed_teams, require_reader
 
 router = APIRouter(tags=["events"])
@@ -97,10 +96,11 @@ async def events(
 
     Events are numbered per Team, and every frame's id is the cursor naming the last number
     sent of each Team: ``acme:120,globex:45`` (decision 0028). A Team the cursor does not name
-    starts from its current number: without ``after`` or ``Last-Event-ID``, or a Team joined
-    since; a Team left is dropped. The first frame is ``ready`` with the cursor; ``heartbeat``
-    frames repeat it every 15 s. An Assistant gets only the events of the Team its project is
-    linked to; an unlinked one gets the service frames alone (decision 0020).
+    starts from its current number, as without ``after`` or ``Last-Event-ID``; a Team joined
+    while the stream is open starts from the moment of joining; a Team left is dropped. The
+    first frame is ``ready`` with the cursor; ``heartbeat`` frames repeat it every 15 s. An
+    Assistant gets only the events of the Team its project is linked to; an unlinked one gets
+    the service frames alone (decision 0020).
 
     Args:
         request: The incoming request.
@@ -131,17 +131,51 @@ async def events(
         )
         return {team: (slug, last) for team, slug, last in rows if scope is None or team in scope}
 
+    async def resumed(db: AsyncSession, teams: dict[int, tuple[str, int]]) -> dict[int, int]:
+        """Return where the client's cursor resumes each Team it names, by Team id.
+
+        Slugs are matched against the stream's Teams, current slugs first, then their former
+        ones read in one query, so a cursor of any length costs no more.
+
+        Args:
+            db: Database session.
+            teams: The stream's Teams, from ``teams_now``.
+        """
+        asked = read_cursor(last_event_id if last_event_id is not None else after)
+        by_slug = {slug: team for team, (slug, _) in teams.items()}
+        if teams and any(slug not in by_slug for slug in asked):
+            former = await db.execute(
+                select(FormerTeamSlug.slug, FormerTeamSlug.team_id).where(
+                    FormerTeamSlug.team_id.in_(teams)
+                )
+            )
+            by_slug = dict(former.tuples().all()) | by_slug
+        # A number past the Team's last would wait for events that already came.
+        return {
+            by_slug[slug]: min(number, teams[by_slug[slug]][1])
+            for slug, number in asked.items()
+            if slug in by_slug
+        }
+
+    async def since_joining(db: AsyncSession, team: int) -> int:
+        """Return the number of a Team's last event before the caller joined it.
+
+        Args:
+            db: Database session.
+            team: The Team.
+        """
+        joined = select(Member.joined_at).where(Member.team_id == team, Member.user_id == user_id)
+        return await db.scalar(
+            select(func.coalesce(func.max(Event.number), 0)).where(
+                Event.team_id == team, Event.created_at < joined.scalar_subquery()
+            )
+        )
+
     async def frames() -> AsyncIterator[str]:
         """Yield frames until the client goes away."""
-        cursor: dict[int, int] = {}
         async with database.sessions() as db:
             teams = await teams_now(db)
-            asked = read_cursor(last_event_id if last_event_id is not None else after)
-            for slug, number in asked.items():
-                team = await find_team(db, slug)
-                if team is not None and team.id in teams:
-                    # A number past the Team's last would wait for events that already came.
-                    cursor[team.id] = min(number, teams[team.id][1])
+            cursor = await resumed(db, teams)
         cursor = {team: cursor.get(team, last) for team, (_, last) in teams.items()}
         slugs = {team: slug for team, (slug, _) in teams.items()}
         flag = bus.listen(user_id)
@@ -152,7 +186,10 @@ async def events(
                 flag.clear()
                 async with database.sessions() as db:
                     teams = await teams_now(db)
-                    cursor = {team: cursor.get(team, last) for team, (_, last) in teams.items()}
+                    for team in teams.keys() - cursor.keys():
+                        # The event that woke the stream may be the first one after joining.
+                        cursor[team] = await since_joining(db, team)
+                    cursor = {team: cursor[team] for team in teams}
                     slugs = {team: slug for team, (slug, _) in teams.items()}
                     rows = (
                         list(

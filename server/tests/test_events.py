@@ -1,6 +1,6 @@
 """Tests of events numbered per Team and the stream's cursor (decision 0028)."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import httpx
 import pytest
@@ -142,3 +142,34 @@ def test_cursor_with_a_former_slug_still_resumes(two: Two, live_url: str) -> Non
 
     assert frames[0] == (None, "ready", '{"last": "acme-inc:2,globex:0"}')
     assert frames[1][0] == "acme-inc:3,globex:0"
+
+
+def test_a_team_joined_while_listening_is_heard_from_the_join(
+    two: Two, human: Callable[[str], TestClient], live_url: str
+) -> None:
+    """The first event after joining reaches a stream opened before, though it woke the stream.
+
+    Args:
+        two: The Teams.
+        human: Factory of logged-in web clients.
+        live_url: Address of the same application served by uvicorn.
+    """
+    _topic(two.alice, "acme")
+    carol = human("carol")
+    frames = _events(live_url, carol, None, 2)
+    assert next(frames) == (None, "ready", '{"last": ""}')
+    token = two.alice.post("/api/team/acme/invite").json()["url"].rsplit("/", 1)[1]
+    assert carol.post(f"/api/invite/{token}/accept").status_code == 200
+    # Written through the live server, so that its event wakes the stream at once.
+    cookie = "; ".join(f"{name}={value}" for name, value in two.alice.cookies.items())
+    headers = {"Cookie": cookie, "Origin": two.alice.headers["Origin"]}
+    with httpx.Client(base_url=live_url, headers=headers) as writer:
+        opened = writer.post(
+            "/api/team/acme/topic", json={"area": "dev", "title": "After", "body": "Hi"}
+        )
+        assert opened.status_code == 201
+
+    frame_id, kind, data = next(frames)
+
+    assert (frame_id, kind) == ("acme:3", "topic")
+    assert '"title": "After"' in data
