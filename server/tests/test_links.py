@@ -2,58 +2,15 @@
 
 import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass
 
 import httpx
-import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 
 from coloqo_server.db import MIGRATIONS_DIR, migrate
 from coloqo_server.settings import Settings
-from tests.conftest import Plugin
-
-
-@dataclass
-class Two:
-    """Alice and Bob in two Teams, Acme and Globex, with an Area ``dev`` each.
-
-    Attributes:
-        alice: Alice's web client.
-        bob: Bob's web client.
-    """
-
-    alice: TestClient
-    bob: TestClient
-
-
-def _team(owner: TestClient, member: TestClient, name: str) -> str:
-    """Create a Team with an Area ``dev`` and bring a member in; return its slug.
-
-    Args:
-        owner: Its owner.
-        member: Who joins.
-        name: Its name.
-    """
-    team = owner.post("/api/team", json={"name": name}).json()["slug"]
-    token = owner.post(f"/api/team/{team}/invite").json()["url"].rsplit("/", 1)[1]
-    assert member.post(f"/api/invite/{token}/accept").status_code == 200
-    assert owner.post(f"/api/team/{team}/area", json={"name": "Dev"}).json()["slug"] == "dev"
-    return team
-
-
-@pytest.fixture
-def two(human: Callable[[str], TestClient]) -> Two:
-    """Build both Teams.
-
-    Args:
-        human: Factory of logged-in web clients.
-    """
-    alice, bob = human("alice"), human("bob")
-    assert _team(alice, bob, "Acme") == "acme"
-    assert _team(alice, bob, "Globex") == "globex"
-    return Two(alice, bob)
+from tests.conftest import Plugin, Two
 
 
 def _topic(client: TestClient, team: str, to: str | None = None) -> int:
@@ -283,7 +240,7 @@ def test_stream_brings_only_the_linked_team(
     frames = []
     with (
         httpx.Client(base_url=live_url, headers=headers, timeout=10) as stream_client,
-        stream_client.stream("GET", "/api/events?after=0") as stream,
+        stream_client.stream("GET", "/api/events?after=acme:0,globex:0") as stream,
     ):
         for line in stream.iter_lines():
             frames.append(line)
