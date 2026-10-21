@@ -17,6 +17,7 @@ import {
 import { useTeam, useTopics } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
 import { Page } from '../components/Layout'
+import { PresenceDot, PresenceText } from '../components/Presence'
 import { Time } from '../components/Time'
 import { RoleBadge, TopicList } from '../components/Topics'
 import {
@@ -338,18 +339,18 @@ function Members({ team }: { team: TeamDetail }) {
             ) : (
               <ul className="flex flex-col gap-0.5">
                 {member.assistants.map((assistant) => (
-                  <li key={assistant.key} className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
+                  <li
+                    key={assistant.key}
+                    className={`flex flex-wrap items-baseline justify-between gap-x-2 text-sm ${assistant.online ? '' : 'opacity-60'}`}
+                  >
                     <span
-                      className="text-stone-700 dark:text-stone-300"
+                      className="inline-flex items-center gap-1.5 text-stone-700 dark:text-stone-300"
                       title={assistant.session_id ? t('sessions.id', { id: assistant.session_id }) : undefined}
                     >
+                      <PresenceDot online={assistant.online ?? false} />
                       {assistant.name}
                     </span>
-                    {assistant.last_seen_at && (
-                      <span className="text-xs text-stone-500 dark:text-stone-400">
-                        {t('team.lastSeen')} <Time value={assistant.last_seen_at} />
-                      </span>
-                    )}
+                    <PresenceText online={assistant.online ?? false} lastSeen={assistant.last_seen_at} />
                   </li>
                 ))}
               </ul>

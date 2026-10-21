@@ -30,11 +30,15 @@ export function useTeams() {
   return useQuery({ queryKey: ['teams'], queryFn: () => call(api.GET('/api/team')) })
 }
 
+/** Which sessions are online changes with no event (decision 0029): pages that show it ask again this often. */
+const PRESENCE_MS = 30_000
+
 export function useTeam(team: string) {
   return useQuery({
     queryKey: ['team', team],
     queryFn: () => call(api.GET('/api/team/{team}', { params: { path: { team } } })),
     enabled: team !== '',
+    refetchInterval: PRESENCE_MS,
   })
 }
 
@@ -58,7 +62,7 @@ export function useInbox() {
 }
 
 export function useProjects() {
-  return useQuery({ queryKey: ['projects'], queryFn: () => call(api.GET('/api/project')) })
+  return useQuery({ queryKey: ['projects'], queryFn: () => call(api.GET('/api/project')), refetchInterval: PRESENCE_MS })
 }
 
 export function useInstallations() {

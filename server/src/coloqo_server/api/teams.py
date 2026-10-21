@@ -40,7 +40,28 @@ router = APIRouter(tags=["teams"])
 INVITE_DAYS = 7
 
 LIVE = timedelta(hours=24)
-"""An Assistant seen this recently is live: the directory lists it and its word stays its own."""
+"""An Assistant seen this recently keeps its word: a new session of its project gets another."""
+
+ONLINE = timedelta(seconds=60)
+"""An Assistant whose session made a request this recently is online (decision 0029).
+
+The watch of a running session makes one at each heartbeat of its stream, about every 15
+seconds, so a minute covers a couple of missed ones and a restart of the server.
+"""
+
+SHOWN = timedelta(minutes=20)
+"""An Assistant offline longer than this is forgotten: no list shows it (decision 0029)."""
+
+
+def online(assistant: Assistant, moment: datetime | None = None) -> bool:
+    """Whether an Assistant's session runs: it made a request within ``ONLINE``.
+
+    Args:
+        assistant: The Assistant.
+        moment: When to judge; now when omitted.
+    """
+    seen = assistant.last_seen_at
+    return seen is not None and seen > (moment or now()) - ONLINE
 
 
 def _slug(value: str | None) -> str | None:
@@ -111,7 +132,7 @@ class TeamOut(BaseModel):
 
 
 class AssistantOut(BaseModel):
-    """A live Assistant of a Member (decision 0024).
+    """A shown Assistant of a Member: online, or offline for less than ``SHOWN`` (0024, 0029).
 
     Attributes:
         key: Its public key.
@@ -119,6 +140,7 @@ class AssistantOut(BaseModel):
         word: Its own word, ``vega``.
         project: The project folder's name.
         last_seen_at: Its last request.
+        online: Its session runs now (decision 0029).
         session_id: The Claude Code session id; only its owner gets it.
     """
 
@@ -127,6 +149,7 @@ class AssistantOut(BaseModel):
     word: str
     project: str
     last_seen_at: datetime | None
+    online: bool = False
     session_id: str | None = None
 
 
@@ -136,7 +159,7 @@ class MemberOut(BaseModel):
     Attributes:
         pseudonym: The name the Team sees.
         role: Owner or member.
-        assistants: The Member's live Assistants whose projects are linked to this Team.
+        assistants: The Member's shown Assistants whose projects are linked to this Team.
         avatar: Where their avatar is served; ``None`` shows their initials.
     """
 
@@ -397,6 +420,7 @@ def assistant_out(assistant: Assistant, project: Project, viewer: Actor) -> Assi
         word=assistant.word,
         project=project.name,
         last_seen_at=assistant.last_seen_at,
+        online=online(assistant),
         session_id=assistant.session_id if assistant.user_id == viewer.user.id else None,
     )
 
@@ -471,7 +495,7 @@ async def team_detail(db: AsyncSession, team: Team, member: Member, actor: Actor
             .where(
                 Assistant.user_id.in_([user.id for _, user in member_rows]),
                 Project.team_id == team.id,
-                Assistant.last_seen_at > now() - LIVE,
+                Assistant.last_seen_at > now() - SHOWN,
             )
             .order_by(Project.name, Assistant.word)
         )

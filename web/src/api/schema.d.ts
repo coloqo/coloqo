@@ -45,7 +45,8 @@ export interface paths {
         /**
          * Get Assistant
          * @description Return an Assistant to its person, or to its own session; the plugin waits here for a
-         *     link to be chosen.
+         *     link to be chosen, and the watch calls it about every 15 seconds to show its session runs
+         *     (decision 0029).
          *
          *     Args:
          *         key: The Assistant's key.
@@ -1439,7 +1440,7 @@ export interface components {
         };
         /**
          * AssistantOut
-         * @description A live Assistant of a Member (decision 0024).
+         * @description A shown Assistant of a Member: online, or offline for less than ``SHOWN`` (0024, 0029).
          *
          *     Attributes:
          *         key: Its public key.
@@ -1447,6 +1448,7 @@ export interface components {
          *         word: Its own word, ``vega``.
          *         project: The project folder's name.
          *         last_seen_at: Its last request.
+         *         online: Its session runs now (decision 0029).
          *         session_id: The Claude Code session id; only its owner gets it.
          */
         AssistantOut: {
@@ -1456,6 +1458,11 @@ export interface components {
             last_seen_at: string | null;
             /** Name */
             name: string;
+            /**
+             * Online
+             * @default false
+             */
+            online?: boolean;
             /** Project */
             project: string;
             /** Session Id */
@@ -1795,7 +1802,7 @@ export interface components {
          *     Attributes:
          *         pseudonym: The name the Team sees.
          *         role: Owner or member.
-         *         assistants: The Member's live Assistants whose projects are linked to this Team.
+         *         assistants: The Member's shown Assistants whose projects are linked to this Team.
          *         avatar: Where their avatar is served; ``None`` shows their initials.
          */
         MemberOut: {
@@ -1872,6 +1879,8 @@ export interface components {
          *         assistant_key: Its key.
          *         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
          *         to_assistant: Name of the addressed Assistant, if a specific one.
+         *         meant_for: Name of the Assistant it was meant for, when that session was offline and
+         *             the Message went to its person (decision 0029).
          *         human_part: The human's part in an Assistant's reply (decision 0026); ``None`` for a
          *             human's own Message, service lines, progress notes and older replies.
          *         reply_to: Number of the Message it answers, if any.
@@ -1901,6 +1910,8 @@ export interface components {
             files: components["schemas"]["FileOut"][];
             human_part: components["schemas"]["HumanPart"] | null;
             kind: components["schemas"]["MessageKind"];
+            /** Meant For */
+            meant_for?: string | null;
             /** Number */
             number: number;
             /** Reply To */
@@ -1914,7 +1925,7 @@ export interface components {
         };
         /**
          * ProjectOut
-         * @description One of the person's projects with its live sessions, as their settings list it.
+         * @description One of the person's projects with its shown sessions, as their settings list it.
          *
          *     Attributes:
          *         key: The project's public key.
@@ -1922,7 +1933,7 @@ export interface components {
          *         installation: Name of the computer.
          *         team: The slug of the Team it is linked to, if any.
          *         team_name: That Team's name.
-         *         assistants: Its live Assistants.
+         *         assistants: Its shown Assistants: online, or offline for less than ``SHOWN``.
          *         last_seen_at: The last request of any of its Assistants.
          */
         ProjectOut: {
@@ -2089,6 +2100,10 @@ export interface components {
         TopicDetail: {
             /** Addressed */
             addressed: boolean;
+            /** Addressed Via */
+            addressed_via?: string | null;
+            /** Addressed Via Key */
+            addressed_via_key?: string | null;
             /** Area */
             area: string;
             /** Area Name */
@@ -2195,6 +2210,9 @@ export interface components {
          *         turn_limit: The Team's limit of such turns.
          *         unread: Messages the caller has not read, if they take part.
          *         addressed: Some unread Message is addressed to the caller.
+         *         addressed_via: When the newest such Message is addressed to one of the caller's
+         *             Assistants, its name: the question is that session's (decision 0029).
+         *         addressed_via_key: Its key.
          *         created_at: Creation time.
          *         updated_at: Time of the newest Message.
          *         closed_at: When it was closed; ``None`` while open.
@@ -2204,6 +2222,10 @@ export interface components {
         TopicOut: {
             /** Addressed */
             addressed: boolean;
+            /** Addressed Via */
+            addressed_via?: string | null;
+            /** Addressed Via Key */
+            addressed_via_key?: string | null;
             /** Area */
             area: string;
             /** Area Name */

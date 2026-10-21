@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.teams import LIVE
+from coloqo_server.api.teams import online
 from coloqo_server.api.topics import assistants_by_id, stored, topic_head
 from coloqo_server.events import add_event
 from coloqo_server.models import (
@@ -29,8 +29,8 @@ IDLE_OUTCOME = "Closed for inactivity: no Messages for {days} days."
 async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict, dict]:
     """Return what an event about a Topic carries, in both shapes, with its holder.
 
-    The holder's project goes with it, and whether the holder is live, so the project's other
-    sessions hear about the Topic when its holder is gone (decision 0024).
+    The holder's project goes with it, and whether the holder is online, so the project's
+    other sessions hear about the Topic when its holder is gone (decisions 0024, 0029).
 
     Args:
         db: Database session.
@@ -48,7 +48,7 @@ async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict,
     new |= {
         "holder": holder.key if holder else None,
         "holder_project": holder.project if holder else None,
-        "holder_live": bool(row and row.last_seen_at and row.last_seen_at > moment - LIVE),
+        "holder_live": bool(row and online(row, moment)),
     }
     old |= {"holder_assistant_id": topic.holder_assistant_id}
     return new, old

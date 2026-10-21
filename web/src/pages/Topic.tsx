@@ -102,6 +102,7 @@ function continues(message: Message, previous: Message | undefined): boolean {
     previous.human_part === message.human_part &&
     previous.to === message.to &&
     previous.to_assistant === message.to_assistant &&
+    previous.meant_for === message.meant_for &&
     previous.by_holder === message.by_holder &&
     new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < GROUP_GAP_MS
   )
@@ -239,6 +240,11 @@ function MessageItem({
             {addressee && (
               <span className={`inline-flex items-center gap-1 ${toMe ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-stone-500 dark:text-stone-400'}`}>
                 {toMe && <Bell className="size-3.5 self-center" />}→ {toMe ? t('message.toYou') : addressee}
+              </span>
+            )}
+            {message.meant_for && (
+              <span className="text-xs text-stone-500 dark:text-stone-400" title={message.meant_for}>
+                {t('message.meantFor', { name: message.meant_for.split(' · ').pop() })}
               </span>
             )}
             {held && (

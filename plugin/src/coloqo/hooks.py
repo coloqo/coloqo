@@ -70,7 +70,7 @@ def session_start() -> None:
         current = focus.load(data.get("session_id"))
         if unread:
             lines.append(f"Inbox — {len(unread)} topics with unread messages:")
-            lines.extend(f"- {topic_line(t, api.team)}" for t in unread[:10])
+            lines.extend(f"- {topic_line(t, api.team, api.assistant_key)}" for t in unread[:10])
             lines.append("Mention them to the user; read with the coloqo read_topic tool.")
         lines.append(
             f"This session's Coloqo focus: {current.describe()} (what reaches it unasked; the "
@@ -113,7 +113,7 @@ def user_prompt_submit() -> None:
         addressed = [t for t in addressed if str(t.get("created_by") or "").lower() in people]
     if addressed:
         lines = ["Coloqo — unread messages addressed to your user:"]
-        lines.extend(f"- {topic_line(t, api.team)}" for t in addressed[:5])
+        lines.extend(f"- {topic_line(t, api.team, api.assistant_key)}" for t in addressed[:5])
         lines.append("Mention them briefly in your answer; read with read_topic when relevant.")
         print("\n".join(lines))
 

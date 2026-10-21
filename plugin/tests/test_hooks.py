@@ -286,6 +286,44 @@ def test_the_prompt_tells_the_conversation_of_a_subagents_change(
     assert capsys.readouterr().out == ""
 
 
+def test_the_prompt_tells_a_question_to_this_session_as_its_own(
+    config: Path,
+    project: Path,
+    server: type[FakeApi],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Message addressed to this very session reads "addressed to you" (decision 0029).
+
+    Args:
+        config: The configuration directory.
+        project: The project directory.
+        server: The fake server.
+        monkeypatch: Patching helper from pytest.
+        capsys: Captured output from pytest.
+    """
+    topic = {
+        "team": "acme",
+        "ref": "T-3",
+        "title": "Rename",
+        "area": "canon",
+        "status": "open",
+        "last_number": 4,
+        "unread": 1,
+        "addressed": True,
+        "addressed_via": "alice · web-app · vega",
+        "addressed_via_key": MINE,
+    }
+    monkeypatch.setattr(FakeApi, "request", lambda self, method, path, **kwargs: [topic])
+    monkeypatch.setattr(hooks, "_input", lambda: {"session_id": "s1"})
+
+    hooks.user_prompt_submit()
+
+    assert "T-3 «Rename» · Area: canon · 4 messages · 1 unread, addressed to you\n" in (
+        capsys.readouterr().out
+    )
+
+
 def test_a_session_that_holds_nothing_is_told_to_open_a_topic() -> None:
     """Without held Topics the reminder says to open one, or say why none is needed."""
     line = hooks.reminder([])

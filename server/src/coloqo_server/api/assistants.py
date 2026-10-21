@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.teams import LIVE, AssistantOut, assistant_out, find_team
+from coloqo_server.api.teams import LIVE, SHOWN, AssistantOut, assistant_out, find_team
 from coloqo_server.models import Assistant, Installation, LinkRequest, Member, Project, Team
 from coloqo_server.naming import new_key, pick_word
 from coloqo_server.security import (
@@ -101,7 +101,7 @@ class WordIn(BaseModel):
 
 
 class ProjectOut(BaseModel):
-    """One of the person's projects with its live sessions, as their settings list it.
+    """One of the person's projects with its shown sessions, as their settings list it.
 
     Attributes:
         key: The project's public key.
@@ -109,7 +109,7 @@ class ProjectOut(BaseModel):
         installation: Name of the computer.
         team: The slug of the Team it is linked to, if any.
         team_name: That Team's name.
-        assistants: Its live Assistants.
+        assistants: Its shown Assistants: online, or offline for less than ``SHOWN``.
         last_seen_at: The last request of any of its Assistants.
     """
 
@@ -352,7 +352,8 @@ async def _own(db: AsyncSession, key: str, actor: Actor) -> tuple[Assistant, Pro
 @router.get("/assistant/{key}")
 async def get_assistant(key: str, actor: ActorDep, db: DB) -> AssistantSelf:
     """Return an Assistant to its person, or to its own session; the plugin waits here for a
-    link to be chosen.
+    link to be chosen, and the watch calls it about every 15 seconds to show its session runs
+    (decision 0029).
 
     Args:
         key: The Assistant's key.
@@ -437,7 +438,7 @@ async def project_outs(db: AsyncSession, actor: Actor, projects: list[Project]) 
                 assistants=[
                     assistant_out(a, project, actor)
                     for a in own
-                    if a.last_seen_at and a.last_seen_at > now() - LIVE
+                    if a.last_seen_at and a.last_seen_at > now() - SHOWN
                 ],
                 last_seen_at=own[0].last_seen_at if own else None,
             )

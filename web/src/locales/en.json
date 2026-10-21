@@ -169,7 +169,8 @@
       "without": "The assistant wrote this on its own, without {{name}}",
       "with": "{{name}} asked for this message or saw its text",
       "words": "{{name}}'s own words, verbatim"
-    }
+    },
+    "meantFor": "meant for {{name}}, offline"
   },
   "compose": {
     "title": "Your reply",
@@ -328,5 +329,9 @@
     "none": "No live sessions now.",
     "rename": "Rename",
     "word": "The word in the session's name"
+  },
+  "presence": {
+    "online": "online",
+    "offline": "offline"
   }
 }
