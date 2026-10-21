@@ -3,18 +3,17 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coloqo_server.api.teams import LIVE
 from coloqo_server.api.topics import assistants_by_id, stored, topic_head
-from coloqo_server.events import add_events
+from coloqo_server.events import add_event
 from coloqo_server.models import (
     Area,
     Assistant,
     Event,
     File,
-    Member,
     Message,
     MessageKind,
     Participant,
@@ -25,20 +24,6 @@ from coloqo_server.models import (
 from coloqo_server.settings import Settings
 
 IDLE_OUTCOME = "Closed for inactivity: no Messages for {days} days."
-
-
-async def _people(db: AsyncSession, topic: Topic) -> set[int]:
-    """Return who should hear about a Topic going idle: its people and its holder's person.
-
-    Args:
-        db: Database session.
-        topic: The Topic.
-    """
-    people = set(
-        await db.scalars(select(Participant.user_id).where(Participant.topic_id == topic.id))
-    )
-    holder = await db.get(Assistant, topic.holder_assistant_id or 0)
-    return people | ({holder.user_id} if holder else set())
 
 
 async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict, dict]:
@@ -70,7 +55,10 @@ async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict,
 
 
 async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> set[int]:
-    """Tell the people of Topics about to close for inactivity, once per quiet spell.
+    """Tell the Team of Topics about to close for inactivity, once per quiet spell.
+
+    The event goes to the whole Team, as every event (decision 0028); a plugin shows it to the
+    holder and to the holder's project's other sessions, the web shows it to nobody.
 
     Args:
         db: Database session.
@@ -99,9 +87,7 @@ async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> s
         closes_at = topic.updated_at + timedelta(days=settings.idle_close_days)
         new, old = await _head(db, topic, moment)
         new["closes_at"] = old["closes_at"] = closes_at.isoformat()
-        recipients |= add_events(
-            db, await _people(db, topic), "topic_idle", stored(new, old, topic.team_id)
-        )
+        recipients |= await add_event(db, topic.team_id, "topic_idle", stored(new, old))
     return recipients
 
 
@@ -145,7 +131,6 @@ async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> 
         topic.status = TopicStatus.Closed
         topic.outcome = topic.outcome or outcome
         topic.closed_at = moment
-        team = list(await db.scalars(select(Member.user_id).where(Member.team_id == topic.team_id)))
         new, old = await _head(db, topic, moment)
         closing = {
             "status": TopicStatus.Closed.value,
@@ -153,8 +138,8 @@ async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> 
             "outcome": topic.outcome,
             "automatic": True,
         }
-        recipients |= add_events(
-            db, team, "topic_status", stored(new | closing, old | closing, topic.team_id)
+        recipients |= await add_event(
+            db, topic.team_id, "topic_status", stored(new | closing, old | closing)
         )
     return recipients
 
@@ -196,10 +181,8 @@ async def delete_archived(db: AsyncSession, settings: Settings, moment: datetime
         await db.execute(delete(Participant).where(Participant.topic_id == topic.id))
         await db.execute(
             delete(Event).where(
-                or_(
-                    Event.data["topic_id"].astext == str(topic.id),
-                    Event.data["legacy"]["topic_id"].astext == str(topic.id),
-                )
+                Event.team_id == topic.team_id,
+                Event.data["topic"].astext == str(topic.number),
             )
         )
         topic.deleted_at = moment

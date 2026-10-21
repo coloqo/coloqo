@@ -158,7 +158,7 @@ def test_old_plugin_hears_the_former_events(old: TestClient, setup: Setup, live_
     frames = []
     with (
         httpx.Client(base_url=live_url, headers=headers, timeout=10) as client,
-        client.stream("GET", "/api/events?after=0") as stream,
+        client.stream("GET", "/api/events?after=acme:0") as stream,
     ):
         for line in stream.iter_lines():
             frames.append(line)

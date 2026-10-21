@@ -346,3 +346,44 @@ def setup(human: Callable[[str], TestClient], plugin: Callable[..., Plugin]) -> 
         team=team,
         area=area,
     )
+
+
+@dataclass
+class Two:
+    """Alice and Bob in two Teams, Acme and Globex, with an Area ``dev`` each.
+
+    Attributes:
+        alice: Alice's web client.
+        bob: Bob's web client.
+    """
+
+    alice: TestClient
+    bob: TestClient
+
+
+def _team(owner: TestClient, member: TestClient, name: str) -> str:
+    """Create a Team with an Area ``dev`` and bring a member in; return its slug.
+
+    Args:
+        owner: Its owner.
+        member: Who joins.
+        name: Its name.
+    """
+    team = owner.post("/api/team", json={"name": name}).json()["slug"]
+    token = owner.post(f"/api/team/{team}/invite").json()["url"].rsplit("/", 1)[1]
+    assert member.post(f"/api/invite/{token}/accept").status_code == 200
+    assert owner.post(f"/api/team/{team}/area", json={"name": "Dev"}).json()["slug"] == "dev"
+    return team
+
+
+@pytest.fixture
+def two(human: Callable[[str], TestClient]) -> Two:
+    """Build both Teams.
+
+    Args:
+        human: Factory of logged-in web clients.
+    """
+    alice, bob = human("alice"), human("bob")
+    assert _team(alice, bob, "Acme") == "acme"
+    assert _team(alice, bob, "Globex") == "globex"
+    return Two(alice, bob)

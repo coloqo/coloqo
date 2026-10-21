@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coloqo_server.api.teams import LIVE, find_area, team_for
-from coloqo_server.events import add_events
+from coloqo_server.events import add_event
 from coloqo_server.models import (
     Area,
     Assistant,
@@ -331,15 +331,14 @@ async def pseudonyms(db: AsyncSession, ids: set[int | None]) -> dict[int, str | 
     return {u.id: u.pseudonym for u in await db.scalars(select(User).where(User.id.in_(wanted)))}
 
 
-def stored(new: dict, old: dict, team_id: int) -> dict:
+def stored(new: dict, old: dict) -> dict:
     """Return an event's data in both shapes: plugins older than 0.5.0 get ``legacy``.
 
     Args:
         new: The data of decision 0025.
         old: The former data, with database ids.
-        team_id: The Team, to keep an Assistant's stream to its own Team; never sent.
     """
-    return {**new, "legacy": old, "_team_id": team_id}
+    return {**new, "legacy": old}
 
 
 def topic_head(topic: Topic, team: Team, area: Area | None) -> tuple[dict, dict]:
@@ -641,16 +640,6 @@ async def join(db: AsyncSession, topic_id: int, user_ids: set[int | None]) -> No
         )
 
 
-async def team_user_ids(db: AsyncSession, team_id: int) -> list[int]:
-    """Return the ids of a Team's Members.
-
-    Args:
-        db: Database session.
-        team_id: The Team.
-    """
-    return list(await db.scalars(select(Member.user_id).where(Member.team_id == team_id)))
-
-
 def human_part(
     actor: Actor, kind: MessageKind, as_human: bool, with_human: bool
 ) -> HumanPart | None:
@@ -814,9 +803,7 @@ async def post(
     if extra:
         new |= extra[0]
         old |= extra[1]
-    recipients = add_events(
-        db, await team_user_ids(db, topic.team_id), "message", stored(new, old, topic.team_id)
-    )
+    recipients = await add_event(db, topic.team_id, "message", stored(new, old))
     return message, recipients
 
 
@@ -917,9 +904,7 @@ async def open_topic(
         "to_user_id": to_user_id,
         "to_assistant_id": to_assistant_id,
     }
-    recipients = add_events(
-        db, await team_user_ids(db, team.id), "topic", stored(new, old, team.id)
-    )
+    recipients = await add_event(db, team.id, "topic", stored(new, old))
     # The opening Message is not a turn: the conversation starts with it.
     _, more = await post(
         db,
@@ -1073,9 +1058,7 @@ async def settle(
         "outcome": topic.outcome,
         "automatic": False,
     }
-    recipients |= add_events(
-        db, await team_user_ids(db, topic.team_id), "topic_status", stored(new, old, team.id)
-    )
+    recipients |= await add_event(db, topic.team_id, "topic_status", stored(new, old))
     return recipients
 
 

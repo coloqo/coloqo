@@ -48,7 +48,7 @@ def _age(settings: Settings, number: int, column: str, days: float) -> None:
 
 
 def test_idle_topic_is_announced_once(setup: Setup, settings: Settings) -> None:
-    """Three days before closing, the holder's and the participants' people are told, once.
+    """Three days before closing, the Team is told once (decision 0028).
 
     Args:
         setup: The Team.

@@ -8,7 +8,6 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
-    Index,
     Integer,
     String,
     Text,
@@ -305,6 +304,7 @@ class Team(Base):
             setting (decision 0021).
         last_topic: Number of its newest Topic; the next one gets ``last_topic + 1``.
         last_file: Number of its newest file, the same way.
+        last_event: Number of its newest event, the same way (decision 0028).
         created_at: Creation time.
     """
 
@@ -317,6 +317,7 @@ class Team(Base):
     archive_days: Mapped[int | None] = mapped_column(Integer)
     last_topic: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_file: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_event: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -587,23 +588,27 @@ class Participant(Base):
 
 
 class Event(Base):
-    """An event for a User's stream; a signal, not content (decision 0006).
+    """An event of a Team for its Members' streams; a signal, not content (decision 0006).
 
-    The id is the User's cursor: a client reconnects with the last id it received.
+    Stored once and numbered in its Team (decision 0028): a stream's cursor names the last
+    number it got of each Team.
 
     Attributes:
-        id: Number from one sequence for all Users.
-        user_id: Whose stream.
+        id: Identifier, never shown; orders a stream's events across its Teams.
+        team_id: The Team.
+        number: Its number in the Team, from 1 without gaps, but for events deleted with
+            their Topic or for age.
         kind: ``message``, ``topic``, ...
         data: What the client needs to decide whether to read.
         created_at: When it happened; the log is kept for a week (decision 0008).
     """
 
     __tablename__ = "events"
-    __table_args__ = (Index("ix_events_user_id_id", "user_id", "id"),)
+    __table_args__ = (UniqueConstraint("team_id", "number"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
+    number: Mapped[int] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(32))
     data: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(

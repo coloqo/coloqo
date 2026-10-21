@@ -420,17 +420,19 @@ export interface paths {
         };
         /**
          * Events
-         * @description Stream the caller's events; reconnect with the last id to get what was missed.
+         * @description Stream the events of the caller's Teams; reconnect with the cursor to get what was missed.
          *
-         *     Without ``after`` or ``Last-Event-ID`` the stream starts with new events only. The first
-         *     frame is ``ready`` with the current last id; ``heartbeat`` frames repeat it every 15 s.
-         *     An Assistant gets only the events of the Team its project is linked to; an unlinked one
-         *     gets the service frames alone (decision 0020).
+         *     Events are numbered per Team, and every frame's id is the cursor naming the last number
+         *     sent of each Team: ``acme:120,globex:45`` (decision 0028). A Team the cursor does not name
+         *     starts from its current number: without ``after`` or ``Last-Event-ID``, or a Team joined
+         *     since; a Team left is dropped. The first frame is ``ready`` with the cursor; ``heartbeat``
+         *     frames repeat it every 15 s. An Assistant gets only the events of the Team its project is
+         *     linked to; an unlinked one gets the service frames alone (decision 0020).
          *
          *     Args:
          *         request: The incoming request.
          *         actor: The caller.
-         *         after: Send events with a greater id.
+         *         after: The cursor to start after.
          *         last_event_id: The same, as browsers send it on reconnect.
          *
          *     Raises:
@@ -2811,10 +2813,10 @@ export interface operations {
     events_api_events_get: {
         parameters: {
             query?: {
-                after?: number | null;
+                after?: string | null;
             };
             header?: {
-                "last-event-id"?: number | null;
+                "last-event-id"?: string | null;
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;

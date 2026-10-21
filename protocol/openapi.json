@@ -1809,7 +1809,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2893,7 +2893,7 @@
     },
     "/api/events": {
       "get": {
-        "description": "Stream the caller's events; reconnect with the last id to get what was missed.\n\nWithout ``after`` or ``Last-Event-ID`` the stream starts with new events only. The first\nframe is ``ready`` with the current last id; ``heartbeat`` frames repeat it every 15 s.\nAn Assistant gets only the events of the Team its project is linked to; an unlinked one\ngets the service frames alone (decision 0020).\n\nArgs:\n    request: The incoming request.\n    actor: The caller.\n    after: Send events with a greater id.\n    last_event_id: The same, as browsers send it on reconnect.\n\nRaises:\n    HTTPException: 403 for a plugin request without an Assistant.",
+        "description": "Stream the events of the caller's Teams; reconnect with the cursor to get what was missed.\n\nEvents are numbered per Team, and every frame's id is the cursor naming the last number\nsent of each Team: ``acme:120,globex:45`` (decision 0028). A Team the cursor does not name\nstarts from its current number: without ``after`` or ``Last-Event-ID``, or a Team joined\nsince; a Team left is dropped. The first frame is ``ready`` with the cursor; ``heartbeat``\nframes repeat it every 15 s. An Assistant gets only the events of the Team its project is\nlinked to; an unlinked one gets the service frames alone (decision 0020).\n\nArgs:\n    request: The incoming request.\n    actor: The caller.\n    after: The cursor to start after.\n    last_event_id: The same, as browsers send it on reconnect.\n\nRaises:\n    HTTPException: 403 for a plugin request without an Assistant.",
         "operationId": "events_api_events_get",
         "parameters": [
           {
@@ -2903,8 +2903,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "minimum": 0,
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -2920,7 +2919,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
