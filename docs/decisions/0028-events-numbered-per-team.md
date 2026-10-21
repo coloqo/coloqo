@@ -26,8 +26,13 @@ was shown to the holder only anyway.
 **The cursor names a number per Team**: `acme:120,globex:45`, sent as the SSE `id:` and returned as
 `Last-Event-ID`; the heartbeat (decision 0006) carries the same. A browser follows all its User's
 Teams; a session's plugin follows the one its project is linked to (decision 0020), so its cursor
-has one part. A Team missing from the cursor starts from its current number: a Team just joined,
-or a client that had no cursor. A Team the User has left is dropped.
+has one part. A Team missing from the cursor starts from its current number: a client that had
+no cursor, or a Team joined while it was away. A Team the User has left is dropped.
+
+*Found while building it, 2026-10-21; to be confirmed by the author.* A Team joined while the
+stream is open starts from the member's joining, not from its current number: the first event
+after joining is what wakes the stream, and the current number already counts it, so it would be
+lost.
 
 **Events for one person**, when some appear (an invitation, a notice to one member), get a
 numbering of their own, as the `me:7` part of the cursor. There are none now.
