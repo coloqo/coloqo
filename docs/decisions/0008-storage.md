@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-17 · **Question:** A8, `docs/architecture/architecture.md`
 
-**Refined by decision 0021** (2026-10-19): a closed Topic is kept for a week, then deleted down to its card.
+**Refined by decision 0021** (2026-10-19): a closed Topic is kept for a week, then deleted down to its card. **By decision 0028** (2026-10-21): events are numbered per Team, under a lock on the Team's row, not by a database sequence.
 
 ## Decision
 

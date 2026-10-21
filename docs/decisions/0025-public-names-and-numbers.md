@@ -4,6 +4,9 @@
 and one Team's Topic numbers jumped over the Topics of other Teams · **Refines:** decisions 0006,
 0007, 0010, 0020
 
+**Refined by decision 0028** (2026-10-21): the event stream's cursor, found to carry database ids,
+names a number per Team.
+
 Teams, Areas, Topics, files and Assistants were known outside the server by their database ids:
 `/teams/3`, `?area=7`, `/topics/41`, `[file 41]`, `/assistants/17/link`, and `{"team_id": 3}` in
 the `.coloqo.json` that teams commit. A stranger gets 404, so the ids opened nothing, but they
