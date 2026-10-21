@@ -3,6 +3,9 @@
 **Date:** 2026-10-20 · **Question:** parallel sessions of one project were one Assistant and did
 not see each other · **Refines:** decisions 0003, 0020, 0021, 0022
 
+**Refined by decision 0029** (2026-10-21): a session is online while its watch runs and forgotten
+after 20 minutes offline; a Message to an offline session goes to its person.
+
 An Assistant was a computer × a project (decision 0003). Every Claude Code session opened in that
 project was the same Assistant, with the same name and the same held Topics. On the pilot, two
 failures followed on 2026-10-20. One session read a Topic and kept "the colleague is waiting for

@@ -14,6 +14,7 @@ from coloqo.api import LINK_FILE, Api, ColoqoError, NotLoggedIn, Project
 from coloqo.render import (
     file_ref,
     message_text,
+    offline,
     ref_text,
     size,
     topic_line,
@@ -232,7 +233,7 @@ def inbox() -> str:
     topics = _call("GET", "/inbox")
     if not topics:
         return "Inbox is empty."
-    return "\n".join(topic_line(t, _client().team) for t in topics)
+    return "\n".join(topic_line(t, _client().team, _client().assistant_key) for t in topics)
 
 
 @mcp.tool(
@@ -296,8 +297,9 @@ def read_topic(topic: str, after: int | None = None) -> str:
     description=(
         "Open a new Topic in an Area (its slug from overview) of the linked Team, with its first "
         "message; you become its holder. One Topic per question or task. `to` (optional) "
-        "addresses a Member by pseudonym or an Assistant by its full name; `issue` is a tracker "
-        "key or link if the Topic is for one; `with_human` as for post_message."
+        "addresses a Member by pseudonym or an Assistant by its full name, as for post_message; "
+        "`issue` is a tracker key or link if the Topic is for one; `with_human` as for "
+        "post_message."
     )
 )
 def open_topic(
@@ -337,14 +339,20 @@ def open_topic(
         },
     )
     trail.mark_done()
-    return f"Opened {data['ref']} «{data['title']}» in {data['area_name']}. Next message number: 2."
+    first = data["messages"][0] if data.get("messages") else {}
+    return (
+        f"Opened {data['ref']} «{data['title']}» in {data['area_name']}. Next message number: 2."
+        + offline(first)
+    )
 
 
 @mcp.tool(
     description=(
         "Post a message in a Topic. `number` must be the Topic's next number (from read_topic); if "
         "someone wrote first you get their messages and the right number instead. `to`: a Member's "
-        "pseudonym or an Assistant's full name, empty for everyone in the Topic. `attach`: local "
+        "pseudonym, or an Assistant's full name only when the question is about that session's "
+        "own work; empty for everyone in the Topic. A session that is offline does not get it: "
+        "its person's online sessions do. `attach`: local "
         "file paths to share (not secret!); `files`: numbers of files already uploaded to this "
         "Topic. `progress`: a note on your own work that is not a turn. `with_human`: your user "
         "asked for this very message or saw its text. `as_human`: only for your user's own words "
@@ -430,7 +438,7 @@ def post_message(
         f"\n[file {f['number']}: {f['name']}, {size(f['size'])}]" for f in message["files"]
     )
     label = ref_text({"team": team, "ref": f"T-{topic_number}"}, _client().team)
-    return f"Posted #{message['number']} in {label}.{attached}"
+    return f"Posted #{message['number']} in {label}.{attached}{offline(message)}"
 
 
 @mcp.tool(

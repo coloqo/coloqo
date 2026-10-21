@@ -23,6 +23,10 @@ SILENCE_SECONDS = 45
 NOTICE_AFTER_SECONDS = 180
 """A break longer than this is reported to the session once the stream is back."""
 
+ALIVE_SECONDS = 20
+"""The watch tells the server its session runs this often; a minute of silence means it does
+not (decision 0029)."""
+
 
 def say(line: str) -> None:
     """Print one notification line for the session.
@@ -90,13 +94,25 @@ def describe(kind: str, data: dict[str, Any], me: Me) -> str | None:
     to_me = data.get("to_assistant") == me.assistant or (
         data.get("to") == me.pseudonym and data.get("to_assistant") is None
     )
+    # Addressed to the user through another of their sessions: that one answers (0029).
+    sibling = data.get("to") == me.pseudonym and data.get("to_assistant") not in (
+        None,
+        me.assistant,
+    )
+    other = data.get("to_assistant_name") or "another session"
+    meant = f" (meant for {data['meant_for']}, which is offline)" if data.get("meant_for") else ""
     if kind == "topic":
         if data.get("author_assistant") == me.assistant:
             return None
         if to_me:
             return (
                 f"Coloqo: {data.get('author')} opened {topic} in Area «{data.get('area')}» "
-                f"addressed to you — read_topic {data.get('ref')}"
+                f"addressed to you{meant} — read_topic {data.get('ref')}"
+            )
+        if sibling:
+            return (
+                f"Coloqo: {data.get('author')} opened {topic} in Area «{data.get('area')}» "
+                f"for {other}, another session of your user; it answers."
             )
         return (
             f"Coloqo: new topic {topic} in Area «{data.get('area')}» by {data.get('author')} — "
@@ -116,11 +132,16 @@ def describe(kind: str, data: dict[str, Any], me: Me) -> str | None:
         if data.get("kind") in ("stage", "closed"):
             # Stage lines are for the web and read_topic; closing comes as topic_status.
             return None
+        author = data.get("assistant") or f"{data.get('author')} (human)"
+        if sibling:
+            return (
+                f"Coloqo: {topic} — message #{data.get('number')} from {author} for {other}, "
+                "another session of your user; it answers."
+            )
         involved = me.assistant in (data.get("assistants") or [])
         if not (to_me or (involved and data.get("to") in (None, me.pseudonym))):
             return None
-        author = data.get("assistant") or f"{data.get('author')} (human)"
-        target = " to you" if to_me else ""
+        target = f" to you{meant}" if to_me else ""
         return (
             f"Coloqo: {topic} — message #{data.get('number')} from {author}{target}. "
             f"read_topic {data.get('ref')} after={int(data.get('number') or 1) - 1}"
@@ -185,13 +206,16 @@ def watch(project_dir: str | None = None) -> None:
     """Hold the event stream for the project's Assistant until the session ends.
 
     Waits quietly while the computer is not logged in, and reconnects after breaks with the
-    last event id, so nothing is missed (decision 0006).
+    last event id, so nothing is missed (decision 0006). Every 20 seconds it tells the server
+    the session runs: a closed laptop leaves the stream open on the server's side for minutes,
+    so the stream alone cannot tell (decision 0029).
 
     Args:
         project_dir: The project; Claude Code's project or the current directory when omitted.
     """
     project = Project.detect(project_dir)
     last_id: str | None = None
+    alive = 0.0
     hinted = False
     broken_since: float | None = None
     delay = 1.0
@@ -201,6 +225,7 @@ def watch(project_dir: str | None = None) -> None:
             api.register(project)
             assert api.assistant_key is not None
             me = Me(api.request("GET", "/me")["pseudonym"], api.assistant_key, api.project_key)
+            alive = time.monotonic()
             linked = api.team is not None
             headers = {"Last-Event-ID": last_id} if last_id else {}
             timeout = httpx.Timeout(10, read=SILENCE_SECONDS)
@@ -209,6 +234,10 @@ def watch(project_dir: str | None = None) -> None:
                     raise NotLoggedIn(401, "revoked")
                 stream.raise_for_status()
                 for event_id, kind, data in frames(stream.iter_lines()):
+                    if time.monotonic() - alive >= ALIVE_SECONDS:
+                        # The heartbeat comes every 15 s, so this runs at least that often.
+                        api.request("GET", f"/assistant/{me.assistant}")
+                        alive = time.monotonic()
                     if kind == "ready":
                         line = restored(
                             linked, time.monotonic() - broken_since if broken_since else None

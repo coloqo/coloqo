@@ -17,7 +17,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.teams import LIVE, find_area, team_for
+from coloqo_server.api.teams import SHOWN, find_area, online, team_for
 from coloqo_server.events import add_event
 from coloqo_server.models import (
     Area,
@@ -100,6 +100,8 @@ class MessageOut(BaseModel):
         assistant_key: Its key.
         to: Pseudonym of the addressee; ``None`` for everyone in the Topic.
         to_assistant: Name of the addressed Assistant, if a specific one.
+        meant_for: Name of the Assistant it was meant for, when that session was offline and
+            the Message went to its person (decision 0029).
         human_part: The human's part in an Assistant's reply (decision 0026); ``None`` for a
             human's own Message, service lines, progress notes and older replies.
         reply_to: Number of the Message it answers, if any.
@@ -117,6 +119,7 @@ class MessageOut(BaseModel):
     assistant_key: str | None
     to: str | None
     to_assistant: str | None
+    meant_for: str | None = None
     human_part: HumanPart | None
     reply_to: int | None
     by_holder: bool
@@ -147,6 +150,9 @@ class TopicOut(BaseModel):
         turn_limit: The Team's limit of such turns.
         unread: Messages the caller has not read, if they take part.
         addressed: Some unread Message is addressed to the caller.
+        addressed_via: When the newest such Message is addressed to one of the caller's
+            Assistants, its name: the question is that session's (decision 0029).
+        addressed_via_key: Its key.
         created_at: Creation time.
         updated_at: Time of the newest Message.
         closed_at: When it was closed; ``None`` while open.
@@ -171,6 +177,8 @@ class TopicOut(BaseModel):
     turn_limit: int
     unread: int
     addressed: bool
+    addressed_via: str | None = None
+    addressed_via_key: str | None = None
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
@@ -396,10 +404,28 @@ async def topic_outs(
     }
     users = await pseudonyms(db, {t.created_by for t in topics})
     holders = await assistants_by_id(db, {t.holder_assistant_id for t in topics})
+    # The newest unread Message addressed to the caller, by Topic: to whom of theirs it went.
+    newest = dict(
+        (
+            await db.execute(
+                select(Message.topic_id, Message.to_assistant_id)
+                .join(Participant, Participant.topic_id == Message.topic_id)
+                .where(
+                    Message.topic_id.in_([p.topic_id for p in reads.values() if p.addressed]),
+                    Participant.user_id == user_id,
+                    Message.to_user_id == user_id,
+                    Message.number > Participant.last_read,
+                )
+                .order_by(Message.topic_id, Message.number)
+            )
+        ).all()
+    )
+    via = await assistants_by_id(db, set(newest.values()))
     result = []
     for topic in topics:
         read = reads.get(topic.id)
         unread = topic.last_number - read.last_read if read else 0
+        through = via.get(newest.get(topic.id) or 0)
         team = teams[topic.team_id]
         area = areas.get(topic.area_id)
         holder = holders.get(topic.holder_assistant_id or 0)
@@ -423,6 +449,8 @@ async def topic_outs(
                 turn_limit=team.turn_limit,
                 unread=max(unread, 0),
                 addressed=bool(read and read.addressed and unread > 0),
+                addressed_via=through.name if through and unread > 0 else None,
+                addressed_via_key=through.key if through and unread > 0 else None,
                 created_at=topic.created_at,
                 updated_at=topic.updated_at,
                 closed_at=topic.closed_at,
@@ -483,7 +511,10 @@ async def message_outs(
         db, {m.author_user_id for m in messages} | {m.to_user_id for m in messages}
     )
     assistants = await assistants_by_id(
-        db, {m.author_assistant_id for m in messages} | {m.to_assistant_id for m in messages}
+        db,
+        {m.author_assistant_id for m in messages}
+        | {m.to_assistant_id for m in messages}
+        | {m.meant_for_id for m in messages},
     )
     by_message: dict[int, list[FileOut]] = {}
     for row, view in zip(file_rows, files, strict=True):
@@ -502,6 +533,7 @@ async def message_outs(
                 assistant_key=author.key if author else None,
                 to=users.get(m.to_user_id or 0),
                 to_assistant=to.name if to else None,
+                meant_for=meant.name if (meant := assistants.get(m.meant_for_id or 0)) else None,
                 human_part=m.human_part,
                 reply_to=m.reply_to,
                 by_holder=m.by_holder,
@@ -575,11 +607,14 @@ async def topic_for(
 
 async def addressee(
     db: AsyncSession, team_id: int, to: str | None
-) -> tuple[int | None, int | None]:
-    """Resolve whom a Message is addressed to in a Team.
+) -> tuple[int | None, int | None, int | None]:
+    """Resolve whom a Message is addressed to in a Team: the User, the Assistant, and the
+    Assistant it was meant for when that one is offline.
 
     An Assistant is named by its full name; a name without its word (``alice · web``, as plugins
-    before sessions knew it) reaches the project's most recently active Assistant.
+    before sessions knew it) reaches the project's most recently active Assistant. A Message to
+    an Assistant whose session is not online goes to its person, and every online session of
+    the person sees it (decision 0029).
 
     Args:
         db: Database session.
@@ -591,7 +626,7 @@ async def addressee(
             names that would work.
     """
     if not to or not to.strip():
-        return None, None
+        return None, None, None
     name = to.strip().lstrip("@").lower()
     members = list(
         await db.scalars(
@@ -600,7 +635,7 @@ async def addressee(
     )
     for user in members:
         if user.pseudonym and user.pseudonym.lower() == name:
-            return user.id, None
+            return user.id, None, None
     # Only Assistants whose project is linked to this Team take part in it (decision 0020).
     assistants = list(
         await db.scalars(
@@ -610,14 +645,15 @@ async def addressee(
             .order_by(Assistant.last_seen_at.desc().nulls_last())
         )
     )
-    for assistant in assistants:
-        if assistant.name.lower() == name:
-            return assistant.user_id, assistant.id
-    for assistant in assistants:
-        if assistant.name.lower().rpartition(" · ")[0] == name:
-            return assistant.user_id, assistant.id
-    live = [a.name for a in assistants if a.last_seen_at and a.last_seen_at > now() - LIVE]
-    known = sorted([u.pseudonym for u in members if u.pseudonym] + live)
+    found = next((a for a in assistants if a.name.lower() == name), None) or next(
+        (a for a in assistants if a.name.lower().rpartition(" · ")[0] == name), None
+    )
+    if found is not None:
+        if online(found):
+            return found.user_id, found.id, None
+        return found.user_id, None, found.id
+    shown = [a.name for a in assistants if a.last_seen_at and a.last_seen_at > now() - SHOWN]
+    known = sorted([u.pseudonym for u in members if u.pseudonym] + shown)
     raise HTTPException(
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         f"Nobody in the Team is called {to!r}. Members and Assistants: {', '.join(known)}",
@@ -697,7 +733,7 @@ async def post(
         HTTPException: 422 for an unknown addressee; 409 when the Topic waits for a human
             (decision 0007).
     """
-    to_user_id, to_assistant_id = await addressee(db, topic.team_id, to)
+    to_user_id, to_assistant_id, meant_for_id = await addressee(db, topic.team_id, to)
     human = actor.is_human or as_human
     team = await db.get(Team, topic.team_id)
     assert team is not None
@@ -738,6 +774,7 @@ async def post(
         author_assistant_id=actor.assistant.id if actor.assistant else None,
         to_user_id=to_user_id,
         to_assistant_id=to_assistant_id,
+        meant_for_id=meant_for_id,
         relayed=bool(as_human and actor.assistant is not None),
         human_part=human_part(actor, kind, as_human, with_human),
         by_holder=actor.assistant is not None and actor.assistant.id == topic.holder_assistant_id,
@@ -767,7 +804,7 @@ async def post(
         )
     )
     involved = posters | {topic.holder_assistant_id, to_assistant_id}
-    who = await assistants_by_id(db, involved)
+    who = await assistants_by_id(db, involved | {meant_for_id})
     holder = who.get(topic.holder_assistant_id or 0)
     users = await pseudonyms(db, {to_user_id})
     area = await db.get(Area, topic.area_id)
@@ -782,6 +819,8 @@ async def post(
         "human": human,
         "to": users.get(to_user_id or 0),
         "to_assistant": who[to_assistant_id].key if to_assistant_id in who else None,
+        "to_assistant_name": who[to_assistant_id].name if to_assistant_id in who else None,
+        "meant_for": who[meant_for_id].name if meant_for_id in who else None,
         "holder": holder.key if holder else None,
         "holder_project": holder.project if holder else None,
         "assistants": sorted(who[i].key for i in posters | {topic.holder_assistant_id} if i in who),
@@ -882,10 +921,10 @@ async def open_topic(
         last_number=0,
         turns_since_human=0,
     )
-    to_user_id, to_assistant_id = await addressee(db, team.id, to)
+    to_user_id, to_assistant_id, meant_for_id = await addressee(db, team.id, to)
     db.add(topic)
     await db.flush()
-    who = await assistants_by_id(db, {topic.holder_assistant_id, to_assistant_id})
+    who = await assistants_by_id(db, {topic.holder_assistant_id, to_assistant_id, meant_for_id})
     users = await pseudonyms(db, {to_user_id})
     holder = who.get(topic.holder_assistant_id or 0)
     new, old = topic_head(topic, team, area)
@@ -895,6 +934,8 @@ async def open_topic(
         "holder": holder.key if holder else None,
         "to": users.get(to_user_id or 0),
         "to_assistant": who[to_assistant_id].key if to_assistant_id in who else None,
+        "to_assistant_name": who[to_assistant_id].name if to_assistant_id in who else None,
+        "meant_for": who[meant_for_id].name if meant_for_id in who else None,
     }
     old |= {
         "author": actor.user.pseudonym,

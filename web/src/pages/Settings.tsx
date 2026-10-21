@@ -16,6 +16,7 @@ import {
 import { useInstallations, useProjects, useTeams } from '../api/queries'
 import { PersonAvatar } from '../components/Avatar'
 import { Page } from '../components/Layout'
+import { PresenceDot, PresenceText } from '../components/Presence'
 import { PseudonymForm } from '../components/PseudonymForm'
 import { Time } from '../components/Time'
 import { Badge, Button, Card, CardHeader, Empty, ErrorNote, Input, Loading, Select } from '../components/ui'
@@ -144,16 +145,13 @@ function SessionRow({ assistant }: { assistant: Assistant }) {
       {word === null ? (
         <>
           <span
-            className="font-medium break-words"
+            className={`inline-flex items-center gap-1.5 font-medium break-words ${assistant.online ? '' : 'opacity-60'}`}
             title={assistant.session_id ? t('sessions.id', { id: assistant.session_id }) : undefined}
           >
+            <PresenceDot online={assistant.online ?? false} />
             {assistant.name}
           </span>
-          {assistant.last_seen_at && (
-            <span className="text-xs text-stone-500 dark:text-stone-400">
-              <Time value={assistant.last_seen_at} />
-            </span>
-          )}
+          <PresenceText online={assistant.online ?? false} lastSeen={assistant.last_seen_at} />
           <Button size="sm" variant="ghost" onClick={() => setWord(assistant.word)}>
             {t('sessions.rename')}
           </Button>

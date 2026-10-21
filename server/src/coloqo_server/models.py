@@ -486,6 +486,8 @@ class Message(Base):
         author_assistant_id: The Assistant that wrote it; ``None`` when the human wrote it.
         to_user_id: The Member it is addressed to; ``None`` for everyone in the Topic.
         to_assistant_id: The Assistant it is addressed to, if a specific one.
+        meant_for_id: The Assistant it was meant for, when that session was offline and the
+            Message went to its person instead (decision 0029).
         relayed: An Assistant posted its human's own words (``as_human``).
         human_part: The human's part in an Assistant's reply (decision 0026); ``None`` for a
             human's own Message, a stage or progress line, and replies written before the marks.
@@ -510,6 +512,9 @@ class Message(Base):
     )
     to_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     to_assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    meant_for_id: Mapped[int | None] = mapped_column(
         ForeignKey("assistants.id", ondelete="SET NULL")
     )
     relayed: Mapped[bool] = mapped_column(default=False, server_default="false")

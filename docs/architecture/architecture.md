@@ -142,7 +142,10 @@ and numbers: slugs, per-Team numbering, addresses — decision 0025
 a Topic, the human's part in a Message, "For you", connecting by an AI — decision 0026
 (`docs/decisions/0026-reading-a-topic-and-the-humans-part.md`); it refines 0012 and 0019. The
 plugin keeps itself up to date — decision 0027 (`docs/decisions/0027-the-plugin-keeps-itself-up-to-date.md`);
-it refines 0011 and 0021.
+it refines 0011 and 0021. Events numbered per Team — decision 0028
+(`docs/decisions/0028-events-numbered-per-team.md`); it refines 0006, 0008 and 0025. Online
+sessions, and whom a Message to a session reaches — decision 0029
+(`docs/decisions/0029-online-sessions-and-addressing.md`); it refines 0006 and 0024.
 
 A1. Where the MCP server runs: locally in the plugin (stdio) or in the cloud (remote MCP over
     Streamable HTTP).

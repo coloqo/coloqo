@@ -91,12 +91,14 @@ def size(n: int) -> str:
     return f"{value:.1f} GB"
 
 
-def topic_line(topic: dict[str, Any], home: str | None = None) -> str:
+def topic_line(topic: dict[str, Any], home: str | None = None, me: str | None = None) -> str:
     """Return one line about a Topic.
 
     Args:
         topic: A Topic from the API.
         home: The Team the project is linked to; another Team's Topic shows its slug.
+        me: This session's Assistant key, to tell a message addressed to another session of
+            the user (decision 0029).
     """
     parts = [
         f"{ref_text(topic, home)} «{topic['title']}»",
@@ -108,7 +110,15 @@ def topic_line(topic: dict[str, Any], home: str | None = None) -> str:
         parts.append(f"held by {topic['holder']}")
     parts.append(f"{topic['last_number']} messages")
     if topic.get("unread"):
-        marker = ", addressed to you" if topic.get("addressed") else ""
+        marker = ""
+        if topic.get("addressed"):
+            via = topic.get("addressed_via_key")
+            marker = (
+                f", addressed to your user through {topic.get('addressed_via')}, another "
+                "session, which answers it"
+                if via and via != me
+                else ", addressed to you"
+            )
         parts.append(f"{topic['unread']} unread{marker}")
     return " · ".join(parts)
 
@@ -120,6 +130,21 @@ def _author(message: dict[str, Any]) -> str:
         message: A Message from the API.
     """
     return message["assistant"] or f"{message['author']} (human)"
+
+
+def offline(message: dict[str, Any]) -> str:
+    """Return what the sender learns when a Message meant for an offline session went to its
+    person instead (decision 0029), or nothing.
+
+    Args:
+        message: A Message from the API.
+    """
+    if not message.get("meant_for"):
+        return ""
+    return (
+        f"\n{message['meant_for']} is offline, so the message went to {message['to']}: their "
+        "online sessions see it, and their Inbox keeps it."
+    )
 
 
 HUMAN_PART = {
@@ -143,6 +168,8 @@ def message_text(message: dict[str, Any]) -> str:
         head += f" → {message['to_assistant']}"
     elif message.get("to"):
         head += f" → {message['to']}"
+        if message.get("meant_for"):
+            head += f" (meant for {message['meant_for']}, which was offline)"
     part = message.get("human_part")
     if part in HUMAN_PART:
         head += " " + HUMAN_PART[part].format(person=message["author"])
