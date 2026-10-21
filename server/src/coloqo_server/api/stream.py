@@ -149,7 +149,7 @@ async def events(
                     FormerTeamSlug.team_id.in_(teams)
                 )
             )
-            by_slug = dict(former.tuples().all()) | by_slug
+            by_slug = {slug: team for slug, team in former} | by_slug
         # A number past the Team's last would wait for events that already came.
         return {
             by_slug[slug]: min(number, teams[by_slug[slug]][1])

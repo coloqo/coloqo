@@ -93,13 +93,18 @@ def test_idle_topic_closes_with_a_line(setup: Setup, settings: Settings) -> None
 
 
 def test_archive_keeps_the_card_and_drops_the_rest(setup: Setup, settings: Settings) -> None:
-    """After the archive time the conversation and files go; the Topic stays as a card.
+    """After the archive time the conversation, files and events go; the Topic stays as a card.
 
     Args:
         setup: The Team.
         settings: Instance settings.
     """
     tid = _open(setup)["number"]
+    other = _open(setup)["number"]
+    # Another Team's Topic of the same number keeps its events.
+    globex = setup.alice.post("/api/team", json={"name": "Globex"}).json()["slug"]
+    setup.alice.post(f"/api/team/{globex}/area", json={"name": "Dev"})
+    setup.alice.post(f"/api/team/{globex}/topic", json={"area": "dev", "title": "Q", "body": "x"})
     file = _upload(setup.alice_api.client, tid, "shot.png", PNG, "image/png")
     setup.alice_api.client.patch(
         f"/api/team/{setup.team}/topic/{tid}",
@@ -113,6 +118,10 @@ def test_archive_keeps_the_card_and_drops_the_rest(setup: Setup, settings: Setti
     _age(settings, tid, "closed_at", 8)
 
     _tend(settings)
+    with _connect(settings.database_url) as connection:
+        events = connection.execute(
+            "SELECT DISTINCT data->>'team', (data->>'topic')::int FROM events ORDER BY 1, 2"
+        ).fetchall()
     card = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
     listed = setup.alice.get(f"/api/team/{setup.team}/topic").json()
     write = setup.bob_web.client.post(
@@ -126,6 +135,7 @@ def test_archive_keeps_the_card_and_drops_the_rest(setup: Setup, settings: Setti
     assert setup.alice.get(f"/api/team/{setup.team}/file/{file['number']}").status_code == 404
     assert tid not in [t["number"] for t in listed]
     assert write.status_code == 410
+    assert events == [(setup.team, other), (globex, tid)]
 
 
 def test_team_keeps_its_own_archive_time(setup: Setup, settings: Settings) -> None:
