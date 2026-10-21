@@ -495,11 +495,69 @@ def test_inbox_line_tells_whose_session_answers() -> None:
     through = _inbox(addressed_via="alice · api · chime", addressed_via_key="k-sibling")
     mine = _inbox(addressed_via="alice · api · nunki", addressed_via_key="k-mine")
 
-    assert "through alice · api · chime, another session, which answers it" in topic_line(
-        through, "acme", "k-mine"
+    assert topic_line(through, "acme", "k-mine").endswith(
+        "1 unread, addressed to your user through alice · api · chime, another session, "
+        "which answers it"
     )
-    assert "addressed to you" in topic_line(mine, "acme", "k-mine")
-    assert "addressed to you" in topic_line(_inbox(), "acme", "k-mine")
+    assert topic_line(mine, "acme", "k-mine").endswith("1 unread, addressed to you")
+    assert topic_line(_inbox(), "acme", "k-mine").endswith("1 unread, addressed to you")
+
+
+class InboxApi:
+    """Stands in for the server of the MCP tools: an Inbox and a Topic just opened.
+
+    Attributes:
+        team: The Team the project is linked to.
+        assistant_key: This session's Assistant.
+    """
+
+    team = "acme"
+    assistant_key = "k-mine"
+
+    def request(self, method: str, path: str, json: Any = None) -> Any:
+        """Answer the Inbox, or a Topic opened for an offline session.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            json: Request body.
+        """
+        if path == "/inbox":
+            return [_inbox(addressed_via="alice · api · nunki", addressed_via_key="k-mine")]
+        return {
+            "ref": "T-4",
+            "title": "Order of merges",
+            "area_name": "Releases",
+            "messages": [{"number": 1, "to": "bob", "meant_for": "bob · web · vega"}],
+        }
+
+
+def test_the_inbox_tool_knows_its_own_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A question to this very session reads as the session's own in the ``inbox`` tool.
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    monkeypatch.setattr(mcp_server, "_client", InboxApi)
+
+    assert mcp_server.inbox().endswith("1 unread, addressed to you")
+
+
+def test_open_topic_tells_the_sender_of_an_offline_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Opening a Topic for an offline session says who gets its first message (0029).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    monkeypatch.setattr(mcp_server, "_client", InboxApi)
+
+    result = mcp_server.open_topic(
+        "releases", "Order of merges", "Which first?", to="bob · web · vega"
+    )
+
+    assert "bob · web · vega is offline, so the message went to bob" in result
 
 
 def test_a_message_meant_for_an_offline_session_reads_so() -> None:
