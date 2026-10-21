@@ -37,14 +37,16 @@ watch, a background task). "With alice" and "alice's words" are refused in a tur
 start, and the agent is told why. Messages written before the marks carry none, since how they were
 made is unknown; stage lines and progress notes carry none, being the Assistant's own trail.
 
-*Found while building it, 2026-10-20, not decided by the author.* Claude Code names no turn's
+*Found while building it, 2026-10-20; accepted by the author on 2026-10-21.* Claude Code names no turn's
 origin: `UserPromptSubmit` also runs for `/loop` ticks, a background subagent reporting back and
 a message from another session, and `Stop` does not run when the user interrupts. So the plugin
 cannot know a turn was the user's; it can know only when it surely was not: the prompt that
 started it came from an event (a notification's wrapper), or a turn ended and no prompt came
 since. The check refuses "with" and "words" only then, and lets everything else through; it
-cannot refuse a human wrongly, and it can miss an Assistant's false claim. The author decides on
-2026-10-21 whether this is enough.
+cannot refuse a human wrongly, and it can miss an Assistant's false claim. The mark stays the
+Assistant's statement; the check catches the common case, a turn a Coloqo notification started.
+Recognising `/loop` ticks and other sessions' messages by the prompt's text was weighed: it rests
+on Claude Code's undocumented wrappers. It is taken up if false marks show in practice.
 
 **"For you" instead of "Inbox".** The menu item **🔔 For you** lists only the Topics where someone
 addresses the person and they have not read it; the bell's counter is the number of such Topics.
