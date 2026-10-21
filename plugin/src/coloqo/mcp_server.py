@@ -177,7 +177,8 @@ def _mark(as_human: bool, with_human: bool) -> None:
 @mcp.tool(
     description=(
         "Show who you are in Coloqo, your Teams with their Areas (slugs, descriptions), Members "
-        "and their live Assistants, and how many Topics have unread messages for your user. "
+        "and their sessions' Assistants, online or lately offline, and how many Topics have "
+        "unread messages for your user. "
         "Start here to find the Area for a new Topic or the name to address someone."
     )
 )
@@ -212,9 +213,19 @@ def overview() -> str:
             )
         if not detail["areas"]:
             lines.append("  none yet; the Team's owner creates Areas in the web interface")
-        lines.append("Members (address by pseudonym or by an Assistant's full name):")
+        lines.append(
+            "Members (address the person by pseudonym; an Assistant by its full name only when "
+            "the question is about that session's own work; a Message to an offline one goes to "
+            "its person):"
+        )
         for member in detail["members"]:
-            names = ", ".join(a["name"] for a in member["assistants"]) or "no live Assistants"
+            names = (
+                ", ".join(
+                    a["name"] + ("" if a.get("online") else " (offline)")
+                    for a in member["assistants"]
+                )
+                or "no sessions lately"
+            )
             lines.append(f"  {member['pseudonym']} ({member['role']}): {names}")
     unread = _call("GET", "/inbox")
     lines.append("")

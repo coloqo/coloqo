@@ -705,3 +705,56 @@ def test_watch_tells_the_server_its_session_runs(monkeypatch: pytest.MonkeyPatch
         watch_module.watch(".")
 
     assert apis[0].sent == [("GET", "/me")] + [("GET", "/assistant/k-mine")] * 3
+
+
+class TeamApi:
+    """Stands in for the server of ``overview``: one Team, a member with two sessions."""
+
+    team = "acme"
+    team_name = "Acme"
+    assistant_name = "alice · api · nunki"
+
+    def request(self, method: str, path: str, json: Any = None) -> Any:
+        """Answer the Teams, the Team and the Inbox.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            json: Request body.
+        """
+        if path == "/team":
+            return [{"slug": "acme"}]
+        if path == "/inbox":
+            return []
+        bob = [
+            {"name": "bob · web · vega", "online": True},
+            {"name": "bob · web · lyra", "online": False},
+        ]
+        return {
+            "name": "Acme",
+            "slug": "acme",
+            "role": "owner",
+            "turn_limit": 10,
+            "areas": [],
+            "members": [
+                {"pseudonym": "bob", "role": "member", "assistants": bob},
+                {"pseudonym": "carol", "role": "member", "assistants": []},
+            ],
+        }
+
+
+def test_overview_marks_offline_sessions_and_prefers_the_person(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``overview`` tells which sessions are offline and says to address the person (0029).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    monkeypatch.setattr(mcp_server, "_client", TeamApi)
+
+    text = mcp_server.overview()
+
+    assert "address the person by pseudonym; an Assistant by its full name only when" in text
+    assert "  bob (member): bob · web · vega, bob · web · lyra (offline)\n" in text
+    assert "  carol (member): no sessions lately\n" in text
