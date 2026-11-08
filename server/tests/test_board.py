@@ -206,6 +206,7 @@ def test_the_owner_edits_the_workflow(setup: Setup, alice: Plugin) -> None:
         json={"stages": [{"name": "Backlog", "kind": "analysis", "was": "Backlog"}, *stages[1:]]},
     )
     no_done = setup.alice.put(path, json={"stages": stages[:-1], "moves": {"Design": "Code"}})
+    to_finished = setup.alice.put(path, json={"stages": stages, "moves": {"Design": "Done"}})
     by_member = setup.bob.put(path, json={"stages": stages, "moves": {"Design": "Code"}})
     saved = setup.alice.put(path, json={"stages": stages, "moves": {"Design": "Code"}})
     task = setup.alice.get(f"/api/team/{setup.team}/task/{number}").json()
@@ -214,6 +215,7 @@ def test_the_owner_edits_the_workflow(setup: Setup, alice: Plugin) -> None:
     assert "name the stage to move them to" in no_move.json()["detail"]
     assert "keeps its kind" in kind_changed.json()["detail"]
     assert "needs done" in no_done.json()["detail"]
+    assert "same category" in to_finished.json()["detail"]
     assert by_member.status_code == 403
     assert saved.json() == ["Backlog", "Анализ", "Code", "QA", "Done"]
     assert task["stage"] == "Code"
@@ -344,3 +346,47 @@ def test_a_promise_has_a_period_progress_and_three_endings(setup: Setup, alice: 
     assert moved["progress"] == {"done": 1, "total": 2}
     assert (missed["stage"], missed["stage_kind"]) == ("Not delivered", "not_delivered")
     assert "period" in [e["kind"] for e in detail["timeline"]]
+
+
+def test_two_first_readers_build_one_board(setup: Setup, alice: Plugin, settings: Settings) -> None:
+    """Two people opening a board for the first time together get the same one (decision 0032).
+
+    Args:
+        setup: The Team.
+        alice: Alice's Assistant.
+        settings: Instance settings.
+    """
+    import asyncio
+
+    from coloqo_server.api.boards import main_board
+    from coloqo_server.db import Database
+
+    with _connect(settings.database_url) as connection:
+        ((team_id,),) = connection.execute(
+            "SELECT id FROM teams WHERE slug = %s", (setup.team,)
+        ).fetchall()
+
+    async def read() -> int:
+        """Build or find the board in a session of its own, holding it a moment."""
+        database = Database(settings.database_url)
+        try:
+            async with database.sessions() as db:
+                board = await main_board(db, team_id)
+                await asyncio.sleep(0.2)
+                await db.commit()
+                return board.id
+        finally:
+            await database.dispose()
+
+    async def both() -> list[int]:
+        """Read twice at once."""
+        return list(await asyncio.gather(read(), read()))
+
+    first, second = asyncio.run(both())
+    with _connect(settings.database_url) as connection:
+        ((boards,),) = connection.execute(
+            "SELECT count(*) FROM boards WHERE team_id = %s", (team_id,)
+        ).fetchall()
+
+    assert first == second
+    assert boards == 1

@@ -16,6 +16,13 @@ const TASK_KINDS: Kind[] = ['backlog', 'analysis', 'design', 'documentation', 'a
 
 type Row = { name: string; kind: Kind; was: string | null }
 
+/** The fixed category of a stage's kind (decision 0032). */
+function category(kind: Kind): 'to_do' | 'in_progress' | 'finished' {
+  if (kind === 'backlog' || kind === 'draft') return 'to_do'
+  if (kind === 'done' || kind === 'cancelled' || kind === 'delivered' || kind === 'not_delivered' || kind === 'withdrawn') return 'finished'
+  return 'in_progress'
+}
+
 /** The owner renames, reorders, adds and removes the stages of the Team's task workflow. */
 function WorkflowEditor({ team, workflow, readOnly }: { team: string; workflow: Workflow; readOnly: boolean }) {
   const { t } = useTranslation()
@@ -100,11 +107,14 @@ function WorkflowEditor({ team, workflow, readOnly }: { team: string; workflow: 
               <span>→</span>
               <Select value={moves[row.was ?? ''] ?? ''} onChange={(event) => setMoves({ ...moves, [row.was ?? '']: event.target.value })} className="py-1">
                 <option value="">{t('tracker.noMove')}</option>
-                {rows.map((target) => (
-                  <option key={target.name} value={target.name}>
-                    {target.name}
-                  </option>
-                ))}
+                {/* Only a stage of the same category: an edit neither starts nor finishes work. */}
+                {rows
+                  .filter((target) => category(target.kind) === category(row.kind))
+                  .map((target) => (
+                    <option key={target.name} value={target.name}>
+                      {target.name}
+                    </option>
+                  ))}
               </Select>
             </label>
           ))}

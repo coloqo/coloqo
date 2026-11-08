@@ -11,7 +11,8 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coloqo_server.api.tasks import TaskOut, assignee_by_name, task_outs
@@ -30,6 +31,7 @@ from coloqo_server.models import (
     StageKind,
     Task,
     TaskType,
+    Team,
     Topic,
     Workflow,
 )
@@ -214,9 +216,12 @@ async def main_board(db: AsyncSession, team_id: int) -> Board:
         db: Database session.
         team_id: The Team.
     """
-    board = await db.scalar(
-        select(Board).where(Board.team_id == team_id, Board.main.is_(True)).limit(1)
-    )
+    query = select(Board).where(Board.team_id == team_id, Board.main.is_(True)).limit(1)
+    board = await db.scalar(query)
+    if board is None:
+        # Two first readers must not build two boards: the Team's row decides who builds it.
+        await db.execute(select(Team.id).where(Team.id == team_id).with_for_update())
+        board = await db.scalar(query)
     stages = await task_stages(db, team_id)
     if board is None:
         board = Board(team_id=team_id, name="Board", main=True)
@@ -304,58 +309,76 @@ async def moves(
         tasks: The tasks.
     """
     result: dict[int, tuple[str, str | None, datetime | None]] = {}
-    topics = {
-        topic.task_id: topic
-        for topic in await db.scalars(select(Topic).where(Topic.task_id.in_([t.id for t in tasks])))
-    }
-    holders = await assistants_by_id(db, {t.holder_assistant_id for t in topics.values()})
-    names = await pseudonyms(db, {t.assignee_id for t in tasks})
+    ids = [t.id for t in tasks if not t.waiting]
     for task in tasks:
         if task.waiting:
             result[task.id] = ("external", task.waiting, None)
-            continue
-        topic = topics.get(task.id)
-        if topic is None:
-            continue
-        asked = await db.scalar(
+    if not ids:
+        return result
+    # A few queries for the whole board, not a few per card: it is read every 30 s per viewer.
+    topics = {
+        topic.task_id: topic
+        for topic in await db.scalars(select(Topic).where(Topic.task_id.in_(ids)))
+    }
+    by_task = {t.id: t for t in tasks}
+    asked = {
+        message.topic_id: message
+        for message in await db.scalars(
             select(Message)
+            .join(Topic, Topic.id == Message.topic_id)
+            .join(Task, Task.id == Topic.task_id)
             .where(
-                Message.topic_id == topic.id,
+                Topic.task_id.in_(ids),
                 Message.to_user_id.is_not(None),
-                Message.to_user_id != task.assignee_id,
+                Message.to_user_id.is_distinct_from(Task.assignee_id),
             )
-            .order_by(Message.number.desc())
-            .limit(1)
+            .order_by(Message.topic_id, Message.number.desc())
+            .ext(distinct_on(Message.topic_id))
         )
-        if asked is not None:
-            answered = await db.scalar(
-                select(Message.id)
-                .where(
-                    Message.topic_id == topic.id,
-                    Message.author_user_id == asked.to_user_id,
-                    Message.number > asked.number,
-                )
-                .limit(1)
+    }
+    written: dict[tuple[int, int], int] = {}
+    if asked:
+        rows = await db.execute(
+            select(Message.topic_id, Message.author_user_id, func.max(Message.number))
+            .where(Message.topic_id.in_(list(asked)))
+            .group_by(Message.topic_id, Message.author_user_id)
+        )
+        written = {(topic_id, author): number for topic_id, author, number in rows}
+    holders_ids = {t.holder_assistant_id for t in topics.values()} - {None}
+    last_moves = (
+        {
+            move.assistant_id: move
+            for move in await db.scalars(
+                select(Move)
+                .where(Move.assistant_id.in_(holders_ids))
+                .order_by(Move.assistant_id, Move.ended_at.desc())
+                .ext(distinct_on(Move.assistant_id))
             )
-            if answered is None:
-                person = (await pseudonyms(db, {asked.to_user_id})).get(asked.to_user_id or 0)
-                result[task.id] = ("person", person, asked.created_at)
-                continue
-        if topic.holder_assistant_id is None:
+        }
+        if holders_ids
+        else {}
+    )
+    holders = await assistants_by_id(db, holders_ids)
+    names = await pseudonyms(
+        db, {t.assignee_id for t in tasks} | {m.to_user_id for m in asked.values()}
+    )
+    for task_id, topic in topics.items():
+        task = by_task[task_id]
+        question = asked.get(topic.id)
+        if (
+            question is not None
+            and written.get((topic.id, question.to_user_id or 0), 0) < question.number
+        ):
+            result[task_id] = ("person", names.get(question.to_user_id or 0), question.created_at)
             continue
-        last = await db.scalar(
-            select(Move)
-            .where(Move.assistant_id == topic.holder_assistant_id)
-            .order_by(Move.ended_at.desc())
-            .limit(1)
-        )
+        last = last_moves.get(topic.holder_assistant_id or 0)
         if last is None:
             continue
-        holder = holders.get(topic.holder_assistant_id)
+        holder = holders.get(last.assistant_id or 0)
         if last.move == "assistant":
-            result[task.id] = ("human", names.get(task.assignee_id or 0), last.ended_at)
+            result[task_id] = ("human", names.get(task.assignee_id or 0), last.ended_at)
         else:
-            result[task.id] = ("assistant", holder.name if holder else None, last.ended_at)
+            result[task_id] = ("assistant", holder.name if holder else None, last.ended_at)
     return result
 
 
@@ -561,7 +584,8 @@ async def edit_workflow(
 
     An existing stage keeps its kind; to change a kind, remove the stage and add another. A
     removed stage stays in history under its name; its tasks move to the stage named in
-    ``moves``, each with a timeline entry. The kinds the type needs stay: the backlog and done
+    ``moves``, of the same category (an edit neither starts nor finishes work), each with a
+    timeline entry. The kinds the type needs stay: the backlog and done
     for tasks, a draft and delivered for promises.
 
     Args:
@@ -574,7 +598,8 @@ async def edit_workflow(
     Raises:
         HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 422 for
             a repeated name, a kind of another type, a changed kind, a missing required kind,
-            an unknown stage, or a removed stage with tasks and no stage to move them to.
+            an unknown stage, or a removed stage with tasks and no stage of its category to
+            move them to.
     """
     found = await owned(db, team, actor.user.id)
     workflow = await db.scalar(
@@ -643,6 +668,13 @@ async def edit_workflow(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 f"{old_name} has tasks: name the stage to move them to in moves",
+            )
+        if CATEGORY[target.kind] != CATEGORY[stage.kind]:
+            # A workflow edit neither starts nor finishes work: a task is finished only by
+            # closing it with an outcome (the author, 2026-11-09).
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"{old_name}'s tasks move to a stage of the same category, not to {target.name}",
             )
         for task in tasks:
             task.stage_id = target.id

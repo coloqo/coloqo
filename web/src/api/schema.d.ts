@@ -2022,7 +2022,8 @@ export interface paths {
          *
          *     An existing stage keeps its kind; to change a kind, remove the stage and add another. A
          *     removed stage stays in history under its name; its tasks move to the stage named in
-         *     ``moves``, each with a timeline entry. The kinds the type needs stay: the backlog and done
+         *     ``moves``, of the same category (an edit neither starts nor finishes work), each with a
+         *     timeline entry. The kinds the type needs stay: the backlog and done
          *     for tasks, a draft and delivered for promises.
          *
          *     Args:
@@ -2035,7 +2036,8 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 422 for
          *             a repeated name, a kind of another type, a changed kind, a missing required kind,
-         *             an unknown stage, or a removed stage with tasks and no stage to move them to.
+         *             an unknown stage, or a removed stage with tasks and no stage of its category to
+         *             move them to.
          */
         put: operations["edit_workflow_api_team__team__workflow__type___put"];
         post?: never;

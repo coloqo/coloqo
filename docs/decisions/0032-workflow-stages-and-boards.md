@@ -61,7 +61,9 @@ The Assistant moves the stage; the status follows.
   keeps it, so "there was no such stage" differs from "it took 0 minutes".
 - **A wait is not a stage** but a mark over any stage (decision 0033).
 - **The Team's owner edits a workflow in the web.** Renaming and reordering are free. Removing a
-  stage that has tasks asks where to move them; the history keeps the old name and kind. Only
+  stage that has tasks asks where to move them, to a stage of the same category: an edit neither
+  starts nor finishes work, a task is finished only by closing it with an outcome (the author,
+  2026-11-09, in the review of PR B). The history keeps the old name and kind. Only
   backlog and done are required.
 - A graph of allowed moves comes later, as rows.
 
