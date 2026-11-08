@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from coloqo import config, mcp_server
 from coloqo import watch as watch_module
-from coloqo.api import Project, _file_name
+from coloqo.api import ColoqoError, Project, _file_name
 from coloqo.render import file_ref, message_text, size, topic_line, topic_ref, topic_text
 from coloqo.watch import Me, describe, frames, restored
 
@@ -22,12 +23,31 @@ OTHER = "k-other"
 
 @pytest.mark.parametrize("value", ["T-12", "t12", "12", " T-12 ", 12])
 def test_topic_ref_accepts_common_forms(value: str | int) -> None:
-    """A Topic is named by ``T-12`` in any case, or by its number.
+    """A task is named by ``T-12`` in any case, or by its number (decision 0031).
 
     Args:
         value: A reference.
     """
-    assert topic_ref(value, "acme") == ("acme", 12)
+    assert topic_ref(value, "acme") == ("acme", "task", 12)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("F-5", ("acme", "free", 5)),
+        ("f5", ("acme", "free", 5)),
+        ("globex/F-5", ("globex", "free", 5)),
+        ("https://app.coloqo.team/team/acme/task/7", ("acme", "task", 7)),
+    ],
+)
+def test_topic_ref_tells_free_topics_from_tasks(value: str, expected: tuple) -> None:
+    """``F-5`` and a ``/topic/5`` link name a free Topic; a ``/task/`` link a task (0031).
+
+    Args:
+        value: A reference.
+        expected: Team, kind and number.
+    """
+    assert topic_ref(value, "acme") == expected
 
 
 @pytest.mark.parametrize(
@@ -40,12 +60,14 @@ def test_topic_ref_accepts_common_forms(value: str | int) -> None:
     ],
 )
 def test_topic_ref_names_another_team(value: str) -> None:
-    """Another Team's Topic is named with its slug, or by its address (decision 0025).
+    """Another Team's Topic is named with its slug, or by its address (decision 0025); an old
+    ``/topic/`` link names the free series, where a task's old Topic keeps its number (0031).
 
     Args:
         value: A reference.
     """
-    assert topic_ref(value, "acme") == ("globex", 12)
+    team, _, number = topic_ref(value, "acme")
+    assert (team, number) == ("globex", 12)
 
 
 def test_topic_ref_refuses_other_text() -> None:
@@ -381,7 +403,7 @@ def test_post_message_sends_the_reply(monkeypatch: pytest.MonkeyPatch) -> None:
     assert api.sent == [
         (
             "POST",
-            "/team/acme/topic/3/message",
+            "/team/acme/task/3/message",
             {
                 "number": 5,
                 "body": "Yes.",
@@ -408,7 +430,9 @@ def test_post_message_in_another_team_names_it(monkeypatch: pytest.MonkeyPatch) 
     result = mcp_server.post_message("globex/T-3", 5, "Yes.")
 
     assert result == "Posted #5 in globex/T-3."
-    assert api.sent[0][1] == "/team/globex/topic/3/message"
+    assert api.sent[0][1] == "/team/globex/task/3/message"
+    free = mcp_server.post_message("F-4", 2, "Yes.")
+    assert (free, api.sent[1][1]) == ("Posted #2 in F-4.", "/team/acme/topic/4/message")
 
 
 class AnsweringApi(RecordingApi):
@@ -423,13 +447,14 @@ class AnsweringApi(RecordingApi):
             json: Request body.
         """
         self.sent.append((method, path, json))
-        return {"number": 6, "ref": "T-3", "title": "Fix", "deletes_at": "2026-10-27T10:00:00Z"}
+        return {"number": 6, "ref": "T-3", "title": "Fix", "stage": "Done", "waiting": None}
 
 
-def test_stage_and_closing_send_what_the_server_expects(
+def test_stages_and_closing_send_what_the_server_expects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A stage goes without a number; closing carries the outcome.
+    """A task moves by stage, with skips and their reasons; a free Topic notes a line; closing
+    a task goes to the task, a free Topic's to the Topic (decisions 0031, 0032).
 
     Args:
         monkeypatch: Patching helper from pytest.
@@ -437,19 +462,37 @@ def test_stage_and_closing_send_what_the_server_expects(
     api = AnsweringApi()
     monkeypatch.setattr(mcp_server, "_client", lambda: api)
 
-    staged = mcp_server.note_stage("T-3", "Testing")
+    moved = mcp_server.change_stage(
+        "T-3", "Agreement", skip={"Documentation": "no doc changes"}, comment="asked the lead"
+    )
+    staged = mcp_server.note_stage("F-4", "Testing")
     closed = mcp_server.close_topic("T-3", "Fixed in ACME-42, MR !17")
+    free_closed = mcp_server.close_topic("F-4", "ISO dates")
+    with pytest.raises(ToolError, match="change_stage"):
+        mcp_server.note_stage("T-3", "Testing")
 
     assert api.sent == [
-        ("POST", "/team/acme/topic/3/stage", {"text": "Testing"}),
         (
-            "PATCH",
-            "/team/acme/topic/3",
-            {"status": "closed", "outcome": "Fixed in ACME-42, MR !17"},
+            "POST",
+            "/team/acme/task/3/stage",
+            {
+                "stage": "Agreement",
+                "skip": {"Documentation": "no doc changes"},
+                "comment": "asked the lead",
+            },
         ),
+        ("POST", "/team/acme/topic/4/stage", {"text": "Testing"}),
+        (
+            "POST",
+            "/team/acme/task/3/close",
+            {"outcome": "Fixed in ACME-42, MR !17", "cancelled": False},
+        ),
+        ("PATCH", "/team/acme/topic/4", {"status": "closed", "outcome": "ISO dates"}),
     ]
+    assert moved == "T-3 is now at Done."
     assert staged == "Stage noted as #6."
-    assert closed.endswith("deleted on 2026-10-27.")
+    assert closed == "Closed T-3 «Fix» as Done."
+    assert free_closed == "Closed T-3 «Fix»."
 
 
 def test_the_mcp_texts_carry_the_task_rules() -> None:
@@ -457,10 +500,11 @@ def test_the_mcp_texts_carry_the_task_rules() -> None:
     tools = {t.name: t.description or "" for t in asyncio.run(mcp_server.mcp.list_tools())}
 
     assert "standing consent" in mcp_server.INSTRUCTIONS
-    assert "someone else holds a Topic for, say so in that Topic" in mcp_server.INSTRUCTIONS
-    assert "names the main one in `issue`" in mcp_server.INSTRUCTIONS
-    assert "different kind of work" in tools["note_stage"]
-    assert "a batch finished" in tools["close_topic"]
+    assert "someone else holds, say so in its Topic" in mcp_server.INSTRUCTIONS
+    assert "One task per piece of work" in mcp_server.INSTRUCTIONS
+    assert "never silently" in tools["change_stage"]
+    assert "a batch finished" in tools["close_task"]
+    assert "free=true" in tools["open_topic"]
 
 
 def test_restored_connection_is_told_only_in_a_linked_project() -> None:
@@ -758,3 +802,85 @@ def test_overview_marks_offline_sessions_and_prefers_the_person(
     assert "address the person by pseudonym; an Assistant by its full name only when" in text
     assert "  bob (member): bob · web · vega, bob · web · lyra (offline)\n" in text
     assert "  carol (member): no sessions lately\n" in text
+
+
+def test_a_quiet_task_is_told_to_its_assignee_only() -> None:
+    """The quiet-task notice asks the session to tell its user, not to move the task (0032)."""
+    data = {
+        "team": "acme",
+        "ref": "T-4",
+        "title": "Export",
+        "task": 4,
+        "stage": "Code",
+        "assignee": "alice",
+        "days": 8,
+    }
+
+    line = describe("task_idle", data, ME)
+
+    assert line is not None and "no activity for 8 days" in line
+    assert "Tell your user" in line and "never just to quiet" in line
+    assert describe("task_idle", {**data, "assignee": "bob"}, ME) is None
+
+
+def test_a_task_assigned_to_the_user_by_someone_else_is_told() -> None:
+    """Planning by a human reaches the assignee's sessions; the session's own act does not."""
+    data = {
+        "team": "acme",
+        "ref": "T-5",
+        "title": "Import",
+        "event": "assigned",
+        "assignee": "alice",
+        "stage": "Backlog",
+        "author": "bob",
+        "author_assistant": None,
+    }
+
+    line = describe("task", data, ME)
+
+    assert line is not None and "assigned to your user by bob" in line
+    assert describe("task", {**data, "author_assistant": ME.assistant}, ME) is None
+    assert describe("task", {**data, "event": "stage"}, ME) is None
+
+
+def test_moves_are_posted_and_kept_when_the_server_is_away() -> None:
+    """Intervals go to /moves as ISO times; when the post fails they wait for the next time."""
+
+    class Server:
+        """Records posts, and fails the first one when asked."""
+
+        def __init__(self, fail: bool) -> None:
+            """Start empty.
+
+            Args:
+                fail: Fail every post.
+            """
+            self.fail = fail
+            self.posted: list[Any] = []
+
+        def request(self, method: str, path: str, json: Any = None) -> dict:
+            """Record a post, or fail.
+
+            Args:
+                method: HTTP method.
+                path: API path.
+                json: Request body.
+
+            Raises:
+                ColoqoError: When failing.
+            """
+            if self.fail:
+                raise ColoqoError(503, "away")
+            self.posted.append((method, path, json))
+            return {}
+
+    intervals = [("assistant", 1_700_000_000_000_000_000, 1_700_000_060_000_000_000)]
+    away, up = Server(fail=True), Server(fail=False)
+
+    kept = watch_module.send_moves(away, intervals)  # type: ignore[arg-type]
+    sent = watch_module.send_moves(up, kept)  # type: ignore[arg-type]
+
+    assert kept == intervals and sent == []
+    ((method, path, body),) = up.posted
+    assert (method, path) == ("POST", "/moves")
+    assert body["intervals"][0]["start"].startswith("2023-11-14T22:13:20")

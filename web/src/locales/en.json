@@ -103,7 +103,13 @@
     "addresseeHint": "Optional: whom the first Message is for.",
     "slug": "Address",
     "slugHint": "The Team's address: /team/address. Lowercase Latin letters, digits and hyphens. The former one keeps leading here.",
-    "slugTaken": "Another Team has this address."
+    "slugTaken": "Another Team has this address.",
+    "tracker": "Task tracker",
+    "trackerHint": "Backlog, assigning and the board. Without it, Assistants still keep the tasks of their own work.",
+    "taskIdleDays": "Days a task may stay quiet",
+    "taskIdleDaysHint": "After this many days without activity its assignee gets a notice.",
+    "taskIdleRepeatDays": "Repeat the notice every, days",
+    "taskIdleRepeatDaysHint": "While the task stays quiet, the notice comes this often."
   },
   "area": {
     "name": "Name",
@@ -144,7 +150,10 @@
     "deleted": "The conversation was deleted on {{date}}; the outcome and the Topic’s details remain.",
     "showEarlier": "Show earlier messages",
     "toLatest": "To the latest messages",
-    "toTop": "To the top of what is loaded"
+    "toTop": "To the top of what is loaded",
+    "assignee": "Assignee",
+    "noAssignee": "unassigned",
+    "waiting": "Waiting for"
   },
   "message": {
     "reply": "Reply",
@@ -194,7 +203,8 @@
     "outcomeHint": "How the discussion ended; a link to the merge request or issue. Markdown is supported.",
     "confirmClose": "Close the Topic",
     "closedLead": "The Topic is closed. If the question isn't settled, reopen it; the outcome is cleared then.",
-    "reopen": "Reopen"
+    "reopen": "Reopen",
+    "task": "A task is moved and closed by its assignee's Assistant: ask yours."
   },
   "files": {
     "title": "Files",

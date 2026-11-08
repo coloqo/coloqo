@@ -78,7 +78,7 @@ function NewTopic({ team, defaultArea, onClose }: { team: TeamDetail; defaultAre
     onSuccess: (topic) => {
       void queryClient.invalidateQueries({ queryKey: ['topics', team.slug] })
       void queryClient.invalidateQueries({ queryKey: ['team', team.slug] })
-      void navigate(topicPath(topic.team, topic.number))
+      void navigate(topicPath(topic.team, topic.number, topic.kind))
     },
   })
   return (
@@ -403,12 +403,22 @@ function TeamSettings({ team }: { team: TeamDetail }) {
   const [name, setName] = useState(team.name)
   const [slug, setSlug] = useState(team.slug)
   const [limit, setLimit] = useState(String(team.turn_limit))
+  const [tracker, setTracker] = useState(team.tracker ?? false)
+  const [idle, setIdle] = useState(String(team.task_idle_days ?? 7))
+  const [repeat, setRepeat] = useState(String(team.task_idle_repeat_days ?? 1))
   const save = useMutation({
     mutationFn: () =>
       call(
         api.PATCH('/api/team/{team}', {
           params: { path: { team: team.slug } },
-          body: { name: name.trim(), slug: slug.trim(), turn_limit: Number(limit) },
+          body: {
+            name: name.trim(),
+            slug: slug.trim(),
+            turn_limit: Number(limit),
+            tracker,
+            task_idle_days: Number(idle),
+            task_idle_repeat_days: Number(repeat),
+          },
         }),
       ),
     onSuccess: (saved) => {
@@ -419,8 +429,16 @@ function TeamSettings({ team }: { team: TeamDetail }) {
     },
   })
   const limitNumber = Number(limit)
-  const valid = name.trim() && slug.trim() && Number.isInteger(limitNumber) && limitNumber >= 1 && limitNumber <= 100
-  const changed = name.trim() !== team.name || slug.trim() !== team.slug || limitNumber !== team.turn_limit
+  const days = (value: string) => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 365
+  const valid =
+    name.trim() && slug.trim() && Number.isInteger(limitNumber) && limitNumber >= 1 && limitNumber <= 100 && days(idle) && days(repeat)
+  const changed =
+    name.trim() !== team.name ||
+    slug.trim() !== team.slug ||
+    limitNumber !== team.turn_limit ||
+    tracker !== (team.tracker ?? false) ||
+    Number(idle) !== (team.task_idle_days ?? 7) ||
+    Number(repeat) !== (team.task_idle_repeat_days ?? 1)
   return (
     <Card>
       <CardHeader title={t('team.settings')} />
@@ -454,6 +472,19 @@ function TeamSettings({ team }: { team: TeamDetail }) {
             className="w-28"
             required
           />
+        </Field>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={tracker} onChange={(event) => setTracker(event.target.checked)} className="mt-0.5" />
+          <span>
+            <span className="font-medium">{t('team.tracker')}</span>
+            <span className="block text-stone-500 dark:text-stone-400">{t('team.trackerHint')}</span>
+          </span>
+        </label>
+        <Field label={t('team.taskIdleDays')} hint={t('team.taskIdleDaysHint')}>
+          <Input type="number" min={1} max={365} value={idle} onChange={(event) => setIdle(event.target.value)} className="w-28" required />
+        </Field>
+        <Field label={t('team.taskIdleRepeatDays')} hint={t('team.taskIdleRepeatDaysHint')}>
+          <Input type="number" min={1} max={365} value={repeat} onChange={(event) => setRepeat(event.target.value)} className="w-28" required />
         </Field>
         <ErrorNote>
           {save.error && (save.error instanceof ApiError && save.error.status === 409 ? t('team.slugTaken') : errorText(save.error, t))}
@@ -511,7 +542,10 @@ export function TeamPage() {
           {data.role === 'owner' && (
             <>
               <InviteCard team={data} />
-              <TeamSettings key={`${data.name}-${data.slug}-${data.turn_limit}`} team={data} />
+              <TeamSettings
+                key={`${data.name}-${data.slug}-${data.turn_limit}-${data.tracker}-${data.task_idle_days}-${data.task_idle_repeat_days}`}
+                team={data}
+              />
             </>
           )}
         </div>

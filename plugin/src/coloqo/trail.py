@@ -11,6 +11,10 @@ ended. The times are kept in the files, not taken from them: two writes within o
 file system's clock would get the same modification time. Claude Code names
 no turn's origin and runs the prompt hook for loop ticks and messages from other sessions too, so
 the marks can only say when a turn was surely not the user's.
+
+A last one, ``moves``, is a log the same two hooks append to, a line per prompt and per stop; the
+session's watch reads what is new and posts the intervals of whose move it was (decision 0033).
+Appending keeps the hooks off the network.
 """
 
 import contextlib
@@ -147,3 +151,81 @@ def human_turn(session: str) -> bool | None:
     except (OSError, ValueError):
         pass
     return True
+
+
+Interval = tuple[str, int, int]
+"""Whose move it was, ``assistant`` or ``human``, from and to, in nanoseconds."""
+
+
+def log_move(session: str, mark: str) -> None:
+    """Append a prompt or a stop to the session's log of moves; a failure is ignored.
+
+    Args:
+        session: The Claude Code session.
+        mark: ``p`` for a prompt, ``s`` for a stop.
+    """
+    path = _mark("moves", session)
+    _touch(path)
+    with contextlib.suppress(OSError), path.open("a", encoding="utf-8") as log:
+        log.write(f"{mark} {time.time_ns()}\n")
+
+
+def intervals(
+    marks: list[tuple[str, int]], last: tuple[str, int] | None
+) -> tuple[list[Interval], tuple[str, int] | None]:
+    """Turn prompts and stops into finished intervals; return them and the open mark.
+
+    From a prompt to the next stop the move is the Assistant's; from a stop to the next prompt,
+    the human's. A prompt made by an event counts as a prompt: the Assistant works on it. A
+    repeated mark keeps the earlier one.
+
+    Args:
+        marks: New marks in order, ``(mark, nanoseconds)``.
+        last: The mark the previous call left open.
+    """
+    found: list[Interval] = []
+    for mark, moment in marks:
+        if last is None or last[0] == mark:
+            last = last or (mark, moment)
+            continue
+        found.append(("assistant" if last[0] == "p" else "human", last[1], moment))
+        last = (mark, moment)
+    return found, last
+
+
+class MoveLog:
+    """What the watch has read of its session's log of moves, kept in memory."""
+
+    def __init__(self, session: str) -> None:
+        """Start at the end of the log, so a restarted watch sends nothing twice.
+
+        Args:
+            session: The Claude Code session.
+        """
+        self.path = _mark("moves", session)
+        self.offset = 0
+        self.last: tuple[str, int] | None = None
+        marks = self._read()
+        self.last = marks[-1] if marks else None
+
+    def _read(self) -> list[tuple[str, int]]:
+        """Return the marks written since the last read, and move past them."""
+        try:
+            with self.path.open("rb") as log:
+                log.seek(self.offset)
+                data = log.read()
+        except OSError:
+            return []
+        end = data.rfind(b"\n") + 1
+        self.offset += end
+        marks = []
+        for line in data[:end].decode("utf-8", "replace").splitlines():
+            mark, _, moment = line.partition(" ")
+            if mark in ("p", "s") and moment.isdigit():
+                marks.append((mark, int(moment)))
+        return marks
+
+    def take(self) -> list[Interval]:
+        """Return the intervals finished since the last call."""
+        found, self.last = intervals(self._read(), self.last)
+        return found

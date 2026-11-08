@@ -9,12 +9,13 @@ import json
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from coloqo import focus
-from coloqo.api import Api, ColoqoError, NotLoggedIn, Project
+from coloqo import focus, trail
+from coloqo.api import Api, ColoqoError, NotLoggedIn, Project, session_id
 from coloqo.hooks import LOGIN_HINT
 
 SILENCE_SECONDS = 45
@@ -23,9 +24,13 @@ SILENCE_SECONDS = 45
 NOTICE_AFTER_SECONDS = 180
 """A break longer than this is reported to the session once the stream is back."""
 
-ALIVE_SECONDS = 15
-"""The watch tells the server its session runs this often, at the heartbeat that comes as often;
-a minute of silence means it does not (decision 0029)."""
+ALIVE_SECONDS = 10
+"""The watch tells the server its session runs at each heartbeat, which comes every 15 s: a
+threshold equal to the heartbeat made every second call fall short by the call's own latency. A
+minute of silence means the session does not run (decision 0029)."""
+
+MOVES_MAX = 500
+"""The most move intervals kept unsent while the server cannot be reached."""
 
 
 def say(line: str) -> None:
@@ -153,6 +158,23 @@ def describe(kind: str, data: dict[str, Any], me: Me) -> str | None:
             return None
         outcome = f": {data['outcome']}" if data.get("outcome") else ""
         return f"Coloqo: {topic} was {data.get('status')} by {data.get('author')}{outcome}."
+    if kind == "task" and data.get("event") == "assigned":
+        if data.get("assignee") != me.pseudonym or data.get("author_assistant") == me.assistant:
+            return None
+        return (
+            f"Coloqo: {topic} was assigned to your user by {data.get('author')}, stage "
+            f"{data.get('stage')}. Mention it to your user; take it with take_task only when "
+            "they say so."
+        )
+    if kind == "task_idle":
+        if data.get("assignee") != me.pseudonym:
+            return None
+        return (
+            f"Coloqo: {topic} has had no activity for {data.get('days')} days (stage "
+            f"{data.get('stage')}). Tell your user in one line and ask whether it waits, has "
+            "moved on or is done; move or close it only by what they say, never just to quiet "
+            "this notice."
+        )
     if kind == "topic_idle":
         mine = data.get("holder") == me.assistant
         sibling = (
@@ -202,18 +224,55 @@ def restored(linked: bool, broken_for: float | None) -> str | None:
     return f"Coloqo: connection restored after {int(broken_for // 60)} min; check the inbox."
 
 
+def send_moves(api: Api, intervals: list[trail.Interval]) -> list[trail.Interval]:
+    """Post move intervals to the server; return those to try again later.
+
+    Args:
+        api: The client, acting as the session's Assistant.
+        intervals: Intervals not yet sent, oldest first.
+    """
+    if not intervals:
+        return []
+    payload = [
+        {
+            "move": move,
+            "start": _iso(start),
+            "end": _iso(end),
+        }
+        for move, start, end in intervals[-MOVES_MAX:]
+    ]
+    try:
+        api.request("POST", "/moves", json={"intervals": payload})
+    except ColoqoError:
+        return intervals[-MOVES_MAX:]
+    return []
+
+
+def _iso(nanoseconds: int) -> str:
+    """Return a moment in nanoseconds since the epoch as ISO 8601 in UTC.
+
+    Args:
+        nanoseconds: The moment.
+    """
+    return datetime.fromtimestamp(nanoseconds / 1e9, UTC).isoformat()
+
+
 def watch(project_dir: str | None = None) -> None:
     """Hold the event stream for the project's Assistant until the session ends.
 
     Waits quietly while the computer is not logged in, and reconnects after breaks with the
-    last event id, so nothing is missed (decision 0006). About every 15 seconds it tells the
-    server the session runs: a closed laptop leaves the stream open on the server's side for
-    minutes, so the stream alone cannot tell (decision 0029).
+    last event id, so nothing is missed (decision 0006). At each heartbeat it tells the server
+    the session runs: a closed laptop leaves the stream open on the server's side for minutes, so
+    the stream alone cannot tell (decision 0029); and it posts the intervals of whose move it was
+    that the hooks logged since (decision 0033).
 
     Args:
         project_dir: The project; Claude Code's project or the current directory when omitted.
     """
     project = Project.detect(project_dir)
+    session = session_id()
+    moves = trail.MoveLog(session) if session else None
+    unsent: list[trail.Interval] = []
     last_id: str | None = None
     alive = 0.0
     hinted = False
@@ -235,9 +294,11 @@ def watch(project_dir: str | None = None) -> None:
                 stream.raise_for_status()
                 for event_id, kind, data in frames(stream.iter_lines()):
                     if time.monotonic() - alive >= ALIVE_SECONDS:
-                        # The heartbeat comes every 15 s, so this runs at least that often.
+                        # The heartbeat comes every 15 s, so this runs at each one.
                         api.request("GET", f"/assistant/{me.assistant}")
                         alive = time.monotonic()
+                        if moves is not None and linked:
+                            unsent = send_moves(api, unsent + moves.take())
                     if kind == "ready":
                         line = restored(
                             linked, time.monotonic() - broken_since if broken_since else None

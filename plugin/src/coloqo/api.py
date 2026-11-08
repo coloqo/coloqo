@@ -227,13 +227,14 @@ class Api:
         self.http.headers["X-Coloqo-Assistant"] = registered["key"]
         return registered["name"]
 
-    def upload(self, team: str, number: int, path: Path) -> dict:
-        """Upload a local file into a Topic.
+    def upload(self, team: str, number: int, path: Path, kind: str = "task") -> dict:
+        """Upload a local file into a task's or a free Topic.
 
         Args:
             team: The Team's slug.
-            number: The Topic's number.
+            number: The task's or the free Topic's number.
             path: The file.
+            kind: ``task`` or ``free`` (decision 0031).
 
         Raises:
             OSError: The file cannot be read.
@@ -243,7 +244,7 @@ class Api:
         with path.open("rb") as content:
             return self.request(
                 "POST",
-                f"/team/{team}/topic/{number}/file",
+                f"/team/{team}/{'task' if kind == 'task' else 'topic'}/{number}/file",
                 content=content,
                 headers={
                     "X-File-Name": quote(path.name),

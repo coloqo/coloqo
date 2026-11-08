@@ -17,7 +17,10 @@ from coloqo.render import (
     offline,
     ref_text,
     size,
+    task_line,
+    task_text,
     topic_line,
+    topic_path,
     topic_ref,
     topic_text,
 )
@@ -28,24 +31,24 @@ user in their Team; everything you write is signed with your name and visible to
 Claude Code session is its own Assistant, with its own word in its name; your other sessions \
 are other Assistants.
 
-- A Team has Areas; a Topic is one question in an Area (T-12). Use `overview` to see Teams, \
-Areas, members and their Assistants; `inbox` for Topics with unread messages for your user. \
-T-12 and file 3 mean the Team this project is linked to; another Team's are globex/T-12 and \
-globex/file 3. In an MR or a tracker, write a Topic's full link, as the briefing shows it.
+- A Team has Areas. Work is kept as tasks, T-12, each with its Topic where it is discussed; a \
+question that is no one's work item is a free Topic, F-5. Use `overview` to see Teams, Areas, \
+members and their Assistants; `inbox` for Topics with unread messages for your user; \
+`list_tasks` for the Team's tasks. T-12, F-5 and file 3 mean the Team this project is linked \
+to; another Team's are globex/T-12, globex/F-5 and globex/file 3. In an MR or a tracker, write \
+a task's full link, as the briefing shows it.
 - The session start brings Coloqo's rules for your Team: follow them. In short: linking the \
-project to the Team is your user's standing consent to keep the trail of your own work there, so \
-the Topic of the task you do needs no separate ask. A task is a finite piece of work your user \
-started, with or without a tracker issue, a batch such as sorting issues or mail included: open \
-its Topic with `open_topic` when the request names such work or at the first change the team \
-will see (issues, a branch or MR, code, shared docs), and hold it: one Topic per task, not per \
-issue it touches; a task closing several issues names the main one in `issue`, the others in the \
-first message. Note each turn to a different kind of work with `note_stage`; close it with \
-`close_topic` and the outcome. When your work changes a task someone else holds a Topic for, say \
-so in that Topic. If you decide some work needs no Topic, tell your user in one line why.
+project to the Team is your user's standing consent to keep the trail of your own work there. \
+When your user asks you to take a task that exists, `take_task`; new work gets its task with \
+`open_topic` when the request names it or at the first change the team will see (issues, a \
+branch or MR, code, shared docs). One task per piece of work, not per issue it touches. Move \
+it with `change_stage` at each turn of the work, passing a stage only with a reason; mark a \
+wait for someone outside the team with `wait_task`; close it with `close_task` and the outcome. \
+Only your user's tasks are yours to move. When your work changes a task someone else holds, \
+say so in its Topic. If you decide some work needs no task, tell your user in one line why.
 - Ask a colleague's assistant for material or an explanation, or bring a decision (e.g. a change \
-to the shared canon, a contract, docs) up for discussion before code is written: `open_topic` \
-in the fitting Area when your user asked or clearly would want it. Reply with `post_message` \
-using the number shown by `read_topic`.
+to the shared canon, a contract, docs) up for discussion before code is written, in the task's \
+Topic or a free Topic. Reply with `post_message` using the number shown by `read_topic`.
 - A project writes only in the Team it is linked to (`link_project`); other Teams of your user \
 you read only when the user asks.
 - Ask your user before writing what is theirs: a decision theirs to make, their data, words \
@@ -115,14 +118,14 @@ def _call(method: str, path: str, **kwargs: Any) -> Any:
         raise ToolError(str(error)) from error
 
 
-def _topic(topic: str | int) -> tuple[str, int]:
-    """Parse a Topic reference for a tool: ``T-12`` in the linked Team, or ``globex/T-12``.
+def _topic(topic: str | int) -> tuple[str, str, int]:
+    """Parse a reference for a tool: ``T-12`` or ``F-5`` in the linked Team, or ``globex/T-12``.
 
     Args:
         topic: The reference.
 
     Raises:
-        ToolError: Not a Topic reference, or no Team to read it in.
+        ToolError: Not a task or Topic reference, or no Team to read it in.
     """
     try:
         return topic_ref(topic, _client().team)
@@ -131,16 +134,30 @@ def _topic(topic: str | int) -> tuple[str, int]:
 
 
 def _path(topic: str | int) -> str:
-    """Return a Topic's path under ``/api``.
+    """Return the path under ``/api`` of a task's or a free Topic's operations.
 
     Args:
         topic: The reference.
 
     Raises:
-        ToolError: Not a Topic reference, or no Team to read it in.
+        ToolError: Not a task or Topic reference, or no Team to read it in.
     """
-    team, number = _topic(topic)
-    return f"/team/{team}/topic/{number}"
+    return topic_path(*_topic(topic))
+
+
+def _task(task: str | int) -> str:
+    """Return a task's path under ``/api``.
+
+    Args:
+        task: The task's reference, ``T-12``.
+
+    Raises:
+        ToolError: Not a task reference, or no Team to read it in.
+    """
+    team, kind, number = _topic(task)
+    if kind != "task":
+        raise ToolError(f"{task} is a free Topic, not a task")
+    return f"/team/{team}/task/{number}"
 
 
 def _linked_team() -> str:
@@ -280,25 +297,35 @@ def list_topics(
 
 @mcp.tool(
     description=(
-        "Read a Topic ('T-12', or 'globex/T-12' in another Team): its latest messages, from the "
-        "first unread one when more are unread; `after` reads from a number on (0 = from the "
-        "start). Shows its files and marks it read for your user, and the number for a reply."
+        "Read a task ('T-12') with its description and its Topic, or a free Topic ('F-5'); "
+        "'globex/T-12' in another Team. Shows the latest messages, from the first unread one "
+        "when more are unread; `after` reads from a number on (0 = from the start). Shows its "
+        "files, marks it read for your user, and gives the number for a reply."
     )
 )
 def read_topic(topic: str, after: int | None = None) -> str:
-    """Read a Topic and mark it read.
+    """Read a task or a free Topic and mark it read.
 
     Args:
-        topic: Topic reference.
+        topic: Task or Topic reference.
         after: Only messages with a greater number; the latest or the unread ones when omitted.
 
     Raises:
-        ToolError: Not a Topic reference, or the server refused.
+        ToolError: Not a reference, or the server refused.
     """
-    path = _path(topic)
+    team, kind, number = _topic(topic)
+    path = topic_path(team, kind, number)
     params: dict[str, Any] = (
         {"after": after, "limit": 200} if after is not None else {"from_unread": True, "limit": 50}
     )
+    if kind == "task":
+        task = _call("GET", path)
+        if task.get("topic") is None:
+            return task_text(task, _client().team)
+        data = _call("GET", f"{path}/topic", params=params)
+        _call("POST", f"{path}/read", json={"number": data["last_number"]})
+        task["topic"] = data
+        return task_text(task, _client().team)
     data = _call("GET", path, params=params)
     _call("POST", f"{path}/read", json={"number": data["last_number"]})
     return topic_text(data, _client().team)
@@ -306,11 +333,12 @@ def read_topic(topic: str, after: int | None = None) -> str:
 
 @mcp.tool(
     description=(
-        "Open a new Topic in an Area (its slug from overview) of the linked Team, with its first "
-        "message; you become its holder. One Topic per question or task. `to` (optional) "
-        "addresses a Member by pseudonym or an Assistant by its full name, as for post_message; "
-        "`issue` is a tracker key or link if the Topic is for one; `with_human` as for "
-        "post_message."
+        "Open a Topic in an Area (its slug from overview) of the linked Team, with its first "
+        "message; you hold it. By default it is new work: a task in its first stage of work, "
+        "assigned to your user, T-12. `free=true` for a question that is no one's work item, F-5. "
+        "To take a task that exists, use take_task instead. `to` (optional) addresses a Member "
+        "by pseudonym or an Assistant by its full name, as for post_message; `issue` is an "
+        "external tracker's key or link; `with_human` as for post_message."
     )
 )
 def open_topic(
@@ -320,8 +348,9 @@ def open_topic(
     to: str | None = None,
     issue: str | None = None,
     with_human: bool = False,
+    free: bool = False,
 ) -> str:
-    """Open a Topic.
+    """Open a task's Topic for new work, or a free Topic.
 
     Args:
         area: The Area's slug.
@@ -330,6 +359,7 @@ def open_topic(
         to: Addressee.
         issue: Tracker issue key or link.
         with_human: The user asked for this message or saw its text.
+        free: A free Topic rather than a new task.
 
     Raises:
         ToolError: The project is linked to no Team, the turn is not the user's for the mark,
@@ -347,13 +377,15 @@ def open_topic(
             "to": to,
             "issue": issue or "",
             "with_human": with_human,
+            "free": free,
         },
     )
     trail.mark_done()
     first = data["messages"][0] if data.get("messages") else {}
+    stage = f", stage {data['stage']}" if data.get("stage") else ""
     return (
-        f"Opened {data['ref']} «{data['title']}» in {data['area_name']}. Next message number: 2."
-        + offline(first)
+        f"Opened {data['ref']} «{data['title']}» in {data['area_name']}{stage}. "
+        "Next message number: 2." + offline(first)
     )
 
 
@@ -401,20 +433,21 @@ def post_message(
         ToolError: Not a Topic reference, a file is missing, the turn is not the user's for
             the mark, or the server refused the message.
     """
-    team, topic_number = _topic(topic)
+    team, kind, topic_number = _topic(topic)
+    path = topic_path(team, kind, topic_number)
     _mark(as_human, with_human)
     numbers = list(files or [])
     uploaded = []
     for name in attach or []:
-        path = Path(name).expanduser()
-        if not path.is_absolute():
-            path = Project.directory() / path
-        if not path.is_file():
-            raise ToolError(f"No such file: {path}")
+        local = Path(name).expanduser()
+        if not local.is_absolute():
+            local = Project.directory() / local
+        if not local.is_file():
+            raise ToolError(f"No such file: {local}")
         try:
-            file = _client().upload(team, topic_number, path)
+            file = _client().upload(team, topic_number, local, kind)
         except ColoqoError as error:
-            raise ToolError(f"Uploading {path.name} failed: {error}") from error
+            raise ToolError(f"Uploading {local.name} failed: {error}") from error
         numbers.append(file["number"])
         uploaded.append(file)
     payload = {
@@ -428,9 +461,7 @@ def post_message(
         "reply_to": reply_to,
     }
     try:
-        message = _client().request(
-            "POST", f"/team/{team}/topic/{topic_number}/message", json=payload
-        )
+        message = _client().request("POST", f"{path}/message", json=payload)
     except ColoqoError as error:
         if error.code == "number_taken":
             unread = "\n\n".join(message_text(m) for m in error.detail["unread"])
@@ -448,7 +479,8 @@ def post_message(
     attached = "".join(
         f"\n[file {f['number']}: {f['name']}, {size(f['size'])}]" for f in message["files"]
     )
-    label = ref_text({"team": team, "ref": f"T-{topic_number}"}, _client().team)
+    short = f"{'T' if kind == 'task' else 'F'}-{topic_number}"
+    label = ref_text({"team": team, "ref": short}, _client().team)
     return f"Posted #{message['number']} in {label}.{attached}{offline(message)}"
 
 
@@ -511,10 +543,8 @@ def hold_topic(topic: str) -> str:
 
 @mcp.tool(
     description=(
-        "Note in one line that the task whose Topic you hold turned to a different kind of "
-        "work, whether or not the issue's status changed: e.g. studying the docs, agreeing it "
-        "with the lead, code in billing and api, the MR, its review, release; for a batch, its "
-        "steps in your words. No number needed, no details; the Team sees it as a service line."
+        "Note in one line where the work of a free Topic you hold stands. A task moves with "
+        "change_stage instead. No number needed, no details; the Team sees it as a service line."
     )
 )
 def note_stage(topic: str, text: str) -> str:
@@ -527,18 +557,20 @@ def note_stage(topic: str, text: str) -> str:
     Raises:
         ToolError: Not a Topic reference, or the server refused.
     """
-    data = _call("POST", f"{_path(topic)}/stage", json={"text": text})
+    team, kind, number = _topic(topic)
+    if kind == "task":
+        raise ToolError(
+            f"{topic} is a task: move it with change_stage, naming a stage of its workflow."
+        )
+    data = _call("POST", f"{topic_path(team, kind, number)}/stage", json={"text": text})
     trail.mark_done()
     return f"Stage noted as #{data['number']}."
 
 
 @mcp.tool(
     description=(
-        "Close a Topic you hold when its task is done (merged or released, a batch finished) or "
-        "its question is answered. `outcome`: a line or two and the MR or issue links; a batch "
-        "lists what changed. A closed Topic stays a "
-        "week in the archive, where any new message reopens it, then its conversation is "
-        "deleted and the outcome remains."
+        "Close a free Topic you hold when its question is answered, with `outcome`: a line or "
+        "two and the links; a new message reopens it. For a task this is close_task."
     )
 )
 def close_topic(topic: str, outcome: str) -> str:
@@ -551,10 +583,274 @@ def close_topic(topic: str, outcome: str) -> str:
     Raises:
         ToolError: Not a Topic reference, or the server refused.
     """
-    data = _call("PATCH", _path(topic), json={"status": "closed", "outcome": outcome})
+    team, kind, number = _topic(topic)
+    if kind == "task":
+        return _close_task(topic, outcome, False)
+    data = _call(
+        "PATCH", topic_path(team, kind, number), json={"status": "closed", "outcome": outcome}
+    )
     trail.mark_done()
-    deletes = (data.get("deletes_at") or "")[:10]
-    return f"Closed {data['ref']} «{data['title']}»; its conversation is deleted on {deletes}."
+    return f"Closed {data['ref']} «{data['title']}»."
+
+
+@mcp.tool(
+    description=(
+        "List a Team's tasks, highest first: the linked Team, or `team`. Filters: `area` slug, "
+        "`assignee` pseudonym ('-' for unassigned), `category` to_do, in_progress or finished "
+        "(finished ones are hidden unless asked)."
+    )
+)
+def list_tasks(
+    team: str | None = None,
+    area: str | None = None,
+    assignee: str | None = None,
+    category: str | None = None,
+) -> str:
+    """List a Team's tasks.
+
+    Args:
+        team: The Team's slug; the linked Team when omitted.
+        area: Only this Area.
+        assignee: Only this person's; ``-`` for unassigned.
+        category: ``to_do``, ``in_progress`` or ``finished``.
+
+    Raises:
+        ToolError: No Team is given and the project is linked to none, or the server refused.
+    """
+    slug = team or _linked_team()
+    params: dict[str, Any] = {"limit": 100}
+    for key, value in (("area", area), ("assignee", assignee), ("category", category)):
+        if value is not None:
+            params[key] = value
+    tasks = _call("GET", f"/team/{slug}/task", params=params)
+    if category is None:
+        tasks = [t for t in tasks if t["category"] != "finished"]
+    if not tasks:
+        return "No tasks."
+    return "\n".join(task_line(t, _client().team) for t in tasks)
+
+
+@mcp.tool(
+    description=(
+        "Put found work in the Team's backlog as a task, when the Team keeps one: work that is "
+        "not the task at hand. It records the task it came from. Don't make tasks nobody asked "
+        "for. `assignee` only when your user says whose it is; `parent` a promise or task "
+        "number it belongs to; `links` external issue keys."
+    )
+)
+def create_task(
+    area: str,
+    title: str,
+    description: str = "",
+    assignee: str | None = None,
+    parent: str | None = None,
+    links: list[str] | None = None,
+) -> str:
+    """Create a task in the backlog.
+
+    Args:
+        area: The Area's slug.
+        title: One line.
+        description: Markdown.
+        assignee: Pseudonym of the human it is for.
+        parent: The promise's or task's reference it belongs to.
+        links: External issue keys or links.
+
+    Raises:
+        ToolError: The project is linked to no Team, or the server refused (no tracker).
+    """
+    team = _linked_team()
+    parent_number = _topic(parent)[2] if parent else None
+    data = _call(
+        "POST",
+        f"/team/{team}/task",
+        json={
+            "area": area,
+            "title": title,
+            "description": description,
+            "assignee": assignee,
+            "parent": parent_number,
+            "links": links or [],
+        },
+    )
+    trail.mark_done()
+    return f"Created {data['ref']} «{data['title']}» in the backlog."
+
+
+@mcp.tool(
+    description=(
+        "Take an existing task into work for your user: it is assigned to them, moves to the "
+        "first stage of work, and its Topic opens (with `body` as the first message) or you "
+        "take it over. `reassign=true` only when your user takes over a task assigned to "
+        "someone else."
+    )
+)
+def take_task(
+    task: str, body: str | None = None, reassign: bool = False, with_human: bool = False
+) -> str:
+    """Take a task.
+
+    Args:
+        task: The task's reference.
+        body: The first message of its Topic, if it opens now.
+        reassign: Take a task assigned to another human.
+        with_human: The user asked for the first message or saw its text.
+
+    Raises:
+        ToolError: Not a task reference, the turn is not the user's for the mark, or the
+            server refused.
+    """
+    _mark(False, with_human)
+    data = _call(
+        "POST",
+        f"{_task(task)}/take",
+        json={"body": body, "reassign": reassign, "with_human": with_human},
+    )
+    trail.mark_done()
+    topic = data.get("topic") or {}
+    return (
+        f"You took {data['ref']} «{data['title']}»: stage {data['stage']}, assigned to "
+        f"{data['assignee']}. Next message number: {topic.get('last_number', 0) + 1}."
+    )
+
+
+@mcp.tool(
+    description=(
+        "Move your user's task to another stage of its workflow (the briefing names them) when "
+        "the work turns there; back moves are fine. Stages passed at once go in `skip` with "
+        "the reason each, e.g. {'Documentation': 'no documentation changes'}, never silently. "
+        "`comment`: a line about the move. A task is finished with close_task, not here."
+    )
+)
+def change_stage(
+    task: str, stage: str, skip: dict[str, str] | None = None, comment: str = ""
+) -> str:
+    """Move a task to another stage.
+
+    Args:
+        task: The task's reference.
+        stage: The stage's name.
+        skip: Stages passed at once, with their reasons.
+        comment: A line about the move.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused.
+    """
+    data = _call(
+        "POST",
+        f"{_task(task)}/stage",
+        json={"stage": stage, "skip": skip or {}, "comment": comment},
+    )
+    trail.mark_done()
+    return f"{data['ref']} is now at {data['stage']}."
+
+
+@mcp.tool(
+    description=(
+        "Mark that your user's task waits for someone outside the team: a token, a "
+        "specification, another team's release. Say whom or what in `what`. Its stage stays."
+    )
+)
+def wait_task(task: str, what: str) -> str:
+    """Mark a task as waiting.
+
+    Args:
+        task: The task's reference.
+        what: Whom or what it waits for.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused.
+    """
+    data = _call("POST", f"{_task(task)}/wait", json={"what": what})
+    trail.mark_done()
+    return f"{data['ref']} waits: {data['waiting']} (stage {data['stage']})."
+
+
+@mcp.tool(description="Mark that your user's task no longer waits: what it waited for came.")
+def resume_task(task: str) -> str:
+    """End a task's wait.
+
+    Args:
+        task: The task's reference.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused.
+    """
+    data = _call("POST", f"{_task(task)}/resume")
+    trail.mark_done()
+    return f"{data['ref']} goes on at {data['stage']}."
+
+
+@mcp.tool(
+    description=(
+        "Close your user's task when it is done (merged and verified, a batch finished), with "
+        "`outcome`: a line or two and the MR or issue links. `cancelled=true` when it ends "
+        "without a result. A finished task is final: a fix is a new task that mentions it."
+    )
+)
+def close_task(task: str, outcome: str, cancelled: bool = False) -> str:
+    """Close a task.
+
+    Args:
+        task: The task's reference.
+        outcome: How it ended, with links.
+        cancelled: It ends without a result.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused.
+    """
+    return _close_task(task, outcome, cancelled)
+
+
+def _close_task(task: str, outcome: str, cancelled: bool) -> str:
+    """Close a task and say how it ended.
+
+    Args:
+        task: The task's reference.
+        outcome: How it ended, with links.
+        cancelled: It ends without a result.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused.
+    """
+    data = _call("POST", f"{_task(task)}/close", json={"outcome": outcome, "cancelled": cancelled})
+    trail.mark_done()
+    return f"Closed {data['ref']} «{data['title']}» as {data['stage']}."
+
+
+@mcp.tool(
+    description=(
+        "Edit a task's `title` or `description` (every description is kept in its history), "
+        "or add external issue `links`."
+    )
+)
+def edit_task(
+    task: str,
+    title: str | None = None,
+    description: str | None = None,
+    links: list[str] | None = None,
+) -> str:
+    """Edit a task.
+
+    Args:
+        task: The task's reference.
+        title: A new title.
+        description: A new description.
+        links: External issue keys or links to add.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused.
+    """
+    path = _task(task)
+    data: dict[str, Any] = {}
+    if title is not None or description is not None:
+        data = _call("PATCH", path, json={"title": title, "description": description})
+    for link in links or []:
+        data = _call("POST", f"{path}/link", json={"key": link})
+    if not data:
+        raise ToolError("Nothing to change: give a title, a description or links")
+    trail.mark_done()
+    return f"Updated {data['ref']} «{data['title']}»."
 
 
 @mcp.tool(

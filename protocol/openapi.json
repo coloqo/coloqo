@@ -106,6 +106,24 @@
         "title": "AreaPatch",
         "type": "object"
       },
+      "AssignIn": {
+        "description": "Assigning a task: planning (decision 0031).\n\nAttributes:\n    assignee: Pseudonym of a human of the Team; ``None`` to unassign.",
+        "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          }
+        },
+        "title": "AssignIn",
+        "type": "object"
+      },
       "AssistantIn": {
         "description": "A session registering its Assistant (decision 0024).\n\nAttributes:\n    project_key: SHA-256 of the project path; the path itself stays on the computer.\n    project_name: Short project name for the Assistant's shown name.\n    team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked\n        project whose person is a member of it, and never overrides a link (decision 0020).\n    team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one\n        more release (decision 0025).\n    session_id: The Claude Code session id; without it the project has one Assistant.",
         "properties": {
@@ -313,6 +331,37 @@
           "team_name"
         ],
         "title": "Briefing",
+        "type": "object"
+      },
+      "Category": {
+        "description": "The fixed category of a stage's kind (decision 0032).\n\nAttributes:\n    ToDo: Work has not started.\n    InProgress: Work goes on; a person's time on a task starts with its first move here.\n    Finished: Final: a finished task is never reopened.",
+        "enum": [
+          "to_do",
+          "in_progress",
+          "finished"
+        ],
+        "title": "Category",
+        "type": "string"
+      },
+      "CloseIn": {
+        "description": "Closing a task.\n\nAttributes:\n    outcome: A line or two, with the MR or issue links.\n    cancelled: Closed without a result.",
+        "properties": {
+          "cancelled": {
+            "default": false,
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "outcome": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "CloseIn",
         "type": "object"
       },
       "DevLoginIn": {
@@ -630,24 +679,26 @@
         "title": "InvitePreview",
         "type": "object"
       },
-      "LinkOut": {
-        "description": "A one-time link where the person chooses the project's Team.\n\nAttributes:\n    url: The page to open.\n    expires_at: After this it does not work.",
+      "LinkIn": {
+        "description": "A link to an external issue.\n\nAttributes:\n    key: The issue's key or address.\n    url: Its address.",
         "properties": {
-          "expires_at": {
-            "format": "date-time",
-            "title": "Expires At",
+          "key": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Key",
             "type": "string"
           },
           "url": {
+            "default": "",
+            "maxLength": 500,
             "title": "Url",
             "type": "string"
           }
         },
         "required": [
-          "url",
-          "expires_at"
+          "key"
         ],
-        "title": "LinkOut",
+        "title": "LinkIn",
         "type": "object"
       },
       "LinkPage": {
@@ -1034,6 +1085,105 @@
         "title": "MessageOut",
         "type": "object"
       },
+      "MoveIn": {
+        "description": "An interval of whose move it was, between an Assistant and its human (decision 0033).\n\nAttributes:\n    move: ``assistant`` from a human's prompt to the Assistant's stop, ``human`` from the\n        stop to the next prompt.\n    start: When it began.\n    end: When it ended.",
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "move": {
+            "enum": [
+              "assistant",
+              "human"
+            ],
+            "title": "Move",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "move",
+          "start",
+          "end"
+        ],
+        "title": "MoveIn",
+        "type": "object"
+      },
+      "MovesIn": {
+        "description": "Move intervals of the calling session.\n\nAttributes:\n    intervals: The intervals, any order.",
+        "properties": {
+          "intervals": {
+            "items": {
+              "$ref": "#/components/schemas/MoveIn"
+            },
+            "maxItems": 500,
+            "title": "Intervals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "intervals"
+        ],
+        "title": "MovesIn",
+        "type": "object"
+      },
+      "MovesOut": {
+        "description": "What was recorded.\n\nAttributes:\n    recorded: Intervals written to timelines.\n    tasks: The tasks they went to.",
+        "properties": {
+          "recorded": {
+            "title": "Recorded",
+            "type": "integer"
+          },
+          "tasks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recorded",
+          "tasks"
+        ],
+        "title": "MovesOut",
+        "type": "object"
+      },
+      "OrderIn": {
+        "description": "Placing a task within its status: higher matters more (decision 0031).\n\nAttributes:\n    before: The number of the task it goes right above.\n    after: The number of the task it goes right below.",
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          }
+        },
+        "title": "OrderIn",
+        "type": "object"
+      },
       "ProjectOut": {
         "description": "One of the person's projects with its shown sessions, as their settings list it.\n\nAttributes:\n    key: The project's public key.\n    name: The folder's name.\n    installation: Name of the computer.\n    team: The slug of the Team it is linked to, if any.\n    team_name: That Team's name.\n    assistants: Its shown Assistants: online, or offline for less than ``SHOWN``.\n    last_seen_at: The last request of any of its Assistants.",
         "properties": {
@@ -1143,21 +1293,632 @@
         "title": "Role",
         "type": "string"
       },
-      "StageIn": {
-        "description": "The holder's work turned to a different kind of activity (decisions 0021, 0023).\n\nAttributes:\n    text: One line, e.g. \"code in billing and api\" or \"MR !17 open\".",
+      "StageKind": {
+        "description": "The fixed kind of a stage; measurements and boards read it, never the name (0032).\n\nAttributes:\n    Backlog: A task written down; it may have no assignee.\n    Analysis: A person asked an Assistant to take the task.\n    Design: A plan of changes with forks, approved by the human.\n    Documentation: The documentation changes.\n    Agreement: The decision goes to the Team or the lead; the docs MR is merged.\n    Code: The code, in one or several repositories.\n    Review: The MR and its review rounds.\n    Delivery: The release and the check in prod.\n    Done: Verified in prod.\n    Cancelled: Closed without a result.\n    Draft: A promise worded, not given yet.\n    Given: A promise given for its period.\n    Delivered: A promise kept.\n    NotDelivered: A promise's period ended without the delivery.\n    Withdrawn: A promise removed on purpose.",
+        "enum": [
+          "backlog",
+          "analysis",
+          "design",
+          "documentation",
+          "agreement",
+          "code",
+          "review",
+          "delivery",
+          "done",
+          "cancelled",
+          "draft",
+          "given",
+          "delivered",
+          "not_delivered",
+          "withdrawn"
+        ],
+        "title": "StageKind",
+        "type": "string"
+      },
+      "StageOut": {
+        "description": "A stage of a workflow.\n\nAttributes:\n    name: Its name.\n    kind: Its fixed kind.\n    category: Its kind's category.",
         "properties": {
-          "text": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Text",
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StageKind"
+          },
+          "name": {
+            "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "text"
+          "name",
+          "kind",
+          "category"
         ],
-        "title": "StageIn",
+        "title": "StageOut",
         "type": "object"
+      },
+      "TakeIn": {
+        "description": "Taking a task into work (decision 0032).\n\nAttributes:\n    body: The first Message of its Topic, when the Topic is opened now.\n    reassign: Take a task assigned to another human, as an explicit reassignment.\n    with_human: The Assistant's human asked for the first Message or saw its text.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "reassign": {
+            "default": false,
+            "title": "Reassign",
+            "type": "boolean"
+          },
+          "with_human": {
+            "default": false,
+            "title": "With Human",
+            "type": "boolean"
+          }
+        },
+        "title": "TakeIn",
+        "type": "object"
+      },
+      "TaskDetail": {
+        "description": "A task with its description, timeline and Topic.\n\nAttributes:\n    description: Markdown.\n    timeline: Its timeline, oldest first; move intervals are left out.\n    topic: Its Topic with some Messages, if it has one.",
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "area_name": {
+            "title": "Area Name",
+            "type": "string"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_topic": {
+            "title": "Has Topic",
+            "type": "boolean"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "holder_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Key"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/coloqo_server__api__tasks__LinkOut"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "number"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_kind": {
+            "$ref": "#/components/schemas/StageKind"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineOut"
+            },
+            "title": "Timeline",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopicDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
+          }
+        },
+        "required": [
+          "team",
+          "number",
+          "ref",
+          "type",
+          "area",
+          "area_name",
+          "title",
+          "stage",
+          "stage_kind",
+          "category",
+          "assignee",
+          "waiting",
+          "outcome",
+          "parent",
+          "source",
+          "links",
+          "has_topic",
+          "holder",
+          "holder_key",
+          "created_by",
+          "rank",
+          "created_at",
+          "updated_at",
+          "started_at",
+          "finished_at",
+          "description",
+          "timeline",
+          "topic"
+        ],
+        "title": "TaskDetail",
+        "type": "object"
+      },
+      "TaskIn": {
+        "description": "A new task in the backlog: planning, so the tracker must be on (decision 0032).\n\nAttributes:\n    area: The Area's slug.\n    title: One line.\n    description: Markdown.\n    type: ``task`` or ``promise``.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it is created; by default the task whose\n        Topic the calling Assistant holds, if exactly one.\n    assignee: Pseudonym of the human to assign it to.\n    links: Keys or addresses of external issues.",
+        "properties": {
+          "area": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Area",
+            "type": "string"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 50000,
+            "title": "Description",
+            "type": "string"
+          },
+          "links": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Links",
+            "type": "array"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType",
+            "default": "task"
+          }
+        },
+        "required": [
+          "area",
+          "title"
+        ],
+        "title": "TaskIn",
+        "type": "object"
+      },
+      "TaskOut": {
+        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "area_name": {
+            "title": "Area Name",
+            "type": "string"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_topic": {
+            "title": "Has Topic",
+            "type": "boolean"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "holder_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Key"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/coloqo_server__api__tasks__LinkOut"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "number"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_kind": {
+            "$ref": "#/components/schemas/StageKind"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
+          }
+        },
+        "required": [
+          "team",
+          "number",
+          "ref",
+          "type",
+          "area",
+          "area_name",
+          "title",
+          "stage",
+          "stage_kind",
+          "category",
+          "assignee",
+          "waiting",
+          "outcome",
+          "parent",
+          "source",
+          "links",
+          "has_topic",
+          "holder",
+          "holder_key",
+          "created_by",
+          "rank",
+          "created_at",
+          "updated_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "TaskOut",
+        "type": "object"
+      },
+      "TaskPatch": {
+        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.",
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "TaskPatch",
+        "type": "object"
+      },
+      "TaskType": {
+        "description": "Type of a task (decision 0031).\n\nAttributes:\n    Task: A work item; a task with a parent task is a subtask.\n    Promise: A commitment for a period that tasks work towards; one holding promises is\n        called a goal.",
+        "enum": [
+          "task",
+          "promise"
+        ],
+        "title": "TaskType",
+        "type": "string"
       },
       "TeamChoice": {
         "description": "The Team a project is linked to, chosen by its person in the web.\n\nAttributes:\n    team: The Team's slug; ``None`` unlinks.",
@@ -1213,6 +1974,21 @@
             "title": "Slug",
             "type": "string"
           },
+          "task_idle_days": {
+            "default": 7,
+            "title": "Task Idle Days",
+            "type": "integer"
+          },
+          "task_idle_repeat_days": {
+            "default": 1,
+            "title": "Task Idle Repeat Days",
+            "type": "integer"
+          },
+          "tracker": {
+            "default": false,
+            "title": "Tracker",
+            "type": "boolean"
+          },
           "turn_limit": {
             "title": "Turn Limit",
             "type": "integer"
@@ -1258,7 +2034,7 @@
         "type": "object"
       },
       "TeamOut": {
-        "description": "A Team as one of its Members sees it.\n\nAttributes:\n    slug: Its address, ``acme``.\n    name: Shown name.\n    role: The caller's role.\n    turn_limit: Assistants' turns without a human before a Topic waits.\n    created_at: Creation time.",
+        "description": "A Team as one of its Members sees it.\n\nAttributes:\n    slug: Its address, ``acme``.\n    name: Shown name.\n    role: The caller's role.\n    turn_limit: Assistants' turns without a human before a Topic waits.\n    tracker: The task tracker is on (decision 0031).\n    task_idle_days: Days a task in work may go quiet before its assignee is told (0032).\n    task_idle_repeat_days: Days between such notices while it stays quiet.\n    created_at: Creation time.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -1276,6 +2052,21 @@
             "title": "Slug",
             "type": "string"
           },
+          "task_idle_days": {
+            "default": 7,
+            "title": "Task Idle Days",
+            "type": "integer"
+          },
+          "task_idle_repeat_days": {
+            "default": 1,
+            "title": "Task Idle Repeat Days",
+            "type": "integer"
+          },
+          "tracker": {
+            "default": false,
+            "title": "Tracker",
+            "type": "boolean"
+          },
           "turn_limit": {
             "title": "Turn Limit",
             "type": "integer"
@@ -1292,7 +2083,7 @@
         "type": "object"
       },
       "TeamPatch": {
-        "description": "Changes to a Team's settings.\n\nAttributes:\n    name: New name.\n    slug: New address; the former one keeps leading to the Team.\n    turn_limit: Assistants' turns in a Topic without a human before it waits (0007).",
+        "description": "Changes to a Team's settings.\n\nAttributes:\n    name: New name.\n    slug: New address; the former one keeps leading to the Team.\n    turn_limit: Assistants' turns in a Topic without a human before it waits (0007).\n    tracker: Turn the task tracker on or off (decision 0031).\n    task_idle_days: Days a task in work may go quiet before its assignee is told (0032).\n    task_idle_repeat_days: Days between such notices while it stays quiet.",
         "properties": {
           "name": {
             "anyOf": [
@@ -1318,6 +2109,43 @@
             ],
             "title": "Slug"
           },
+          "task_idle_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Idle Days"
+          },
+          "task_idle_repeat_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Idle Repeat Days"
+          },
+          "tracker": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker"
+          },
           "turn_limit": {
             "anyOf": [
               {
@@ -1333,6 +2161,56 @@
           }
         },
         "title": "TeamPatch",
+        "type": "object"
+      },
+      "TimelineOut": {
+        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``closed``, ``move``, ...\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
+        "properties": {
+          "assistant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "author",
+          "assistant",
+          "data",
+          "created_at"
+        ],
+        "title": "TimelineOut",
         "type": "object"
       },
       "TopicDetail": {
@@ -1371,6 +2249,17 @@
           "area_name": {
             "title": "Area Name",
             "type": "string"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
           },
           "closed_at": {
             "anyOf": [
@@ -1457,6 +2346,15 @@
             "title": "Issue",
             "type": "string"
           },
+          "kind": {
+            "default": "free",
+            "enum": [
+              "task",
+              "free"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "last_number": {
             "title": "Last Number",
             "type": "integer"
@@ -1480,8 +2378,41 @@
             "title": "Ref",
             "type": "string"
           },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "stage_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Kind"
+          },
           "status": {
             "$ref": "#/components/schemas/TopicStatus"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
           },
           "team": {
             "title": "Team",
@@ -1507,6 +2438,17 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
           }
         },
         "required": [
@@ -1539,7 +2481,7 @@
         "type": "object"
       },
       "TopicIn": {
-        "description": "A new Topic with its first Message.\n\nAttributes:\n    area: The Area's slug.\n    title: The question, one line.\n    body: The first Message: what is asked or which task was started.\n    issue: Tracker issue key or link, if the Topic is for one.\n    to: Pseudonym of a Member or an Assistant's name, if the first Message is for them.\n    with_human: The Assistant's human asked for this Message or saw its text (0026).",
+        "description": "A new Topic with its first Message.\n\nAttributes:\n    area: The Area's slug.\n    title: The question, one line.\n    body: The first Message: what is asked or which task was started.\n    issue: Tracker issue key or link, if the Topic is for one.\n    to: Pseudonym of a Member or an Assistant's name, if the first Message is for them.\n    with_human: The Assistant's human asked for this Message or saw its text (0026).\n    free: A free Topic, not anyone's work item; otherwise the Topic is for a new task, which\n        starts in work (decision 0032). A plugin older than the tracker cannot send it.",
         "properties": {
           "area": {
             "maxLength": 40,
@@ -1552,6 +2494,11 @@
             "minLength": 1,
             "title": "Body",
             "type": "string"
+          },
+          "free": {
+            "default": false,
+            "title": "Free",
+            "type": "boolean"
           },
           "issue": {
             "default": "",
@@ -1591,7 +2538,7 @@
         "type": "object"
       },
       "TopicOut": {
-        "description": "A Topic in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: The question.\n    issue: Tracker issue key or link.\n    status: Open or closed.\n    outcome: How it was settled.\n    holder: Name of the holding Assistant.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever opened it.\n    last_number: Number of the newest Message.\n    turns_since_human: Assistants' turns since the last human Message.\n    turn_limit: The Team's limit of such turns.\n    unread: Messages the caller has not read, if they take part.\n    addressed: Some unread Message is addressed to the caller.\n    addressed_via: When the newest such Message is addressed to one of the caller's\n        Assistants, its name: the question is that session's (decision 0029).\n    addressed_via_key: Its key.\n    created_at: Creation time.\n    updated_at: Time of the newest Message.\n    closed_at: When it was closed; ``None`` while open.\n    deletes_at: When its conversation will be deleted, while it is in the archive.\n    deleted_at: When its conversation was deleted; the rest is its card (decision 0021).",
+        "description": "A Topic in a list.\n\nAttributes:\n    team: The Team's slug.\n    kind: ``task`` for a task's Topic, ``free`` for a free Topic (decision 0031).\n    number: The task's number for a task's Topic, the free number for a free one.\n    ref: Short reference, ``T-<number>`` or ``F-<number>``.\n    task: The task's number, for a task's Topic.\n    stage: The task's stage, for a task's Topic.\n    stage_kind: That stage's fixed kind.\n    assignee: Pseudonym of the human the task is assigned to.\n    waiting: What the task waits for, while it waits.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: The question.\n    issue: Tracker issue key or link.\n    status: Open or closed.\n    outcome: How it was settled.\n    holder: Name of the holding Assistant.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever opened it.\n    last_number: Number of the newest Message.\n    turns_since_human: Assistants' turns since the last human Message.\n    turn_limit: The Team's limit of such turns.\n    unread: Messages the caller has not read, if they take part.\n    addressed: Some unread Message is addressed to the caller.\n    addressed_via: When the newest such Message is addressed to one of the caller's\n        Assistants, its name: the question is that session's (decision 0029).\n    addressed_via_key: Its key.\n    created_at: Creation time.\n    updated_at: Time of the newest Message.\n    closed_at: When it was closed; ``None`` while open.\n    deletes_at: Always ``None``: Topics are kept (decision 0030); left for older readers.\n    deleted_at: When its conversation was deleted, before Topics were kept; the rest is its\n        card (decision 0021).",
         "properties": {
           "addressed": {
             "title": "Addressed",
@@ -1626,6 +2573,17 @@
           "area_name": {
             "title": "Area Name",
             "type": "string"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
           },
           "closed_at": {
             "anyOf": [
@@ -1705,6 +2663,15 @@
             "title": "Issue",
             "type": "string"
           },
+          "kind": {
+            "default": "free",
+            "enum": [
+              "task",
+              "free"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "last_number": {
             "title": "Last Number",
             "type": "integer"
@@ -1721,8 +2688,41 @@
             "title": "Ref",
             "type": "string"
           },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "stage_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Kind"
+          },
           "status": {
             "$ref": "#/components/schemas/TopicStatus"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
           },
           "team": {
             "title": "Team",
@@ -1748,6 +2748,17 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
           }
         },
         "required": [
@@ -1851,6 +2862,22 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WaitIn": {
+        "description": "An external wait over the task's stage (decision 0033).\n\nAttributes:\n    what: Whom or what the task waits for.",
+        "properties": {
+          "what": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "What",
+            "type": "string"
+          }
+        },
+        "required": [
+          "what"
+        ],
+        "title": "WaitIn",
+        "type": "object"
+      },
       "WordIn": {
         "description": "A new word for an Assistant.\n\nAttributes:\n    word: Lowercase Latin letters, digits and hyphens, a letter first, up to 32.",
         "properties": {
@@ -1864,12 +2891,126 @@
         ],
         "title": "WordIn",
         "type": "object"
+      },
+      "WorkflowOut": {
+        "description": "A workflow with its stages in order.\n\nAttributes:\n    type: The type of task it serves.\n    areas: Slugs of the Areas whose tasks move by it; empty for the promise workflow.\n    stages: Its stages.",
+        "properties": {
+          "areas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Areas",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageOut"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          }
+        },
+        "required": [
+          "type",
+          "areas",
+          "stages"
+        ],
+        "title": "WorkflowOut",
+        "type": "object"
+      },
+      "coloqo_server__api__assistants__LinkOut": {
+        "description": "A one-time link where the person chooses the project's Team.\n\nAttributes:\n    url: The page to open.\n    expires_at: After this it does not work.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "LinkOut",
+        "type": "object"
+      },
+      "coloqo_server__api__tasks__LinkOut": {
+        "description": "A link to an issue of an external tracker.\n\nAttributes:\n    key: The issue's key.\n    url: Its address, if known.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "url"
+        ],
+        "title": "LinkOut",
+        "type": "object"
+      },
+      "coloqo_server__api__tasks__StageIn": {
+        "description": "Moving a task to another stage of work.\n\nAttributes:\n    stage: The stage's name, any case.\n    skip: Stages passed at once, by name, each with its reason (\"no documentation\n        changes\"); the timeline keeps them.\n    comment: A line about the move.",
+        "properties": {
+          "comment": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Comment",
+            "type": "string"
+          },
+          "skip": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 20,
+            "title": "Skip",
+            "type": "object"
+          },
+          "stage": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "title": "StageIn",
+        "type": "object"
+      },
+      "coloqo_server__api__topics__StageIn": {
+        "description": "The holder's work turned to a different kind of activity (decisions 0021, 0023).\n\nAttributes:\n    text: One line, e.g. \"code in billing and api\" or \"MR !17 open\".",
+        "properties": {
+          "text": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "StageIn",
+        "type": "object"
       }
     }
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2514,7 +3655,7 @@
     },
     "/api/briefing": {
       "get": {
-        "description": "Tell a starting session who it is in Coloqo and how to work; the server keeps the rules.\n\nA rule changes here, for every project and Team, without a plugin release. A plugin older\nthan 0.5.0 gets the former shape and is told to update (decision 0025).\n\nArgs:\n    request: The incoming request.\n    actor: The Assistant of the session.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 without an Assistant.",
+        "description": "Tell a starting session who it is in Coloqo and how to work; the server keeps the rules.\n\nA rule changes here, for every project and Team, without a plugin release. A plugin older\nthan the tracker gets the rules it knows, and is told to update (decision 0027).\n\nArgs:\n    request: The incoming request.\n    actor: The Assistant of the session.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 without an Assistant.",
         "operationId": "briefing_api_briefing_get",
         "parameters": [
           {
@@ -3088,7 +4229,7 @@
     },
     "/api/inbox": {
       "get": {
-        "description": "List Topics the caller takes part in that have unread Messages (decision 0006).\n\nThe web shows those addressed to the person as \"For you\" (decision 0026); an agent gets the\nwhole list.\n\nArgs:\n    request: The incoming request.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 for a plugin request without an Assistant.",
+        "description": "List Topics the caller takes part in that have unread Messages (decision 0006).\n\nThe web shows those addressed to the person as \"For you\" (decision 0026); an agent gets the\nwhole list.\n\nArgs:\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 for a plugin request without an Assistant.",
         "operationId": "inbox_api_inbox_get",
         "parameters": [
           {
@@ -3583,7 +4724,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LinkOut"
+                  "$ref": "#/components/schemas/coloqo_server__api__assistants__LinkOut"
                 }
               }
             },
@@ -4193,6 +5334,98 @@
         ]
       }
     },
+    "/api/moves": {
+      "post": {
+        "description": "Record whose move it was in the calling session, on the tasks whose Topics it holds.\n\nThe plugin's hooks mark the human's prompts and the Assistant's stops; the session's watch\nturns them into intervals and posts them here (decision 0033). An interval goes to every\nunfinished task whose Topic the session holds; an interval longer than 12 hours, or ending\nbefore it starts, is dropped.\n\nArgs:\n    body: The intervals.\n    actor: The session's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 without an Assistant.",
+        "operationId": "post_moves_api_moves_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Moves",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
     "/api/project": {
       "get": {
         "description": "List the person's projects on computers not revoked, with their Teams and live sessions.\n\nArgs:\n    actor: The logged-in human.\n    db: Database session.",
@@ -4647,7 +5880,7 @@
         ]
       },
       "patch": {
-        "description": "Change a Team's name, address or turn limit.\n\nA changed slug is kept as a former one, so links to the Team keep working; going back to a\nformer slug takes it out of the former ones.\n\nArgs:\n    team: The Team's slug.\n    body: The changes.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409\n        when the new slug is another Team's.",
+        "description": "Change a Team's name, address, turn limit or tracker settings.\n\nA changed slug is kept as a former one, so links to the Team keep working; going back to a\nformer slug takes it out of the former ones.\n\nArgs:\n    team: The Team's slug.\n    body: The changes.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409\n        when the new slug is another Team's.",
         "operationId": "update_team_api_team__team__patch",
         "parameters": [
           {
@@ -5249,9 +6482,1974 @@
         ]
       }
     },
+    "/api/team/{team}/task": {
+      "get": {
+        "description": "List a Team's tasks, highest first within their order.\n\nArgs:\n    team: The Team's slug.\n    actor: The caller.\n    db: Database session.\n    area: Only this Area, by slug.\n    category: Only to do, in progress or finished.\n    assignee: Only those assigned to this pseudonym; ``-`` for unassigned.\n    type_filter: Only tasks or only promises.\n    limit: At most this many.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team or there is no such Area.",
+        "operationId": "list_tasks_api_team__team__task_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Area"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Category"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assignee",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskOut"
+                  },
+                  "title": "Response List Tasks Api Team  Team  Task Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Tasks",
+        "tags": [
+          "tasks"
+        ]
+      },
+      "post": {
+        "description": "Put a task in the backlog: planning, so the tracker must be on (decision 0032).\n\nIts source is the task within which it is created: the one given, or the one whose Topic\nthe calling Assistant holds (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    body: The task.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Team, Area, parent or source for the caller;\n        403 when the caller may not write there; 409 ``no_tracker`` without the tracker;\n        422 for an unknown assignee or a parent that cannot hold it.",
+        "operationId": "create_task_api_team__team__task_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}": {
+      "get": {
+        "description": "Return a task with its description, timeline and Topic.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    actor: The caller.\n    db: Database session.\n    limit: How many of its Topic's Messages.\n    from_unread: Start at the first unread Message when more than ``limit`` are unread.\n\nRaises:\n    HTTPException: 404 when there is no such task in the caller's Teams.",
+        "operationId": "read_task_api_team__team__task__number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_unread",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "From Unread",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Task",
+        "tags": [
+          "tasks"
+        ]
+      },
+      "patch": {
+        "description": "Edit a task's title, description or Area; the timeline keeps every description.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task or Area; 403 when the caller may not\n        write there.",
+        "operationId": "edit_task_api_team__team__task__number__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/assign": {
+      "post": {
+        "description": "Assign a task to a human of the Team, or unassign it: planning (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The assignee's pseudonym, or ``None``.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 when the caller may not write there;\n        409 ``no_tracker`` without the tracker, ``finished`` for a finished task; 422 for\n        an unknown pseudonym.",
+        "operationId": "assign_task_api_team__team__task__number__assign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assign Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/close": {
+      "post": {
+        "description": "Finish a task as done or cancelled, with an outcome; its Topic closes (decision 0032).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The outcome, and whether it is cancelled.\n    actor: The assignee's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 for a human or when the caller may\n        not write there; 409 ``not_assignee`` for another Assistant, ``finished`` when it is\n        finished already; 422 without an outcome.",
+        "operationId": "close_api_team__team__task__number__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/file": {
+      "post": {
+        "description": "Upload a file into a task's Topic; the request body is the content.\n\nArgs:\n    request: The incoming request with the content as its body.\n    team: The Team's slug.\n    number: The task's number.\n    actor: The caller.\n    db: Database session.\n    x_file_name: File name, percent-encoded.\n    content_type: Media type of the content.\n\nRaises:\n    HTTPException: 404 when there is no such task or it has no Topic yet; 403 when the\n        caller may not write there (decision 0020); 422 for an empty name; 413 when the\n        file or the Team's storage is over the limit.\n    OSError: The file cannot be written.",
+        "operationId": "upload_task_file_api_team__team__task__number__file_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-file-name",
+            "required": true,
+            "schema": {
+              "title": "X-File-Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "content-type",
+            "required": false,
+            "schema": {
+              "default": "application/octet-stream",
+              "title": "Content-Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Task File",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/hold": {
+      "post": {
+        "description": "Make the calling Assistant the holder of a task's Topic (decision 0024).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task or it has no Topic yet; 403 without an\n        Assistant, or when it may not write there (decision 0020).",
+        "operationId": "hold_task_topic_api_team__team__task__number__hold_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hold Task Topic",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/link": {
+      "post": {
+        "description": "Link a task to an external issue; no sync (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The issue's key and address.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 when the caller may not write there.",
+        "operationId": "link_task_api_team__team__task__number__link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Link Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/message": {
+      "post": {
+        "description": "Write a Message into a task's Topic with the number the writer believes is next (0007).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task or it has no Topic yet; 403 when the\n        caller may not write there (decision 0020); 409 ``number_taken`` with the unread\n        Messages when the number is not next, or ``turn_limit`` when the Topic waits for a\n        human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is not an\n        earlier Message of the Topic.",
+        "operationId": "post_task_message_api_team__team__task__number__message_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Task Message",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/order": {
+      "post": {
+        "description": "Place a task right above or below another: planning by a human (decision 0032).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The task it goes above or below.\n    actor: A human of the Team in the web.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 for a plugin; 409 ``no_tracker``\n        without the tracker; 422 without exactly one of ``before`` and ``after``.",
+        "operationId": "order_task_api_team__team__task__number__order_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/read": {
+      "post": {
+        "description": "Record how far the caller has read a task's Topic.\n\nArgs:\n    team: The Team's slug.\n    number: The task's number.\n    body: Number of the newest Message read.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task or it has no Topic yet; 403 for a plugin\n        request without an Assistant.",
+        "operationId": "read_task_up_to_api_team__team__task__number__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Task Up To",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/resume": {
+      "post": {
+        "description": "Mark that a task's external wait is over.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    actor: The assignee's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 for a human or when the caller may\n        not write there; 409 ``not_assignee`` for another Assistant, ``finished`` for a\n        finished task.",
+        "operationId": "resume_task_api_team__team__task__number__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/stage": {
+      "post": {
+        "description": "Move a task to another stage of work, maybe passing some at once (decision 0032).\n\nMoves are free within work, back ones included; a finished task is final, and finishing\none goes through ``close``.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The stage, the stages skipped with reasons, and a comment.\n    actor: The assignee's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 for a human or when the caller may\n        not write there; 409 ``not_assignee`` for another Assistant, ``finished`` for a\n        finished task; 422 for an unknown stage, a finished one, or a skipped stage that is\n        not in the workflow.",
+        "operationId": "change_stage_api_team__team__task__number__stage_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/coloqo_server__api__tasks__StageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Stage",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/take": {
+      "post": {
+        "description": "Take a task into work: assigned, moved to work, its Topic opened and held (0032).\n\nA task in the backlog moves to the first stage of work. A task with no assignee is assigned\nto the caller's human; one assigned to another human only with ``reassign``.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The first Message and whether to reassign.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 without an Assistant, or when it may\n        not write there; 409 ``finished`` for a finished task, ``assigned`` for one assigned\n        to another human without ``reassign``.",
+        "operationId": "take_task_api_team__team__task__number__take_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Take Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/topic": {
+      "get": {
+        "description": "Return a task's Topic with some of its Messages, as ``/topic/{number}`` does a free one.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    actor: The caller.\n    db: Database session.\n    after: Only Messages with a greater number, the first ``limit`` of them.\n    before: Only Messages with a smaller number, the last ``limit`` of them.\n    limit: How many Messages.\n    from_unread: Start at the first unread Message when more than ``limit`` are unread.\n\nRaises:\n    HTTPException: 404 when there is no such task in the caller's Teams, or it has no Topic\n        yet; 403 for a plugin request without an Assistant.",
+        "operationId": "read_task_topic_api_team__team__task__number__topic_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_unread",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "From Unread",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Task Topic",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/api/team/{team}/task/{number}/wait": {
+      "post": {
+        "description": "Mark that a task waits for something outside the Team; its stage stays (decision 0033).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: Whom or what it waits for.\n    actor: The assignee's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 for a human or when the caller may\n        not write there; 409 ``not_assignee`` for another Assistant, ``finished`` for a\n        finished task.",
+        "operationId": "wait_task_api_team__team__task__number__wait_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wait Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
     "/api/team/{team}/topic": {
       "get": {
-        "description": "List a Team's Topics, newest activity first; deleted ones are left out.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    actor: The caller.\n    db: Database session.\n    area: Only this Area, by slug.\n    status_filter: Only open or only closed.\n    limit: At most this many.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team or there is no such Area; 403 for\n        a plugin request without an Assistant.",
+        "description": "List a Team's Topics, newest activity first; deleted ones are left out.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    actor: The caller.\n    db: Database session.\n    area: Only this Area, by slug.\n    status_filter: Only open or only closed.\n    kind: Only tasks' Topics, or only free ones.\n    limit: At most this many.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team or there is no such Area; 403 for\n        a plugin request without an Assistant.",
         "operationId": "list_topics_api_team__team__topic_get",
         "parameters": [
           {
@@ -5293,6 +8491,26 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "task",
+                    "free"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
             }
           },
           {
@@ -5388,7 +8606,7 @@
         ]
       },
       "post": {
-        "description": "Open a Topic in an Area with its first Message; the calling Assistant holds it.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    body: Area, title and first Message.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Team or Area for the caller; 403 when the\n        caller may not write there (decision 0020); 422 for an unknown addressee.",
+        "description": "Open a Topic in an Area with its first Message; the calling Assistant holds it.\n\nA Topic for a new task unless ``free`` (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    body: Area, title and first Message.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Team or Area for the caller; 403 when the\n        caller may not write there (decision 0020); 422 for an unknown addressee.",
         "operationId": "create_topic_api_team__team__topic_post",
         "parameters": [
           {
@@ -5489,7 +8707,7 @@
     },
     "/api/team/{team}/topic/{number}": {
       "get": {
-        "description": "Return a Topic with some of its Messages (decisions 0007, 0026).\n\nWithout ``after`` or ``before``: its last ``limit`` Messages, or with ``from_unread`` from\nthe caller's first unread one, at most 500.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The Topic's number.\n    actor: The caller.\n    db: Database session.\n    after: Only Messages with a greater number, the first ``limit`` of them.\n    before: Only Messages with a smaller number, the last ``limit`` of them.\n    limit: How many Messages.\n    from_unread: Start at the first unread Message when more than ``limit`` are unread.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a\n        plugin request without an Assistant.",
+        "description": "Return a free Topic with some of its Messages (decisions 0007, 0026, 0031).\n\nWithout ``after`` or ``before``: its last ``limit`` Messages, or with ``from_unread`` from\nthe caller's first unread one, at most 500. The free number of a Topic that became a task's\ngives that task's Topic; to a plugin older than the tracker, the number is a task's.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The free Topic's number.\n    actor: The caller.\n    db: Database session.\n    after: Only Messages with a greater number, the first ``limit`` of them.\n    before: Only Messages with a smaller number, the last ``limit`` of them.\n    limit: How many Messages.\n    from_unread: Start at the first unread Message when more than ``limit`` are unread.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a\n        plugin request without an Assistant.",
         "operationId": "read_topic_api_team__team__topic__number__get",
         "parameters": [
           {
@@ -5643,7 +8861,7 @@
         ]
       },
       "patch": {
-        "description": "Close a Topic with an outcome, or reopen it (decision 0021).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The Topic's number.\n    body: New state and outcome.\n    actor: The holding Assistant or a human of the Team.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the\n        caller may not write there or is an Assistant reopening; 409 ``not_holder`` for an\n        Assistant that does not hold it; 422 for an Assistant closing without an outcome;\n        410 for a deleted Topic.",
+        "description": "Close a Topic with an outcome, or reopen a free one (decisions 0021, 0032).\n\nClosing a task's Topic, which a plugin older than the tracker does here, closes its task\nas done.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The free Topic's number; a task's, to a plugin older than the tracker.\n    body: New state and outcome.\n    actor: The holding Assistant or a human of the Team.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the\n        caller may not write there, is an Assistant reopening, or a human closing a task's\n        Topic; 409 ``not_holder`` for an Assistant that does not hold it; 422 for an\n        Assistant closing without an outcome; 410 for a deleted Topic.",
         "operationId": "settle_topic_api_team__team__topic__number__patch",
         "parameters": [
           {
@@ -5753,7 +8971,7 @@
     },
     "/api/team/{team}/topic/{number}/file": {
       "post": {
-        "description": "Upload a file into a Topic; the request body is the content.\n\nAttach it to a Message by its number.\n\nArgs:\n    request: The incoming request with the content as its body.\n    team: The Team's slug.\n    number: The Topic's number.\n    actor: The caller.\n    db: Database session.\n    x_file_name: File name, percent-encoded.\n    content_type: Media type of the content.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when\n        the file or the Team's storage is over the limit.\n    OSError: The file cannot be written.",
+        "description": "Upload a file into a free Topic; the request body is the content.\n\nAttach it to a Message by its number.\n\nArgs:\n    request: The incoming request with the content as its body.\n    team: The Team's slug.\n    number: The free Topic's number; a task's, to a plugin older than the tracker.\n    actor: The caller.\n    db: Database session.\n    x_file_name: File name, percent-encoded.\n    content_type: Media type of the content.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when\n        the file or the Team's storage is over the limit.\n    OSError: The file cannot be written.",
         "operationId": "upload_file_api_team__team__topic__number__file_post",
         "parameters": [
           {
@@ -5872,7 +9090,7 @@
     },
     "/api/team/{team}/topic/{number}/hold": {
       "post": {
-        "description": "Make the calling Assistant the Topic's holder; taking over shows in the feed (0024).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The Topic's number.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when\n        it may not write there (decision 0020); 410 for a deleted Topic.",
+        "description": "Make the calling Assistant a free Topic's holder; taking over shows in the feed (0024).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The free Topic's number; a task's, to a plugin older than the tracker.\n    actor: The Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when\n        it may not write there (decision 0020); 410 for a deleted Topic.",
         "operationId": "hold_topic_api_team__team__topic__number__hold_post",
         "parameters": [
           {
@@ -5972,7 +9190,7 @@
     },
     "/api/team/{team}/topic/{number}/message": {
       "post": {
-        "description": "Write a Message with the number the writer believes is next (decision 0007).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The Topic's number.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the\n        unread Messages when the number is not next, or ``turn_limit`` when the Topic\n        waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to``\n        that is not an earlier Message of the Topic.",
+        "description": "Write a Message into a free Topic with the number the writer believes is next (0007).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The free Topic's number; a task's, to a plugin older than the tracker.\n    body: The Message.\n    actor: The writer.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the\n        unread Messages when the number is not next, or ``turn_limit`` when the Topic\n        waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to``\n        that is not an earlier Message of the Topic.",
         "operationId": "post_message_api_team__team__topic__number__message_post",
         "parameters": [
           {
@@ -6082,7 +9300,7 @@
     },
     "/api/team/{team}/topic/{number}/read": {
       "post": {
-        "description": "Record how far the caller has read a Topic; it leaves the Inbox when read through.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The Topic's number.\n    body: Number of the newest Message read.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a\n        plugin request without an Assistant.",
+        "description": "Record how far the caller has read a free Topic; it leaves the Inbox when read through.\n\nArgs:\n    team: The Team's slug.\n    number: The free Topic's number; a task's, to a plugin older than the tracker.\n    body: Number of the newest Message read.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a\n        plugin request without an Assistant.",
         "operationId": "read_up_to_api_team__team__topic__number__read_post",
         "parameters": [
           {
@@ -6192,7 +9410,7 @@
     },
     "/api/team/{team}/topic/{number}/stage": {
       "post": {
-        "description": "Note that the holder's work turned to a different kind of activity (decision 0021).\n\nTakes no number: a stage answers nothing, so it needs no check for unread Messages. It is\nnot a turn; it takes the Topic out of the archive, since work goes on.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The Topic's number.\n    body: The stage.\n    actor: The holding Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there; 409 ``not_holder`` unless the caller is the holding Assistant; 410 for a\n        deleted Topic.",
+        "description": "Note that the holder's work turned to a different kind of activity (decision 0021).\n\nTakes no number: a stage answers nothing, so it needs no check for unread Messages. It is\nnot a turn; it takes a free Topic out of the archive, since work goes on. A task's stage\nchanges with ``/task/{number}/stage`` (decision 0032); a plugin older than the tracker\nstill notes its free-text stages here.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The free Topic's number; a task's, to a plugin older than the tracker.\n    body: The stage.\n    actor: The holding Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Topic; 403 when the caller may not write\n        there; 409 ``not_holder`` unless the caller is the holding Assistant; 410 for a\n        deleted Topic.",
         "operationId": "post_stage_api_team__team__topic__number__stage_post",
         "parameters": [
           {
@@ -6266,7 +9484,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StageIn"
+                "$ref": "#/components/schemas/coloqo_server__api__topics__StageIn"
               }
             }
           },
@@ -6297,6 +9515,101 @@
         "summary": "Post Stage",
         "tags": [
           "topics"
+        ]
+      }
+    },
+    "/api/team/{team}/workflow": {
+      "get": {
+        "description": "Return the Team's workflows with their stages, and which Areas use each.\n\nArgs:\n    team: The Team's slug.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team.",
+        "operationId": "list_workflows_api_team__team__workflow_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowOut"
+                  },
+                  "title": "Response List Workflows Api Team  Team  Workflow Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Workflows",
+        "tags": [
+          "tasks"
         ]
       }
     }

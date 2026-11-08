@@ -84,12 +84,14 @@ def user_prompt_submit() -> None:
 
     Also of its task's Topic, when a subagent of the session changed what the team will see and
     the conversation has not been told yet (decision 0023). And note that a turn starts with a
-    prompt, the user's or one made from an event (decision 0026).
+    prompt, the user's or one made from an event (decision 0026), in the log of whose move it is
+    too (decision 0033).
     """
     data = _input()
     session = _session(data)
     if session:
         trail.prompt_arrived(session, str(data.get("prompt") or ""))
+        trail.log_move(session, "p")
     if session and trail.is_pending(session) and not trail.is_done(session):
         line = task_reminder(session, _project(data))
         if line:
@@ -257,10 +259,12 @@ def post_tool_use() -> None:
 
 
 def stop() -> None:
-    """Note that the session's turn ended, so a turn a notification starts is told apart (0026)."""
+    """Note that the session's turn ended, so a turn a notification starts is told apart (0026),
+    and log it for whose move it is (decision 0033)."""
     session = _session(_input())
     if session:
         trail.turn_ended(session)
+        trail.log_move(session, "s")
 
 
 HOOKS = {
