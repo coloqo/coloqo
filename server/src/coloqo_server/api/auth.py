@@ -388,7 +388,7 @@ async def me(request: Request, actor: AnyActorDep, db: DB) -> Me:
         select(Identity.id).where(Identity.user_id == actor.user.id, Identity.provider == "github")
     )
     return Me(
-        id=actor.user.id if actor.legacy else None,
+        id=None,
         pseudonym=actor.user.pseudonym,
         via="web" if actor.is_human else "plugin",
         assistant=actor.assistant.name if actor.assistant else None,

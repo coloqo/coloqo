@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from coloqo_server.settings import Settings
 from tests.conftest import Plugin, Setup, _connect
-from tests.test_retention import _age, _tend
+from tests.test_retention import _age, _open_free, _tend
 from tests.test_topics import _open
 
 
@@ -214,7 +214,7 @@ def test_idle_warning_says_whether_the_holder_is_online(setup: Setup, settings: 
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["number"]
+    tid = _open_free(setup)
     _age(settings, tid, "updated_at", 28)
     _away(settings, setup.alice_api, 2)
 

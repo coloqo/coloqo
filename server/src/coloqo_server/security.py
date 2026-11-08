@@ -18,6 +18,12 @@ SESSION_COOKIE = "__Host-coloqo_session"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 SESSIONS_SINCE = (0, 5, 0)
+"""The first plugin release with sessions and public names (decisions 0024, 0025); older ones are
+refused since the tracker's release."""
+
+TASKS_SINCE = (0, 7, 0)
+"""The first plugin release that knows tasks and free Topics (decision 0031): older ones read
+``/topic/N`` as ``T-N`` and see no free Topics."""
 """The first plugin version that knows sessions and public names (decisions 0024, 0025); older
 plugins are served the former paths and shapes for one more release."""
 
@@ -51,7 +57,6 @@ class Actor:
         assistant: The Assistant, when the plugin names one in ``X-Coloqo-Assistant``.
         project: The Assistant's project, which holds the Team link (decision 0024).
         plugin: The plugin's version from ``X-Coloqo-Plugin``, as numbers; ``None`` for the web.
-        legacy: A plugin older than 0.5.0: it gets the former paths' shapes (decision 0025).
     """
 
     user: User
@@ -59,12 +64,16 @@ class Actor:
     assistant: Assistant | None = None
     project: Project | None = None
     plugin: tuple[int, ...] | None = None
-    legacy: bool = False
 
     @property
     def is_human(self) -> bool:
         """The request comes from the human's own web session."""
         return self.installation is None
+
+    @property
+    def before_tasks(self) -> bool:
+        """A plugin older than the tracker: ``T-N`` is everything it knows (decision 0031)."""
+        return self.installation is not None and (self.plugin is None or self.plugin < TASKS_SINCE)
 
     @property
     def team_id(self) -> int | None:
@@ -148,12 +157,12 @@ async def get_actor(
         db: Database session.
         authorization: ``Bearer <installation token>`` from the plugin.
         x_coloqo_assistant: Key of the calling Assistant, registered by this installation; a
-            plugin older than 0.5.0 sends its numeric id.
+            plugin older than 0.5.0 sent its numeric id and is refused.
         x_coloqo_plugin: The plugin's version.
 
     Raises:
-        HTTPException: 401 without valid credentials; 403 for a foreign Assistant id or a
-            cookie request from another origin.
+        HTTPException: 401 without valid credentials; 403 for a foreign Assistant key or a
+            cookie request from another origin; 426 for a plugin older than 0.5.0.
     """
     if authorization:
         scheme, _, token = authorization.partition(" ")
@@ -170,16 +179,18 @@ async def get_actor(
             )
         installation.last_seen_at = now()
         version = plugin_version(x_coloqo_plugin)
-        legacy = version is None or version < SESSIONS_SINCE
+        named = (x_coloqo_assistant or "").strip()
+        if (version is not None and version < SESSIONS_SINCE) or named.isdigit():
+            raise HTTPException(
+                status.HTTP_426_UPGRADE_REQUIRED,
+                "This Coloqo plugin is older than 0.5.0 and no longer served. Update it: run "
+                "`claude plugin marketplace update coloqo` and `claude plugin update "
+                "coloqo@coloqo`, then restart the session.",
+            )
         assistant = None
         project = None
-        if x_coloqo_assistant:
-            named = x_coloqo_assistant.strip()
-            if named.isdigit():
-                assistant = await db.get(Assistant, int(named))
-                legacy = True
-            else:
-                assistant = await db.scalar(select(Assistant).where(Assistant.key == named))
+        if named:
+            assistant = await db.scalar(select(Assistant).where(Assistant.key == named))
             if assistant is None or assistant.installation_id != installation.id:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, "Unknown Assistant")
             assistant.last_seen_at = installation.last_seen_at
@@ -193,7 +204,6 @@ async def get_actor(
             assistant=assistant,
             project=project,
             plugin=version,
-            legacy=legacy,
         )
     user = await _web_user(request, db)
     if user is None:

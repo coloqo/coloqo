@@ -186,7 +186,11 @@ def plugin(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
     clients: list[TestClient] = []
 
     def install(
-        web: TestClient, project: str, team: str | None = None, session: str | None = "s1"
+        web: TestClient,
+        project: str,
+        team: str | None = None,
+        session: str | None = "s1",
+        version: str = "0.5.0",
     ) -> Plugin:
         """Log a plugin in through the device code, confirmed by ``web``'s human.
 
@@ -195,8 +199,9 @@ def plugin(app: FastAPI) -> Iterator[Callable[..., Plugin]]:
             project: Project name of the Assistant.
             team: The Team's slug its project is linked to, as a ``.coloqo.json`` names it.
             session: The Claude Code session the Assistant is.
+            version: The plugin's version; 0.5.0 knows no tasks (decision 0031).
         """
-        client = TestClient(app, base_url=ORIGIN, headers={"X-Coloqo-Plugin": "0.5.0"})
+        client = TestClient(app, base_url=ORIGIN, headers={"X-Coloqo-Plugin": version})
         client.__enter__()
         clients.append(client)
         start = client.post("/api/device/start", json={"name": "laptop"}).json()

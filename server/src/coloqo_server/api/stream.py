@@ -70,18 +70,19 @@ def write_cursor(cursor: dict[int, int], slugs: dict[int, str]) -> str:
     )
 
 
-def shaped(data: dict, legacy: bool) -> dict:
-    """Return an event's data in the shape its reader knows (decision 0025).
+def shaped(data: dict, before_tasks: bool) -> dict:
+    """Return an event's data for its reader; empty when the reader must not get it.
 
-    Events keep both shapes: the data of decision 0025, and under ``legacy`` the former one
-    with database ids, for plugins older than 0.5.0.
+    Events stored before the tracker's release may still carry the former shape under
+    ``legacy``; it is dropped. A plugin older than the tracker gets no event about a free Topic:
+    it would read the free number as a task's (decision 0031).
 
     Args:
         data: The stored data.
-        legacy: The reader is a plugin older than 0.5.0.
+        before_tasks: The reader is a plugin older than the tracker.
     """
-    if legacy:
-        return data.get("legacy", {})
+    if before_tasks and data.get("topic_kind") == "free":
+        return {}
     return {key: value for key, value in data.items() if key != "legacy"}
 
 
@@ -116,7 +117,7 @@ async def events(
     bus = request.app.state.bus
     user_id = actor.user.id
     scope = pushed_teams(actor)
-    legacy = actor.legacy
+    before_tasks = actor.before_tasks
 
     async def teams_now(db: AsyncSession) -> dict[int, tuple[str, int]]:
         """Return the Teams whose events the stream carries now: slug and last number by id.
@@ -212,7 +213,7 @@ async def events(
                     )
                 for row in rows:
                     cursor[row.team_id] = max(cursor[row.team_id], row.number)
-                    data = shaped(row.data, legacy)
+                    data = shaped(row.data, before_tasks)
                     if data:
                         yield _frame(row.kind, data, write_cursor(cursor, slugs))
                 if rows:

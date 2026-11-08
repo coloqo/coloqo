@@ -20,6 +20,16 @@ def _path(setup: Setup, number: int) -> str:
     return f"/api/team/{setup.team}/topic/{number}"
 
 
+def _read(setup: Setup, number: int) -> str:
+    """Return the address the web reads a task's Topic at.
+
+    Args:
+        setup: The Team.
+        number: The task's number.
+    """
+    return f"/api/team/{setup.team}/task/{number}/topic"
+
+
 def test_each_session_is_its_own_assistant_with_a_word(
     setup: Setup, sibling: Callable[..., Plugin]
 ) -> None:
@@ -116,7 +126,7 @@ def test_taking_over_leaves_a_line_and_moves_the_stages(
     held = second.client.post(f"{_path(setup, number)}/hold").json()
     again = second.client.post(f"{_path(setup, number)}/hold")
     old = setup.alice_api.client.post(f"{_path(setup, number)}/stage", json={"text": "x"})
-    messages = setup.alice.get(_path(setup, number)).json()["messages"]
+    messages = setup.alice.get(_read(setup, number)).json()["messages"]
 
     assert refused.json()["detail"]["code"] == "not_holder"
     assert held["holder"] == second.assistant
