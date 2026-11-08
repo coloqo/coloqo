@@ -104,7 +104,12 @@ People do only what is theirs to do: the developer asks, the team lead permits.
    | Assistant | a session of the User's agent with its own name; acts on the User's behalf (until 2026-10-17 — "agent") |
    | Worker | a Team Member with a role, not a human's representative; has a responsible human (W1, added 2026-10-17) |
    | Area | a permanent object of a Team; Topics are created in an Area. A separate Area is where the rules, the people or the chain of decisions differ (refined 2026-10-20, below) |
-   | Topic | a discussion of one question in an Area, for a tracker issue (key and link) or without one; starts with the first Message, is marked resolved when an Outcome is recorded, and stays in history — it can be continued. An Assistant that has taken a task must open a Topic and hold it; the first Message says which task it started, moving to a subtask is a short Message without details; this way it is visible who is doing what (refined 2026-10-17) |
+   | Topic | a discussion of one question in an Area, for a tracker issue (key and link) or without one; starts with the first Message, is marked resolved when an Outcome is recorded, and stays in history — it can be continued. An Assistant that has taken a task must open a Topic and hold it; the first Message says which task it started, moving to a subtask is a short Message without details; this way it is visible who is doing what (refined 2026-10-17). Since 2026-11-08 a Topic is either a task's Topic, shown as one with its task (`T-42`), or a free Topic (`F-5`) in its Area's "Free Topics"; Topics are kept, not deleted (decisions 0030, 0031) |
+   | Task | a Team's work item in an Area, `T-42`: a title, a description, a stage, an assignee (a human), a timeline; its Topic is where it is discussed. Coloqo is the system of record for a Team's working tasks; external issues are links (added 2026-11-08, decision 0031) |
+   | Promise | a task of the type "promise": a commitment for a period, in product terms, that tasks work towards; holds either promises or tasks. A promise that holds promises is called a Goal (added 2026-11-08, decision 0031) |
+   | Stage | where a task is in its work (analysis, design, code, …), of a fixed kind; a Team's workflow lists its stages (added 2026-11-08, decision 0032) |
+   | Status | a Team's grouping of stages, shown as a column of the board (added 2026-11-08, decision 0032) |
+   | Board | a Team's view of its tasks by status; one per Team in the first version (added 2026-11-08, decision 0032) |
    | Message | written into a Topic by an Assistant or a human; addressed to a Member, their Assistant or everyone in the Topic; it is visible who wrote it — a human or an Assistant |
    | Inbox | belongs to a User, shared by all their Assistants: what is addressed to them and not yet handled |
    | Question | a Message addressed to a human and awaiting their answer; its name is a number and a short title (`Q-17 · Access to the environment`), from whom and in which Topic; open or closed — by the human's answer (with a mark of where they answered) or withdrawn by the asker (added 2026-10-17) |
@@ -143,7 +148,8 @@ People do only what is theirs to do: the developer asks, the team lead permits.
      normal"). An open Topic in the Area means the slot is taken. Before a release an Assistant
      looks at the open Topics there. To queue, it writes to the holder in their Topic ("api goes
      after you; tell me when your observation ends"). Old messages go the way of every closed
-     Topic: a week in the archive, then deletion down to the card (decision 0021). The Area is
+     Topic: a week in the archive, then deletion down to the card (decision 0021; withdrawn by
+     decision 0030 on 2026-11-08, Topics are kept). The Area is
      permanent, and a human creates and archives it.
    - *Not a permanent Topic.* A Topic with no end is a channel under another name, and the Topic's
      machinery does not fit it. The Assistants' turn limit would trip all the time, it has no
@@ -306,6 +312,15 @@ before them.
     starting point for earning: a self-deployable solution, with paid features and support on top.
   - Affected: question 8 (cloud first), A3 (login via GitHub and Google), A4 (key verification via
     GitHub): their revision — a separate question.
+
+  **Refined 2026-11-08** (the task tracker and the speed coefficients,
+  `docs/tasks/2026-11-08-speed-coefficients-and-a-task-tracker.md`). Making a team more effective
+  includes showing it its real figures. **Figures are a mirror for the person themselves and
+  material for the Team's conversation, not an instrument of oversight.** Coloqo measures work so
+  that a person sees their own figures and the Team has facts to work on its efficiency with; it
+  is not a tool for watching people or control in the bad sense. Each person's intuition about
+  speed — their own and their colleagues' — differs and does not match reality; the facts correct
+  it for everyone, the lead included.
 - **M2.** Who pays and for what.
 - **M3.** Where the boundary between open and paid lies.
 - **M4.** Third-party contributions to the code and rights to them.
@@ -502,6 +517,12 @@ Coloqo are absent from the architecture.
     corporate tracker is unreachable from the cloud, the Team's tasks would be stored with us
     (decision 0014). Why not our own task board: it duplicates the tracker, and the system of
     record is the tracker.
+
+  **Revised 2026-11-08** (decision 0031). Coloqo gets a task tracker of its own and is the system of
+  record for a Team's working tasks; the external tracker keeps what the Team keeps there, linked by
+  key and URL. This reverses only "why not our own task board"; the reasons against a server
+  integration stand, and the Assistant is the bridge. The Workers' queue by a tracker filter is left
+  for when Workers are built.
 
   **Refined 2026-10-17** (after the analysis of roles in W5). A worker can have any role, several
   workers work on one task in sequence.
