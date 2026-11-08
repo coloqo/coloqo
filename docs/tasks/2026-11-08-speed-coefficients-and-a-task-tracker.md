@@ -519,6 +519,13 @@ the measurement").
     their section (question 10), so a free Topic is seen as free at once. A free Topic that grows
     into a task becomes the new task's Topic, and its former name keeps leading there, as former
     slugs do (decision 0025).
+  - **Addresses (2026-11-08, the author, after a review note on the old links):** a free Topic is
+    `F-5` at `/team/acme/topic/5`; a task's Topic opens at `/team/acme/task/47` and
+    `/team/acme/task/47/topic`. Existing Topics are, at the migration, free Topics that became tasks
+    with the same numbers: those numbers stay taken in the free series, and both counters continue
+    after them, so `/team/acme/topic/12` in old MRs and the API calls of old plugins lead to task 12
+    by the one rule "a free Topic that became a task leads to it". `/team/acme/free/5` was weighed
+    and dropped. Written into decision 0031.
   - **The plugin's tools take both forms**: `T-42` reads a task's Topic, the free letter a free
     Topic.
   - **Existing Topics become tasks with their numbers**: tasks of a Team without the tracker, with

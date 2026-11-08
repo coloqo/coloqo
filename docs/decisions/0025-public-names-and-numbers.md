@@ -6,7 +6,8 @@ and one Team's Topic numbers jumped over the Topics of other Teams · **Refines:
 
 **Refined by decision 0028** (2026-10-21): the event stream's cursor, found to carry database ids,
 names a number per Team. **By decision 0031** (2026-11-08): `T-` numbers tasks, at
-`/team/acme/task/42`; existing Topics become tasks with their numbers; free Topics are `F-5`.
+`/team/acme/task/42`; existing Topics become tasks with their numbers; free Topics are `F-5`, at
+`/team/acme/topic/5`, where the old links to Topics keep leading to their tasks.
 
 Teams, Areas, Topics, files and Assistants were known outside the server by their database ids:
 `/teams/3`, `?area=7`, `/topics/41`, `[file 41]`, `/assistants/17/link`, and `{"team_id": 3}` in

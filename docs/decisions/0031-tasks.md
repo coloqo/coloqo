@@ -52,13 +52,23 @@ Workflow, stages and boards are decision 0032; the timeline and whose move, deci
 
 - **The letter `T` goes to tasks**: `T-42`, `/team/acme/task/42`, a Message `/team/acme/task/42#m-5`,
   another Team's `globex/T-42`; numbered per Team from 1 without gaps. Moving a task between Areas
-  does not change its number. A task's Topic has no number of its own; with several Topics later,
-  `/team/acme/task/42/topic/N`, the address without the suffix opening the first.
-- **Free Topics are `F-5`**, another Team's `globex/F-5`, with a counter of their own. A free Topic
-  that becomes a task's Topic keeps leading there by its former name.
-- **Existing Topics become tasks with their numbers**, in a Team without the tracker: an open Topic
-  in progress, a closed one done. The task counter continues the Topic counter, so every `T-12` in
-  an MR or an issue keeps its meaning.
+  does not change its number.
+- **A task's Topic has no number of its own.** It opens at `/team/acme/task/42`, where the web shows
+  the task and its Topic as one, and at `/team/acme/task/42/topic`; with several Topics later, the
+  next ones are `/team/acme/task/42/topic/N`.
+- **A free Topic is `F-5`, at `/team/acme/topic/5`**, another Team's `globex/F-5`, numbered by a
+  counter of the Team's own. A number is given once and never again: a free Topic that becomes a
+  task's Topic leads there by its former name and address (`/team/acme/topic/5` →
+  `/team/acme/task/47`), so the list of free Topics may show gaps, as file numbers do (decision
+  0025).
+- **Existing Topics, at the migration, are free Topics that became tasks with the same numbers**:
+  tasks of a Team without the tracker, an open Topic in progress, a closed one done. Both of a
+  Team's counters, tasks' and free Topics', continue after them; a new Team starts both at 1. So
+  every `T-12` in an MR or an issue keeps its meaning, the full links `/team/acme/topic/12` (and
+  `#m-5` in them) that the briefing asked Assistants to write there lead to `/team/acme/task/12`,
+  and the API calls of plugins not yet updated (decision 0027) resolve there by the same rule — one
+  rule for resolving a number, no separate redirects. (The old links were pointed out by a review
+  note on 2026-11-08; the author proposed keeping `/topic/N` for free Topics.)
 - **The plugin's tools take both forms.**
 - **A Team key** (`ACME-42`) may come later as a setting, a second name; the short form always
   works.

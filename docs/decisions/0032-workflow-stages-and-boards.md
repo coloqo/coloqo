@@ -88,7 +88,9 @@ The Assistant moves the stage; the status follows.
 - **Closing a task closes its Topic**; the outcome is required. A Message in a finished task's Topic
   may be written and changes nothing in the task.
 - **Tasks are not closed for inactivity**: that would write a false outcome. A task in work with no
-  activity gets only a notice to its assignee; when, is set when it is built. Free Topics keep decision 0021's rule.
+  activity (no timeline event, no Message in its Topic) gets a notice to its assignee's sessions
+  after 7 days, then every day until something happens; a task with an active wait gets none. The
+  threshold and the repetition are Team settings (added 2026-11-08 with the implementation plan). Free Topics keep decision 0021's rule.
 
 ### Boards
 
@@ -107,7 +109,9 @@ The Assistant moves the stage; the status follows.
   they have a tree view of their own with their tasks and progress.
 - **Filters** by Area, assignee and promise are parameters of the view; a link keeps them.
 - **"Done" shows the last two weeks**; the rest are in the list and search.
-- **A Team without the tracker** has the board hidden.
+- **A Team without the tracker** has the board hidden, and no planning: creating a task in the
+  backlog and assigning are refused with "turn the tracker on"; taking, moving and closing work as
+  with it (added 2026-11-08 with the implementation plan).
 
 ## Why
 
