@@ -7840,7 +7840,7 @@
     },
     "/api/team/{team}/task/{number}/assign": {
       "post": {
-        "description": "Assign a task to a human of the Team, or unassign it: planning (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The assignee's pseudonym, or ``None``.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 when the caller may not write there;\n        409 ``no_tracker`` without the tracker, ``finished`` for a finished task; 422 for\n        an unknown pseudonym.",
+        "description": "Assign a task to a human of the Team, or unassign it: planning (decision 0031).\n\nA task in work may be handed over too, e.g. when its assignee is ill: the event names the\nformer assignee, whose sessions are told to stop, and the new one's to take it.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: The assignee's pseudonym, or ``None``.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task; 403 when the caller may not write there;\n        409 ``no_tracker`` without the tracker, ``finished`` for a finished task; 422 for\n        an unknown pseudonym.",
         "operationId": "assign_task_api_team__team__task__number__assign_post",
         "parameters": [
           {

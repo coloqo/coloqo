@@ -381,7 +381,8 @@
     "timeline": "Timeline",
     "handOver": "{{ref}} is in work with {{from}}. Their Assistant will no longer move it. Hand it to {{to}}?",
     "unfold": "Show it all",
-    "fold": "Fold"
+    "fold": "Fold",
+    "descriptionPlaceholder": "Description: what to do, why, when it is done…"
   },
   "timeline": {
     "created": "task created",

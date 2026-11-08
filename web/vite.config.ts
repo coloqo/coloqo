@@ -13,6 +13,8 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             { name: 'markdown', test: /node_modules[\\/](react-markdown|remark-|mdast-|micromark|unified|hast-|unist-|vfile)/ },
+            // The Markdown editor is loaded only when someone edits a description.
+            { name: 'editor', test: /node_modules[\\/](@codemirror|@lezer|style-mod|w3c-keyname|crelt)[\\/]/ },
             { name: 'vendor', test: /node_modules/ },
           ],
         },

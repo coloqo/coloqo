@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -7,7 +7,7 @@ import { api, call, topicPath, type TaskDetail, type TeamDetail, type TimelineEn
 import { issueLink } from '../lib/format'
 import { Markdown } from './Markdown'
 import { Time } from './Time'
-import { Badge, Button, Card, CardHeader, ErrorNote, Notice, Select, Textarea } from './ui'
+import { Badge, Button, Card, CardHeader, ErrorNote, Notice, Select } from './ui'
 
 /** The text of a timeline entry, for the feed and for a task without a Topic. */
 export function TimelineText({ entry }: { entry: TimelineEntry }) {
@@ -183,6 +183,9 @@ export function Progress({ done, total }: { done: number; total: number }) {
   )
 }
 
+/** The editor and CodeMirror come only when a description is edited: a chunk of their own. */
+const MarkdownEditor = lazy(() => import('./MarkdownEditor').then((module) => ({ default: module.MarkdownEditor })))
+
 /** How many lines a long text shows before "Show it all": it keeps what follows within reach. */
 const FOLDED_LINES = 4
 
@@ -231,14 +234,25 @@ function Folded({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** The task's description, editable, with every former text kept in its history (0033). */
+/**
+ * The task's description, edited in place like Obsidian edits Markdown: the line under the
+ * cursor shows its Markdown, the rest reads as rendered (the author, 2026-11-09). Save and cancel
+ * appear once it changed; each saved text is kept in its history (decision 0033).
+ */
 export function Description({ task }: { task: TaskDetail }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [editing, setEditing] = useState(false)
   const [text, setText] = useState(task.description)
+  const [base, setBase] = useState(task.description)
   const [history, setHistory] = useState(false)
+  const [open, setOpen] = useState(false)
   const versions = task.timeline.filter((entry) => entry.kind === 'described')
+  // A description changed elsewhere comes in unless this one has unsaved changes.
+  if (task.description !== base && text === base) {
+    setBase(task.description)
+    setText(task.description)
+  }
+  const dirty = text !== base
   const save = useMutation({
     mutationFn: () =>
       call(
@@ -248,52 +262,40 @@ export function Description({ task }: { task: TaskDetail }) {
         }),
       ),
     onSuccess: () => {
-      setEditing(false)
+      setBase(text)
       void queryClient.invalidateQueries({ queryKey: ['task', task.team] })
     },
   })
   return (
     <Card>
-      <CardHeader title={t('task.description')}>
-        {!editing && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setText(task.description)
-              setEditing(true)
-            }}
-          >
-            {t('common.edit')}
-          </Button>
-        )}
-      </CardHeader>
+      <CardHeader title={t('task.description')} />
       <div className="flex flex-col gap-3 px-4 py-3">
-        {editing ? (
-          <form
-            className="flex flex-col gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              save.mutate()
-            }}
-          >
-            <Textarea value={text} onChange={(event) => setText(event.target.value)} rows={18} maxLength={50000} autoFocus />
-            <ErrorNote>{save.error ? String(save.error) : null}</ErrorNote>
-            <div className="flex gap-2">
-              <Button type="submit" size="sm" variant="primary" disabled={save.isPending}>
-                {t('common.save')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                {t('common.cancel')}
-              </Button>
-            </div>
-          </form>
-        ) : task.description ? (
-          <Folded>
-            <Markdown text={task.description} />
-          </Folded>
+        {/* Folded until opened or edited: a long text keeps the conversation within reach. */}
+        {open || dirty ? (
+          <Suspense fallback={<Markdown text={text} />}>
+            <MarkdownEditor value={text} onChange={setText} placeholder={t('task.descriptionPlaceholder')} />
+          </Suspense>
         ) : (
-          <p className="text-sm text-stone-500 dark:text-stone-400">{t('task.noDescription')}</p>
+          <div onClick={() => setOpen(true)} className="cursor-text">
+            {task.description ? (
+              <Folded>
+                <Markdown text={task.description} />
+              </Folded>
+            ) : (
+              <p className="text-sm text-stone-400 dark:text-stone-500">{t('task.descriptionPlaceholder')}</p>
+            )}
+          </div>
+        )}
+        {dirty && (
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="primary" onClick={() => save.mutate()} disabled={save.isPending}>
+              {t('common.save')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setText(base)}>
+              {t('common.cancel')}
+            </Button>
+            <ErrorNote>{save.error ? String(save.error) : null}</ErrorNote>
+          </div>
         )}
         {versions.length > 1 && (
           <div>

@@ -87,3 +87,54 @@
     animation-duration: 0.01s;
   }
 }
+
+/* The Markdown editor's live preview: the same look as rendered Markdown (.md) off the line
+   being edited. */
+@layer components {
+  .md-editor .cm-editor {
+    @apply text-[0.9375rem];
+  }
+  .md-editor .cm-md-h1 {
+    @apply pt-3 text-lg font-semibold;
+  }
+  .md-editor .cm-md-h2,
+  .md-editor .cm-md-h3,
+  .md-editor .cm-md-h4,
+  .md-editor .cm-md-h5,
+  .md-editor .cm-md-h6 {
+    @apply pt-3 text-base font-semibold;
+  }
+  .md-editor .cm-md-strong {
+    @apply font-semibold;
+  }
+  .md-editor .cm-md-em {
+    @apply italic;
+  }
+  .md-editor .cm-md-strike {
+    @apply line-through;
+  }
+  .md-editor .cm-md-code {
+    @apply rounded bg-stone-100 px-1 font-mono text-[0.85em] dark:bg-stone-800;
+  }
+  .md-editor .cm-md-link {
+    @apply text-amber-700 underline decoration-amber-700/40 underline-offset-2 dark:text-amber-400 dark:decoration-amber-400/40;
+  }
+  .md-editor .cm-md-quote {
+    @apply border-l-2 border-stone-300 pl-3 text-stone-600 dark:border-stone-700 dark:text-stone-400;
+  }
+  .md-editor .cm-md-pre {
+    @apply bg-stone-100 px-3 font-mono text-sm dark:bg-stone-800/80;
+  }
+  .md-editor .cm-md-fence {
+    @apply h-2 bg-stone-100 dark:bg-stone-800/80;
+  }
+  .md-editor .cm-md-bullet {
+    @apply mr-0.5 text-stone-500;
+  }
+  .md-editor .cm-placeholder {
+    @apply text-stone-400 dark:text-stone-500;
+  }
+  .md-editor .cm-cursor {
+    @apply border-stone-900 dark:border-stone-100;
+  }
+}

@@ -1273,6 +1273,9 @@ export interface paths {
          * Assign Task
          * @description Assign a task to a human of the Team, or unassign it: planning (decision 0031).
          *
+         *     A task in work may be handed over too, e.g. when its assignee is ill: the event names the
+         *     former assignee, whose sessions are told to stop, and the new one's to take it.
+         *
          *     Args:
          *         request: The incoming request.
          *         team: The Team's slug.
