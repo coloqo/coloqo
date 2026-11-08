@@ -23,7 +23,6 @@ from coloqo_server.events import add_event
 from coloqo_server.models import (
     Area,
     Assistant,
-    Category,
     File,
     HumanPart,
     Member,
@@ -1004,7 +1003,7 @@ async def open_topic(
         HTTPException: 422 for an unknown addressee.
     """
     from coloqo_server.tracker import add_link, new_task
-    from coloqo_server.workflows import first_of, stages_of, workflow_for
+    from coloqo_server.workflows import stages_of, start_of, workflow_for
 
     team = await db.scalar(select(Team).where(Team.id == area.team_id).with_for_update())
     assert team is not None
@@ -1016,7 +1015,7 @@ async def open_topic(
         number = team.last_topic
     else:
         workflow = await workflow_for(db, team.id, TaskType.Task, area)
-        stage = first_of(await stages_of(db, workflow.id), Category.InProgress)
+        stage = start_of(await stages_of(db, workflow.id))
         task = await new_task(db, actor, team, area, title, TaskType.Task, stage, actor.user.id)
         if issue.strip():
             await add_link(db, actor, task, issue)

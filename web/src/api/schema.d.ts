@@ -1046,6 +1046,57 @@ export interface paths {
         patch: operations["update_area_api_team__team__area__area__patch"];
         trace?: never;
     };
+    "/api/team/{team}/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Board
+         * @description Return the Team's board with its tasks and subtasks; promises are not on it.
+         *
+         *     A task stands in the waiting column while it waits, if the board has one, otherwise in the
+         *     column of its stage. A finished task stays 14 days. Filters narrow the view; a link keeps
+         *     them.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         actor: The caller.
+         *         db: Database session.
+         *         area: Only this Area, by slug.
+         *         assignee: Only this person's; ``-`` for unassigned.
+         *         promise: Only what stands below this promise or goal, by number.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team, or for an unknown Area or
+         *             promise; 422 for an unknown pseudonym.
+         */
+        get: operations["read_board_api_team__team__board_get"];
+        /**
+         * Set Board
+         * @description Set the board's columns: the owner groups the stages into statuses (decision 0032).
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         body: The columns.
+         *         actor: The logged-in owner.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 422 when
+         *             a stage is unknown, shown twice or not shown, a waiting column names stages, or
+         *             there is more than one waiting column.
+         */
+        put: operations["set_board_api_team__team__board_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/team/{team}/file/{number}": {
         parameters: {
             query?: never;
@@ -1954,6 +2005,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/team/{team}/workflow/{type_}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit Workflow
+         * @description Edit the Team's workflow of a type: rename, reorder, add and remove stages (0032).
+         *
+         *     An existing stage keeps its kind; to change a kind, remove the stage and add another. A
+         *     removed stage stays in history under its name; its tasks move to the stage named in
+         *     ``moves``, each with a timeline entry. The kinds the type needs stay: the backlog and done
+         *     for tasks, a draft and delivered for promises.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         type_: ``task`` or ``promise``.
+         *         body: The stages in order and where to move the tasks of removed ones.
+         *         actor: The logged-in owner.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 422 for
+         *             a repeated name, a kind of another type, a changed kind, a missing required kind,
+         *             an unknown stage, or a removed stage with tasks and no stage to move them to.
+         */
+        put: operations["edit_workflow_api_team__team__workflow__type___put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2113,6 +2201,35 @@ export interface components {
             word: string;
         };
         /**
+         * BoardIn
+         * @description The board's columns as the owner sets them.
+         *
+         *     Attributes:
+         *         columns: The columns in order; every stage of the Team's task workflows stands in
+         *             exactly one column by stages, and there is at most one waiting column.
+         */
+        BoardIn: {
+            /** Columns */
+            columns: components["schemas"]["ColumnIn"][];
+        };
+        /**
+         * BoardOut
+         * @description The board with the tasks on it.
+         *
+         *     Attributes:
+         *         name: The board's name.
+         *         columns: Its columns in order.
+         *         cards: The tasks, highest first within a column; promises are not on the board.
+         */
+        BoardOut: {
+            /** Cards */
+            cards: components["schemas"]["Card"][];
+            /** Columns */
+            columns: components["schemas"]["ColumnOut"][];
+            /** Name */
+            name: string;
+        };
+        /**
          * Briefing
          * @description What a session learns at its start (decision 0021).
          *
@@ -2131,6 +2248,87 @@ export interface components {
             text: string;
         };
         /**
+         * Card
+         * @description A task on the board.
+         *
+         *     Attributes:
+         *         column: The index of the column it stands in.
+         *         promise: The nearest promise above it.
+         *         move: Whose move it is: ``assistant``, ``human`` (its human), ``person`` (another
+         *             person of the Team), ``external``; ``None`` when nothing tells (decision 0033).
+         *         move_who: Who: the Assistant's name, a pseudonym, or what is awaited.
+         *         move_since: Since when, if known.
+         */
+        Card: {
+            /** Area */
+            area: string;
+            /** Area Name */
+            area_name: string;
+            /** Assignee */
+            assignee: string | null;
+            category: components["schemas"]["Category"];
+            /** Column */
+            column: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Has Topic */
+            has_topic: boolean;
+            /** Holder */
+            holder: string | null;
+            /** Holder Key */
+            holder_key: string | null;
+            /** Links */
+            links: components["schemas"]["coloqo_server__api__tasks__LinkOut"][];
+            /** Move */
+            move: ("assistant" | "human" | "person" | "external") | null;
+            /** Move Since */
+            move_since: string | null;
+            /** Move Who */
+            move_who: string | null;
+            /** Number */
+            number: number;
+            /** Outcome */
+            outcome: string;
+            /** Parent */
+            parent: number | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Period Start */
+            period_start?: string | null;
+            progress?: components["schemas"]["Progress"] | null;
+            promise: components["schemas"]["Promise"] | null;
+            /** Rank */
+            rank: number;
+            /** Ref */
+            ref: string;
+            /** Source */
+            source: number | null;
+            /** Stage */
+            stage: string;
+            stage_kind: components["schemas"]["StageKind"];
+            /** Started At */
+            started_at: string | null;
+            /** Team */
+            team: string;
+            /** Title */
+            title: string;
+            type: components["schemas"]["TaskType"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Waiting */
+            waiting: string | null;
+        };
+        /**
          * Category
          * @description The fixed category of a stage's kind (decision 0032).
          *
@@ -2143,11 +2341,12 @@ export interface components {
         Category: "to_do" | "in_progress" | "finished";
         /**
          * CloseIn
-         * @description Closing a task.
+         * @description Closing a task or a promise.
          *
          *     Attributes:
          *         outcome: A line or two, with the MR or issue links.
-         *         cancelled: Closed without a result.
+         *         cancelled: Closed without a result: a task cancelled, a promise withdrawn.
+         *         missed: A promise whose period ended without the delivery: not delivered (0032).
          */
         CloseIn: {
             /**
@@ -2155,9 +2354,57 @@ export interface components {
              * @default false
              */
             cancelled?: boolean;
+            /**
+             * Missed
+             * @default false
+             */
+            missed?: boolean;
             /** Outcome */
             outcome: string;
         };
+        /**
+         * ColumnIn
+         * @description A column as the owner sets it.
+         *
+         *     Attributes:
+         *         name: The status it shows.
+         *         rule: ``stages`` or ``waiting``.
+         *         stages: Names of its stages, for a column by stages.
+         */
+        ColumnIn: {
+            /** Name */
+            name: string;
+            /** @default stages */
+            rule?: components["schemas"]["ColumnRule"];
+            /** Stages */
+            stages?: string[];
+        };
+        /**
+         * ColumnOut
+         * @description A column of the board.
+         *
+         *     Attributes:
+         *         name: The status it shows.
+         *         rule: ``stages``, or ``waiting`` for tasks with an active external wait.
+         *         stages: Names of its stages, for a column by stages.
+         */
+        ColumnOut: {
+            /** Name */
+            name: string;
+            rule: components["schemas"]["ColumnRule"];
+            /** Stages */
+            stages: string[];
+        };
+        /**
+         * ColumnRule
+         * @description What puts a task into a column of a board (decision 0032).
+         *
+         *     Attributes:
+         *         Stages: Its stage is one of the column's stages.
+         *         Waiting: It has an active external wait, whatever its stage.
+         * @enum {string}
+         */
+        ColumnRule: "stages" | "waiting";
         /**
          * DevLoginIn
          * @description Development login by name.
@@ -2628,6 +2875,20 @@ export interface components {
             before?: number | null;
         };
         /**
+         * Progress
+         * @description What a promise holds, done against all.
+         *
+         *     Attributes:
+         *         done: Done or delivered.
+         *         total: All but the cancelled and withdrawn.
+         */
+        Progress: {
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * ProjectOut
          * @description One of the person's projects with its shown sessions, as their settings list it.
          *
@@ -2655,6 +2916,20 @@ export interface components {
             team: string | null;
             /** Team Name */
             team_name: string | null;
+        };
+        /**
+         * Promise
+         * @description The promise a task works towards.
+         *
+         *     Attributes:
+         *         number: Its number.
+         *         title: Its title.
+         */
+        Promise: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
         };
         /**
          * PseudonymIn
@@ -2792,6 +3067,11 @@ export interface components {
             outcome: string;
             /** Parent */
             parent: number | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Period Start */
+            period_start?: string | null;
+            progress?: components["schemas"]["Progress"] | null;
             /** Rank */
             rank: number;
             /** Ref */
@@ -2833,6 +3113,8 @@ export interface components {
          *             Topic the calling Assistant holds, if exactly one.
          *         assignee: Pseudonym of the human to assign it to.
          *         links: Keys or addresses of external issues.
+         *         period_start: A promise's first day.
+         *         period_end: A promise's last day.
          */
         TaskIn: {
             /** Area */
@@ -2848,6 +3130,10 @@ export interface components {
             links?: string[];
             /** Parent */
             parent?: number | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Period Start */
+            period_start?: string | null;
             /** Source */
             source?: number | null;
             /** Title */
@@ -2881,6 +3167,10 @@ export interface components {
          *         holder_key: Its key.
          *         created_by: Pseudonym of whoever created it.
          *         rank: Its place within its status: smaller stands higher.
+         *         period_start: A promise's first day.
+         *         period_end: A promise's last day.
+         *         progress: For a promise, what it holds: done against all, the cancelled and withdrawn
+         *             left out (decision 0031).
          *         created_at: Creation time.
          *         updated_at: Time of its newest activity.
          *         started_at: Its first move into work.
@@ -2917,6 +3207,11 @@ export interface components {
             outcome: string;
             /** Parent */
             parent: number | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Period Start */
+            period_start?: string | null;
+            progress?: components["schemas"]["Progress"] | null;
             /** Rank */
             rank: number;
             /** Ref */
@@ -2949,12 +3244,18 @@ export interface components {
          *         title: A new title.
          *         description: A new description.
          *         area: A new Area, by slug; the number stays.
+         *         period_start: A promise's first day.
+         *         period_end: A promise's last day.
          */
         TaskPatch: {
             /** Area */
             area?: string | null;
             /** Description */
             description?: string | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Period Start */
+            period_start?: string | null;
             /** Title */
             title?: string | null;
         };
@@ -3425,6 +3726,22 @@ export interface components {
             word: string;
         };
         /**
+         * WorkflowIn
+         * @description A workflow as the owner edits it.
+         *
+         *     Attributes:
+         *         stages: Its stages in order.
+         *         moves: For each removed stage that has tasks, the new name of the stage to move them to.
+         */
+        WorkflowIn: {
+            /** Moves */
+            moves?: {
+                [key: string]: string;
+            };
+            /** Stages */
+            stages: components["schemas"]["coloqo_server__api__boards__StageIn"][];
+        };
+        /**
          * WorkflowOut
          * @description A workflow with its stages in order.
          *
@@ -3456,6 +3773,22 @@ export interface components {
             expires_at: string;
             /** Url */
             url: string;
+        };
+        /**
+         * StageIn
+         * @description A stage in the edited workflow.
+         *
+         *     Attributes:
+         *         name: Its name, unique in the workflow.
+         *         kind: Its fixed kind; an existing stage keeps its kind (remove it and add another).
+         *         was: The current name of the existing stage it is; ``None`` for a new stage.
+         */
+        coloqo_server__api__boards__StageIn: {
+            kind: components["schemas"]["StageKind"];
+            /** Name */
+            name: string;
+            /** Was */
+            was?: string | null;
         };
         /**
          * LinkOut
@@ -4879,6 +5212,84 @@ export interface operations {
             };
         };
     };
+    read_board_api_team__team__board_get: {
+        parameters: {
+            query?: {
+                area?: string | null;
+                assignee?: string | null;
+                promise?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_board_api_team__team__board_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_file_api_team__team__file__number__get: {
         parameters: {
             query?: {
@@ -5998,6 +6409,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_workflow_api_team__team__workflow__type___put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                type_: components["schemas"]["TaskType"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */

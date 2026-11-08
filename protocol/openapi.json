@@ -295,6 +295,55 @@
         "title": "AssistantSelf",
         "type": "object"
       },
+      "BoardIn": {
+        "description": "The board's columns as the owner sets them.\n\nAttributes:\n    columns: The columns in order; every stage of the Team's task workflows stands in\n        exactly one column by stages, and there is at most one waiting column.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnIn"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "BoardIn",
+        "type": "object"
+      },
+      "BoardOut": {
+        "description": "The board with the tasks on it.\n\nAttributes:\n    name: The board's name.\n    columns: Its columns in order.\n    cards: The tasks, highest first within a column; promises are not on the board.",
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/Card"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnOut"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "columns",
+          "cards"
+        ],
+        "title": "BoardOut",
+        "type": "object"
+      },
       "Briefing": {
         "description": "What a session learns at its start (decision 0021).\n\nAttributes:\n    text: Coloqo's rules for Assistants and the Topics of the session and its project,\n        ready to show.\n    team: The slug of the Team the project is linked to; ``None`` while unlinked.\n    team_name: That Team's name.",
         "properties": {
@@ -333,6 +382,300 @@
         "title": "Briefing",
         "type": "object"
       },
+      "Card": {
+        "description": "A task on the board.\n\nAttributes:\n    column: The index of the column it stands in.\n    promise: The nearest promise above it.\n    move: Whose move it is: ``assistant``, ``human`` (its human), ``person`` (another\n        person of the Team), ``external``; ``None`` when nothing tells (decision 0033).\n    move_who: Who: the Assistant's name, a pseudonym, or what is awaited.\n    move_since: Since when, if known.",
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "area_name": {
+            "title": "Area Name",
+            "type": "string"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "column": {
+            "title": "Column",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_topic": {
+            "title": "Has Topic",
+            "type": "boolean"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "holder_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Key"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/coloqo_server__api__tasks__LinkOut"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "move": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assistant",
+                  "human",
+                  "person",
+                  "external"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move"
+          },
+          "move_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move Since"
+          },
+          "move_who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move Who"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "promise": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Promise"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "number"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_kind": {
+            "$ref": "#/components/schemas/StageKind"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
+          }
+        },
+        "required": [
+          "team",
+          "number",
+          "ref",
+          "type",
+          "area",
+          "area_name",
+          "title",
+          "stage",
+          "stage_kind",
+          "category",
+          "assignee",
+          "waiting",
+          "outcome",
+          "parent",
+          "source",
+          "links",
+          "has_topic",
+          "holder",
+          "holder_key",
+          "created_by",
+          "rank",
+          "created_at",
+          "updated_at",
+          "started_at",
+          "finished_at",
+          "column",
+          "promise",
+          "move",
+          "move_who",
+          "move_since"
+        ],
+        "title": "Card",
+        "type": "object"
+      },
       "Category": {
         "description": "The fixed category of a stage's kind (decision 0032).\n\nAttributes:\n    ToDo: Work has not started.\n    InProgress: Work goes on; a person's time on a task starts with its first move here.\n    Finished: Final: a finished task is never reopened.",
         "enum": [
@@ -344,11 +687,16 @@
         "type": "string"
       },
       "CloseIn": {
-        "description": "Closing a task.\n\nAttributes:\n    outcome: A line or two, with the MR or issue links.\n    cancelled: Closed without a result.",
+        "description": "Closing a task or a promise.\n\nAttributes:\n    outcome: A line or two, with the MR or issue links.\n    cancelled: Closed without a result: a task cancelled, a promise withdrawn.\n    missed: A promise whose period ended without the delivery: not delivered (0032).",
         "properties": {
           "cancelled": {
             "default": false,
             "title": "Cancelled",
+            "type": "boolean"
+          },
+          "missed": {
+            "default": false,
+            "title": "Missed",
             "type": "boolean"
           },
           "outcome": {
@@ -363,6 +711,69 @@
         ],
         "title": "CloseIn",
         "type": "object"
+      },
+      "ColumnIn": {
+        "description": "A column as the owner sets it.\n\nAttributes:\n    name: The status it shows.\n    rule: ``stages`` or ``waiting``.\n    stages: Names of its stages, for a column by stages.",
+        "properties": {
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ColumnRule",
+            "default": "stages"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ColumnIn",
+        "type": "object"
+      },
+      "ColumnOut": {
+        "description": "A column of the board.\n\nAttributes:\n    name: The status it shows.\n    rule: ``stages``, or ``waiting`` for tasks with an active external wait.\n    stages: Names of its stages, for a column by stages.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ColumnRule"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "rule",
+          "stages"
+        ],
+        "title": "ColumnOut",
+        "type": "object"
+      },
+      "ColumnRule": {
+        "description": "What puts a task into a column of a board (decision 0032).\n\nAttributes:\n    Stages: Its stage is one of the column's stages.\n    Waiting: It has an active external wait, whatever its stage.",
+        "enum": [
+          "stages",
+          "waiting"
+        ],
+        "title": "ColumnRule",
+        "type": "string"
       },
       "DevLoginIn": {
         "description": "Development login by name.\n\nAttributes:\n    pseudonym: Whom to log in as; the User is created if needed.",
@@ -1176,6 +1587,25 @@
         "title": "OrderIn",
         "type": "object"
       },
+      "Progress": {
+        "description": "What a promise holds, done against all.\n\nAttributes:\n    done: Done or delivered.\n    total: All but the cancelled and withdrawn.",
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "done",
+          "total"
+        ],
+        "title": "Progress",
+        "type": "object"
+      },
       "ProjectOut": {
         "description": "One of the person's projects with its shown sessions, as their settings list it.\n\nAttributes:\n    key: The project's public key.\n    name: The folder's name.\n    installation: Name of the computer.\n    team: The slug of the Team it is linked to, if any.\n    team_name: That Team's name.\n    assistants: Its shown Assistants: online, or offline for less than ``SHOWN``.\n    last_seen_at: The last request of any of its Assistants.",
         "properties": {
@@ -1243,6 +1673,25 @@
           "last_seen_at"
         ],
         "title": "ProjectOut",
+        "type": "object"
+      },
+      "Promise": {
+        "description": "The promise a task works towards.\n\nAttributes:\n    number: Its number.\n    title: Its title.",
+        "properties": {
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "title"
+        ],
+        "title": "Promise",
         "type": "object"
       },
       "PseudonymIn": {
@@ -1467,6 +1916,40 @@
             ],
             "title": "Parent"
           },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rank": {
             "title": "Rank",
             "type": "number"
@@ -1584,7 +2067,7 @@
         "type": "object"
       },
       "TaskIn": {
-        "description": "A new task in the backlog: planning, so the tracker must be on (decision 0032).\n\nAttributes:\n    area: The Area's slug.\n    title: One line.\n    description: Markdown.\n    type: ``task`` or ``promise``.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it is created; by default the task whose\n        Topic the calling Assistant holds, if exactly one.\n    assignee: Pseudonym of the human to assign it to.\n    links: Keys or addresses of external issues.",
+        "description": "A new task in the backlog: planning, so the tracker must be on (decision 0032).\n\nAttributes:\n    area: The Area's slug.\n    title: One line.\n    description: Markdown.\n    type: ``task`` or ``promise``.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it is created; by default the task whose\n        Topic the calling Assistant holds, if exactly one.\n    assignee: Pseudonym of the human to assign it to.\n    links: Keys or addresses of external issues.\n    period_start: A promise's first day.\n    period_end: A promise's last day.",
         "properties": {
           "area": {
             "maxLength": 40,
@@ -1628,6 +2111,30 @@
             ],
             "title": "Parent"
           },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
           "source": {
             "anyOf": [
               {
@@ -1658,7 +2165,7 @@
         "type": "object"
       },
       "TaskOut": {
-        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
+        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    progress: For a promise, what it holds: done against all, the cancelled and withdrawn\n        left out (decision 0031).\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
         "properties": {
           "area": {
             "title": "Area",
@@ -1762,6 +2269,40 @@
             ],
             "title": "Parent"
           },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rank": {
             "title": "Rank",
             "type": "number"
@@ -1859,7 +2400,7 @@
         "type": "object"
       },
       "TaskPatch": {
-        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.",
+        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.\n    period_start: A promise's first day.\n    period_end: A promise's last day.",
         "properties": {
           "area": {
             "anyOf": [
@@ -1885,6 +2426,30 @@
               }
             ],
             "title": "Description"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
           },
           "title": {
             "anyOf": [
@@ -2884,6 +3449,32 @@
         "title": "WordIn",
         "type": "object"
       },
+      "WorkflowIn": {
+        "description": "A workflow as the owner edits it.\n\nAttributes:\n    stages: Its stages in order.\n    moves: For each removed stage that has tasks, the new name of the stage to move them to.",
+        "properties": {
+          "moves": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Moves",
+            "type": "object"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/coloqo_server__api__boards__StageIn"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "stages"
+        ],
+        "title": "WorkflowIn",
+        "type": "object"
+      },
       "WorkflowOut": {
         "description": "A workflow with its stages in order.\n\nAttributes:\n    type: The type of task it serves.\n    areas: Slugs of the Areas whose tasks move by it; empty for the promise workflow.\n    stages: Its stages.",
         "properties": {
@@ -2931,6 +3522,37 @@
           "expires_at"
         ],
         "title": "LinkOut",
+        "type": "object"
+      },
+      "coloqo_server__api__boards__StageIn": {
+        "description": "A stage in the edited workflow.\n\nAttributes:\n    name: Its name, unique in the workflow.\n    kind: Its fixed kind; an existing stage keeps its kind (remove it and add another).\n    was: The current name of the existing stage it is; ``None`` for a new stage.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StageKind"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "was": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Was"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "StageIn",
         "type": "object"
       },
       "coloqo_server__api__tasks__LinkOut": {
@@ -3002,7 +3624,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.9.0"
+    "version": "0.10.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -6272,6 +6894,248 @@
         "summary": "Update Area",
         "tags": [
           "teams"
+        ]
+      }
+    },
+    "/api/team/{team}/board": {
+      "get": {
+        "description": "Return the Team's board with its tasks and subtasks; promises are not on it.\n\nA task stands in the waiting column while it waits, if the board has one, otherwise in the\ncolumn of its stage. A finished task stays 14 days. Filters narrow the view; a link keeps\nthem.\n\nArgs:\n    team: The Team's slug.\n    actor: The caller.\n    db: Database session.\n    area: Only this Area, by slug.\n    assignee: Only this person's; ``-`` for unassigned.\n    promise: Only what stands below this promise or goal, by number.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team, or for an unknown Area or\n        promise; 422 for an unknown pseudonym.",
+        "operationId": "read_board_api_team__team__board_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Area"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assignee",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee"
+            }
+          },
+          {
+            "in": "query",
+            "name": "promise",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Promise"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Board",
+        "tags": [
+          "board"
+        ]
+      },
+      "put": {
+        "description": "Set the board's columns: the owner groups the stages into statuses (decision 0032).\n\nArgs:\n    team: The Team's slug.\n    body: The columns.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 422 when\n        a stage is unknown, shown twice or not shown, a waiting column names stages, or\n        there is more than one waiting column.",
+        "operationId": "set_board_api_team__team__board_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ColumnOut"
+                  },
+                  "title": "Response Set Board Api Team  Team  Board Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Board",
+        "tags": [
+          "board"
         ]
       }
     },
@@ -9602,6 +10466,119 @@
         "summary": "List Workflows",
         "tags": [
           "tasks"
+        ]
+      }
+    },
+    "/api/team/{team}/workflow/{type_}": {
+      "put": {
+        "description": "Edit the Team's workflow of a type: rename, reorder, add and remove stages (0032).\n\nAn existing stage keeps its kind; to change a kind, remove the stage and add another. A\nremoved stage stays in history under its name; its tasks move to the stage named in\n``moves``, each with a timeline entry. The kinds the type needs stay: the backlog and done\nfor tasks, a draft and delivered for promises.\n\nArgs:\n    team: The Team's slug.\n    type_: ``task`` or ``promise``.\n    body: The stages in order and where to move the tasks of removed ones.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 422 for\n        a repeated name, a kind of another type, a changed kind, a missing required kind,\n        an unknown stage, or a removed stage with tasks and no stage to move them to.",
+        "operationId": "edit_workflow_api_team__team__workflow__type___put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "type_",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TaskType"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Edit Workflow Api Team  Team  Workflow  Type   Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Workflow",
+        "tags": [
+          "board"
         ]
       }
     }

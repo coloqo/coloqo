@@ -5,7 +5,7 @@ in the web plans: assigns and orders. Planning needs the tracker on; taking, mov
 work without it. Every change goes to the task's timeline.
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -50,7 +50,7 @@ from coloqo_server.models import (
 )
 from coloqo_server.security import DB, Actor, ActorDep, now, require_reader, require_writer
 from coloqo_server.tracker import add_link, first_link, new_task, record
-from coloqo_server.workflows import first_of, first_of_kind, stages_of, workflow_for
+from coloqo_server.workflows import first_of, first_of_kind, stages_of, start_of, workflow_for
 
 router = APIRouter(tags=["tasks"])
 
@@ -68,6 +68,18 @@ class LinkOut(BaseModel):
 
     key: str
     url: str
+
+
+class Progress(BaseModel):
+    """What a promise holds, done against all.
+
+    Attributes:
+        done: Done or delivered.
+        total: All but the cancelled and withdrawn.
+    """
+
+    done: int
+    total: int
 
 
 class TaskOut(BaseModel):
@@ -95,6 +107,10 @@ class TaskOut(BaseModel):
         holder_key: Its key.
         created_by: Pseudonym of whoever created it.
         rank: Its place within its status: smaller stands higher.
+        period_start: A promise's first day.
+        period_end: A promise's last day.
+        progress: For a promise, what it holds: done against all, the cancelled and withdrawn
+            left out (decision 0031).
         created_at: Creation time.
         updated_at: Time of its newest activity.
         started_at: Its first move into work.
@@ -122,6 +138,9 @@ class TaskOut(BaseModel):
     holder_key: str | None
     created_by: str | None
     rank: float
+    period_start: date | None = None
+    period_end: date | None = None
+    progress: Progress | None = None
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None
@@ -202,12 +221,16 @@ class TaskIn(BaseModel):
             Topic the calling Assistant holds, if exactly one.
         assignee: Pseudonym of the human to assign it to.
         links: Keys or addresses of external issues.
+        period_start: A promise's first day.
+        period_end: A promise's last day.
     """
 
     area: str = Field(min_length=1, max_length=40)
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=50_000)
     type: TaskType = TaskType.Task
+    period_start: date | None = None
+    period_end: date | None = None
     parent: int | None = None
     source: int | None = None
     assignee: str | None = None
@@ -254,15 +277,17 @@ class WaitIn(BaseModel):
 
 
 class CloseIn(BaseModel):
-    """Closing a task.
+    """Closing a task or a promise.
 
     Attributes:
         outcome: A line or two, with the MR or issue links.
-        cancelled: Closed without a result.
+        cancelled: Closed without a result: a task cancelled, a promise withdrawn.
+        missed: A promise whose period ended without the delivery: not delivered (0032).
     """
 
     outcome: str = Field(min_length=1, max_length=5000)
     cancelled: bool = False
+    missed: bool = False
 
 
 class TaskPatch(BaseModel):
@@ -272,11 +297,15 @@ class TaskPatch(BaseModel):
         title: A new title.
         description: A new description.
         area: A new Area, by slug; the number stays.
+        period_start: A promise's first day.
+        period_end: A promise's last day.
     """
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=50_000)
     area: str | None = Field(default=None, min_length=1, max_length=40)
+    period_start: date | None = None
+    period_end: date | None = None
 
 
 class LinkIn(BaseModel):
@@ -384,6 +413,22 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
         links.setdefault(link.task_id, []).append(LinkOut(key=link.key, url=link.url))
     topics = {t.task_id: t for t in await db.scalars(select(Topic).where(Topic.task_id.in_(ids)))}
     holders = await assistants_by_id(db, {t.holder_assistant_id for t in topics.values()})
+    progress: dict[int, Progress] = {}
+    promises = [x.id for x in tasks if x.type == TaskType.Promise]
+    if promises:
+        counts: dict[int, list[int]] = {pid: [0, 0] for pid in promises}
+        rows = await db.execute(
+            select(Task.parent_id, Stage.kind)
+            .join(Stage, Stage.id == Task.stage_id)
+            .where(Task.parent_id.in_(promises))
+        )
+        for parent_id, kind in rows:
+            if kind in (StageKind.Cancelled, StageKind.Withdrawn):
+                continue
+            counts[parent_id][1] += 1
+            if kind in (StageKind.Done, StageKind.Delivered):
+                counts[parent_id][0] += 1
+        progress = {pid: Progress(done=d, total=t) for pid, (d, t) in counts.items()}
     users = await pseudonyms(db, {x.assignee_id for x in tasks} | {x.created_by for x in tasks})
     result = []
     for task in tasks:
@@ -414,6 +459,9 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
                 holder_key=holder.key if holder else None,
                 created_by=users.get(task.created_by),
                 rank=task.rank,
+                period_start=task.period_start,
+                period_end=task.period_end,
+                progress=progress.get(task.id),
                 created_at=task.created_at,
                 updated_at=task.updated_at,
                 started_at=task.started_at,
@@ -650,8 +698,10 @@ async def close_task(
     cancelled: bool,
     label: str,
     topic: Topic | None = None,
+    missed: bool = False,
 ) -> set[int]:
-    """Finish a locked task as done or cancelled; its Topic closes with it (decision 0032).
+    """Finish a locked task as done or cancelled, a promise as delivered, not delivered or
+    withdrawn; its Topic closes with it (decision 0032).
 
     Args:
         db: Database session.
@@ -661,6 +711,7 @@ async def close_task(
         cancelled: Closed without a result.
         label: How the caller names the task.
         topic: Its Topic, already locked, if the caller came through it.
+        missed: A promise not delivered in its period.
 
     Returns:
         The Users who got events, to wake after the commit.
@@ -686,7 +737,13 @@ async def close_task(
         )
     stages = await stages_of(db, current.workflow_id)
     if task.type == TaskType.Promise:
-        kind = StageKind.Withdrawn if cancelled else StageKind.Delivered
+        kind = (
+            StageKind.Withdrawn
+            if cancelled
+            else StageKind.NotDelivered
+            if missed
+            else StageKind.Delivered
+        )
     else:
         kind = StageKind.Cancelled if cancelled else StageKind.Done
     stage = first_of_kind(stages, kind)
@@ -935,6 +992,7 @@ async def create_task(
         parent.id if parent else None,
         source.id if source else None,
     )
+    task.period_start, task.period_end = body.period_start, body.period_end
     for key in body.links:
         await add_link(db, actor, task, key)
     recipients = await task_event(db, actor, task, "created")
@@ -1036,6 +1094,11 @@ async def edit_task(
     if body.description is not None and body.description != task.description:
         record(db, task, "described", actor, {"text": body.description})
         task.description = body.description
+    for field in ("period_start", "period_end"):
+        value = getattr(body, field)
+        if field in body.model_fields_set and value != getattr(task, field):
+            record(db, task, "period", actor, {field: value.isoformat() if value else None})
+            setattr(task, field, value)
     if body.area is not None:
         area = await find_area(db, found.id, body.area)
         if area is None:
@@ -1104,8 +1167,9 @@ async def take_task(
         task.assignee_id = actor.user.id
         recipients |= await task_event(db, actor, task, "assigned")
     if CATEGORY[current.kind] == Category.ToDo:
-        stage = first_of(await stages_of(db, current.workflow_id), Category.InProgress)
-        recipients |= await move_to(db, actor, task, stage, stage.name, {})
+        stage = start_of(await stages_of(db, current.workflow_id))
+        if stage.id != current.id:
+            recipients |= await move_to(db, actor, task, stage, stage.name, {})
     topic = await topic_of(db, task, lock=True)
     if topic is None:
         area = await db.get(Area, task.area_id)
@@ -1335,7 +1399,13 @@ async def close(
     """
     task, found = await task_for(db, team, number, actor, write=True)
     recipients = await close_task(
-        db, actor, task, body.outcome, body.cancelled, f"{found.slug}/{ref(task.number)}"
+        db,
+        actor,
+        task,
+        body.outcome,
+        body.cancelled,
+        f"{found.slug}/{ref(task.number)}",
+        missed=body.missed,
     )
     await db.commit()
     request.app.state.bus.wake(recipients)
