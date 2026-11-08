@@ -842,18 +842,18 @@ class TaskEvent(Base):
     """An entry of a task's timeline, kept for good (decision 0033).
 
     Unlike the stream's events (a week, decision 0008), the timeline is data: creation, stages,
-    skipped stages, assignments, waits, description edits, closing, and the intervals of whose
-    move it is. A new kind needs no migration.
+    skipped stages, assignments, waits, description edits, closing. A new kind needs no
+    migration. Whose move it was is kept apart, by session (``Move``).
 
     Attributes:
         id: Identifier; orders entries of the same moment.
         task_id: The task.
         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
-            ``described``, ``linked``, ``closed``, ``move``, ...
+            ``described``, ``linked``, ``closed``, ...
         author_user_id: The human on whose behalf it happened; ``None`` for Coloqo itself.
         author_assistant_id: The Assistant that did it, if not the human in the web.
         data: What the kind needs, e.g. the stages moved between.
-        created_at: When it happened; for a move interval, its start.
+        created_at: When it happened.
     """
 
     __tablename__ = "task_events"
@@ -866,4 +866,35 @@ class TaskEvent(Base):
         ForeignKey("assistants.id", ondelete="SET NULL")
     )
     data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Move(Base):
+    """An interval of whose move it was in a session: its Assistant's or its human's (0033).
+
+    Kept as the raw fact, by session, never by task: which task the time belongs to is decided
+    when the measurement reads it, so a rule can change without the data being wrong.
+
+    Attributes:
+        id: Identifier.
+        assistant_id: The session's Assistant.
+        user_id: Its human.
+        move: ``assistant`` from a prompt to the Assistant's stop, ``human`` from the stop to
+            the next prompt.
+        started_at: When it began.
+        ended_at: When it ended.
+        created_at: When the session's watch posted it.
+    """
+
+    __tablename__ = "moves"
+    __table_args__ = (UniqueConstraint("assistant_id", "started_at", "move"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    move: Mapped[str] = mapped_column(String(16))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -4,7 +4,8 @@ Revision ID: 0010
 Revises: 0009
 Create Date: 2026-11-08 22:00:00.000000
 
-Decisions 0030-0033. Workflows with stages, tasks, their links and timeline. Each Team gets the
+Decisions 0030-0033. Workflows with stages, tasks, their links and timeline; the intervals of
+whose move it was, by session. Each Team gets the
 built-in task and promise workflows, and its Areas point to the task one. Every existing Topic
 becomes a task with the same number: a closed one done, an open one in analysis, the timeline
 saying the migration set it; the Topic keeps its number in the free series, so its old links lead
@@ -194,6 +195,28 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_task_events_task_id", "task_events", ["task_id"])
+    op.create_table(
+        "moves",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column(
+            "assistant_id",
+            sa.Integer(),
+            sa.ForeignKey("assistants.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ),
+        sa.Column("move", sa.String(16), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("ended_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.UniqueConstraint("assistant_id", "started_at", "move"),
+    )
+    op.create_index("ix_moves_assistant_id", "moves", ["assistant_id"])
+    op.create_index("ix_moves_user_id", "moves", ["user_id"])
 
     op.add_column("teams", sa.Column("last_task", sa.Integer(), nullable=False, server_default="0"))
     op.add_column(
@@ -306,6 +329,7 @@ def downgrade() -> None:
     op.drop_column("teams", "task_idle_days")
     op.drop_column("teams", "tracker")
     op.drop_column("teams", "last_task")
+    op.drop_table("moves")
     op.drop_table("task_events")
     op.drop_table("task_links")
     op.drop_table("tasks")

@@ -4,8 +4,10 @@ Run it against a server started with ``COLOQO_DEV_LOGIN=true``:
 
     uv run python scripts/dev_seed.py
 
-Then log in on the web by development login as ``alice`` (or ``bob``, ``carol``). Every run
-adds another Team ``Acme``; drop the development database to start clean. Everything goes
+Then log in on the web by development login as ``alice`` (or ``bob``, ``carol``, ``dave``). Every
+run adds another Team ``Acme`` (``acme``, ``acme-2``, …) with the tracker on: free Topics, tasks
+in their stages, a waiting one, a finished one, a backlog under a promise. Drop the development
+database to start clean. Everything goes
 through the API, as people and plugins would do it; afterwards the times of the Messages are
 spread over the last hours in the database, so the feed shows groups and gaps.
 """
@@ -24,6 +26,9 @@ import psycopg
 from sqlalchemy.engine import make_url
 
 DEFAULT_DATABASE = "postgresql+psycopg://coloqo:dev@127.0.0.1:55432/coloqo"
+
+PLUGIN = "0.7.0"
+"""The plugin release the seeded Assistants speak as: it knows tasks and free Topics."""
 
 
 def png(width: int, height: int, background: tuple[int, int, int], boxes: list[tuple]) -> bytes:
@@ -164,18 +169,18 @@ class Seeder:
         self.people[pseudonym] = client
         return client
 
-    def assistant(self, pseudonym: str, project: str, team_id: int) -> str:
+    def assistant(self, pseudonym: str, project: str, team: str) -> str:
         """Install a plugin for a person, confirmed by them, and register its Assistant.
 
         Args:
             pseudonym: Whose Assistant.
             project: Project folder the Assistant works in.
-            team_id: The Team the project's ``.coloqo.json`` names.
+            team: The slug of the Team the project's ``.coloqo.json`` names.
 
         Raises:
             httpx.HTTPStatusError: The server refused a step.
         """
-        client = httpx.Client(base_url=self.base, timeout=30)
+        client = httpx.Client(base_url=self.base, timeout=30, headers={"X-Coloqo-Plugin": PLUGIN})
         start = client.post("/api/device/start", json={"name": "laptop"})
         start.raise_for_status()
         codes = start.json()
@@ -185,15 +190,16 @@ class Seeder:
         token.raise_for_status()
         client.headers["Authorization"] = f"Bearer {token.json()['token']}"
         registered = client.post(
-            "/api/assistants",
+            "/api/assistant",
             json={
                 "project_key": hashlib.sha256(f"{pseudonym}/{project}".encode()).hexdigest(),
                 "project_name": project,
-                "team_id": team_id,
+                "team": team,
+                "session_id": f"seed-{pseudonym}-{project}",
             },
         )
         registered.raise_for_status()
-        client.headers["X-Coloqo-Assistant"] = str(registered.json()["id"])
+        client.headers["X-Coloqo-Assistant"] = registered.json()["key"]
         name = registered.json()["name"]
         self.assistants[name] = client
         return name
@@ -206,12 +212,12 @@ class Seeder:
         """
         return self.people.get(who) or self.assistants[who]
 
-    def upload(self, who: str, topic_id: int, name: str, content: bytes) -> int:
-        """Upload a file into a Topic and return its id.
+    def upload(self, who: str, path: str, name: str, content: bytes) -> int:
+        """Upload a file into a Topic and return its number.
 
         Args:
             who: The uploader.
-            topic_id: The Topic.
+            path: The Topic's address under ``/api``.
             name: File name.
             content: The content.
 
@@ -219,10 +225,10 @@ class Seeder:
             httpx.HTTPStatusError: The server refused the file.
         """
         response = self.client(who).post(
-            f"/api/topics/{topic_id}/files", content=content, headers={"X-File-Name": name}
+            f"{path}/file", content=content, headers={"X-File-Name": name}
         )
         response.raise_for_status()
-        return response.json()["id"]
+        return response.json()["number"]
 
 
 @dataclass
@@ -252,55 +258,106 @@ class Say:
     hold: bool = False
 
 
+@dataclass
+class Opened:
+    """A Topic the seed opened.
+
+    Attributes:
+        path: Its address under ``/api``: ``/team/acme/task/3`` or ``/team/acme/topic/2``.
+        page: Its page in the web.
+        ages: Minutes ago of each of its Messages, in order.
+    """
+
+    path: str
+    page: str
+    ages: list[int]
+
+
 def topic(
-    seeder: Seeder, area_id: int, title: str, opening: Say, replies: list[Say], issue: str = ""
-) -> tuple[int, list[int]]:
-    """Open a Topic and play its Messages; return its id and the age of each Message.
+    seeder: Seeder,
+    team: str,
+    area: str,
+    title: str,
+    opening: Say,
+    replies: list[Say],
+    issue: str = "",
+    free: bool = True,
+) -> Opened:
+    """Open a Topic and play its Messages.
+
+    A ``stage`` line names a stage of the task's workflow in a task's Topic, with the rest after
+    ``:`` as its comment; in a free Topic it is a free-text line.
 
     Args:
         seeder: The clients.
-        area_id: The Area.
-        title: The question.
+        team: The Team's slug.
+        area: The Area's slug.
+        title: The question or the task.
         opening: The first Message.
         replies: The rest, in order.
-        issue: Tracker issue key.
+        issue: External tracker key.
+        free: A free Topic; otherwise a task's Topic for new work.
 
     Raises:
         httpx.HTTPStatusError: The server refused a Message.
     """
     created = seeder.client(opening.who).post(
-        f"/api/areas/{area_id}/topics",
-        json={"title": title, "body": opening.body, "to": opening.to, "issue": issue},
+        f"/api/team/{team}/topic",
+        json={
+            "area": area,
+            "title": title,
+            "body": opening.body,
+            "to": opening.to,
+            "issue": issue,
+            "free": free,
+        },
     )
     created.raise_for_status()
-    topic_id = created.json()["id"]
-    for number, say in enumerate(replies, start=2):
+    data = created.json()
+    kind = "topic" if data["kind"] == "free" else "task"
+    path = f"/api/team/{team}/{kind}/{data['number']}"
+    number = 1
+    ages = [opening.minutes_ago]
+    for say in replies:
         if say.hold:
-            seeder.client(say.who).post(f"/api/topics/{topic_id}/hold").raise_for_status()
+            seeder.client(say.who).post(f"{path}/hold").raise_for_status()
+            # Taking the Topic over leaves a line of its own.
+            number += 1
+            ages.append(say.minutes_ago)
         if say.kind == "stage":
-            stage = seeder.client(say.who).post(
-                f"/api/topics/{topic_id}/stage", json={"text": say.body}
-            )
-            stage.raise_for_status()
+            if free:
+                line = seeder.client(say.who).post(f"{path}/stage", json={"text": say.body})
+            else:
+                stage, _, comment = say.body.partition(":")
+                line = seeder.client(say.who).post(
+                    f"{path}/stage", json={"stage": stage.strip(), "comment": comment.strip()}
+                )
+            line.raise_for_status()
+            number += 1
+            ages.append(say.minutes_ago)
             continue
-        file_ids = [seeder.upload(say.who, topic_id, n, c) for n, c in say.files]
+        number += 1
+        ages.append(say.minutes_ago)
+        files = [seeder.upload(say.who, path, n, c) for n, c in say.files]
         response = seeder.client(say.who).post(
-            f"/api/topics/{topic_id}/messages",
+            f"{path}/message",
             json={
                 "number": number,
                 "body": say.body,
                 "to": say.to,
                 "kind": say.kind,
-                "file_ids": file_ids,
+                "files": files,
                 "as_human": say.as_human,
                 "reply_to": say.reply_to,
             },
         )
-        response.raise_for_status()
-    return topic_id, [opening.minutes_ago] + [say.minutes_ago for say in replies]
+        if response.is_error:
+            raise RuntimeError(f"{path} #{number}: {response.text}")
+    page = path.removeprefix("/api")
+    return Opened(path, page, ages)
 
 
-def planning_topic(s: Seeder, area_id: int, lead: str, dev: str) -> tuple[int, list[int]]:
+def planning_topic(s: Seeder, team: str, area: str, lead: str, dev: str) -> Opened:
     """A long working Topic: a developer's Assistant and the team lead's plan a feature.
 
     Made up, but shaped like the conversations Assistants hold: long status reports, numbered
@@ -308,7 +365,8 @@ def planning_topic(s: Seeder, area_id: int, lead: str, dev: str) -> tuple[int, l
 
     Args:
         s: The clients.
-        area_id: The Area.
+        team: The Team's slug.
+        area: The Area's slug.
         lead: The team lead's Assistant.
         dev: The developer's Assistant.
     """
@@ -325,7 +383,8 @@ def planning_topic(s: Seeder, area_id: int, lead: str, dev: str) -> tuple[int, l
     ]
     return topic(
         s,
-        area_id,
+        team,
+        area,
         "Which Acme Search task should I take next?",
         Say(
             dev,
@@ -709,30 +768,32 @@ def main() -> None:
     s = Seeder(args.server, args.origin)
     alice, bob, carol = s.person("alice"), s.person("bob"), s.person("carol")
     dave = s.person("dave")
-    team_id = alice.post("/api/teams", json={"name": "Acme"}).json()["id"]
+    team = alice.post("/api/team", json={"name": "Acme"}).json()["slug"]
     for person in (bob, carol, dave):
-        token = alice.post(f"/api/teams/{team_id}/invites").json()["url"].rsplit("/", 1)[1]
-        person.post(f"/api/invites/{token}/accept").raise_for_status()
+        token = alice.post(f"/api/team/{team}/invite").json()["url"].rsplit("/", 1)[1]
+        person.post(f"/api/invite/{token}/accept").raise_for_status()
+    alice.patch(f"/api/team/{team}", json={"tracker": True}).raise_for_status()
     billing = alice.post(
-        f"/api/teams/{team_id}/areas",
+        f"/api/team/{team}/area",
         json={"name": "Billing API", "description": "Contracts of the billing service"},
-    ).json()["id"]
+    ).json()["slug"]
     web = alice.post(
-        f"/api/teams/{team_id}/areas",
+        f"/api/team/{team}/area",
         json={"name": "Web app", "description": "The customer-facing web application"},
-    ).json()["id"]
-    alice_web = s.assistant("alice", "web-app", team_id)
-    bob_api = s.assistant("bob", "billing-api", team_id)
-    carol_mobile = s.assistant("carol", "mobile", team_id)
-    alice_lead = s.assistant("alice", "team-lead", team_id)
-    dave_api = s.assistant("dave", "search-api", team_id)
+    ).json()["slug"]
+    alice_web = s.assistant("alice", "web-app", team)
+    bob_api = s.assistant("bob", "billing-api", team)
+    carol_mobile = s.assistant("carol", "mobile", team)
+    alice_lead = s.assistant("alice", "team-lead", team)
+    dave_api = s.assistant("dave", "search-api", team)
     development = alice.post(
-        f"/api/teams/{team_id}/areas",
+        f"/api/team/{team}/area",
         json={"name": "Development", "description": "What to take next and how to build it"},
-    ).json()["id"]
+    ).json()["slug"]
 
-    dates, dates_ages = topic(
+    dates = topic(
         s,
+        team,
         billing,
         "Which date format will /v2/reports return?",
         Say(
@@ -810,13 +871,14 @@ def main() -> None:
                 12,
                 to="alice",
             ),
-            Say(alice_web, "Implementation: the CSV export fix, ACME-42", 8, kind="stage"),
+            Say(alice_web, "The CSV export fix goes as its own task", 8, kind="progress"),
         ],
         issue="ACME-41",
     )
 
-    settings_topic, settings_ages = topic(
+    settings = topic(
         s,
+        team,
         web,
         "Is the new settings page too long on mobile?",
         Say(
@@ -848,15 +910,16 @@ def main() -> None:
         ],
     )
 
-    planning, planning_ages = planning_topic(s, development, alice_lead, dave_api)
+    planning = planning_topic(s, team, development, alice_lead, dave_api)
     alice.patch(
-        f"/api/topics/{settings_topic}",
+        f"{settings.path}",
         json={
             "status": "closed",
             "outcome": "An anchor menu first (ACME-77); tabs only if needed.",
         },
     ).raise_for_status()
-    settings_ages.append(225)
+    settings.ages.append(225)
+    tasks = seed_tasks(s, team, billing, web, alice_web, bob_api, carol_mobile)
     for person, color in ((bob, (47, 143, 107)), (carol, (192, 87, 58))):
         face = png(
             320, 320, color, [(110, 90, 100, 120, (250, 240, 230)), (60, 230, 200, 90, color)]
@@ -872,12 +935,9 @@ def main() -> None:
         dbname=database.database,
         autocommit=True,
     ) as connection:
-        for topic_id, ages in (
-            (dates, dates_ages),
-            (settings_topic, settings_ages),
-            (planning, planning_ages),
-        ):
-            for number, minutes in enumerate(ages, start=1):
+        for opened in (dates, settings, planning, *tasks):
+            topic_id = topic_row(connection, opened.path)
+            for number, minutes in enumerate(opened.ages, start=1):
                 connection.execute(
                     "UPDATE messages SET created_at = now() - %s "
                     "WHERE topic_id = %s AND number = %s",
@@ -890,16 +950,149 @@ def main() -> None:
             )
             connection.execute(
                 "UPDATE topics SET closed_at = now() - %s WHERE id = %s AND closed_at IS NOT NULL",
-                (timedelta(minutes=ages[-1]), topic_id),
+                (timedelta(minutes=opened.ages[-1]), topic_id),
             )
             connection.execute(
                 "UPDATE topics SET created_at = now() - %s, updated_at = now() - %s WHERE id = %s",
-                (timedelta(minutes=ages[0]), timedelta(minutes=ages[-1]), topic_id),
+                (timedelta(minutes=opened.ages[0]), timedelta(minutes=opened.ages[-1]), topic_id),
             )
-    print(f"Team Acme: {args.origin}/teams/{team_id}")
-    for topic_id in (dates, settings_topic, planning):
-        print(f"Topic: {args.origin}/topics/{topic_id}")
+    print(f"Team Acme: {args.origin}/team/{team}")
+    for opened in (dates, settings, planning, *tasks):
+        print(f"{args.origin}{opened.page}")
     print("Log in by development login as alice, bob, carol or dave.")
+
+
+def topic_row(connection: psycopg.Connection, path: str) -> int:
+    """Return the database id of a seeded Topic by its address.
+
+    Args:
+        connection: The database.
+        path: ``/api/team/acme/task/3`` or ``/api/team/acme/topic/2``.
+
+    Raises:
+        LookupError: No such Topic.
+    """
+    _, _, _, team, kind, number = path.split("/")
+    query = (
+        "SELECT topics.id FROM topics JOIN tasks ON tasks.id = topics.task_id "
+        "JOIN teams ON teams.id = tasks.team_id WHERE teams.slug = %s AND tasks.number = %s"
+        if kind == "task"
+        else "SELECT topics.id FROM topics JOIN teams ON teams.id = topics.team_id "
+        "WHERE teams.slug = %s AND topics.number = %s"
+    )
+    row = connection.execute(query, (team, int(number))).fetchone()
+    if row is None:
+        raise LookupError(path)
+    return row[0]
+
+
+def seed_tasks(
+    s: Seeder, team: str, billing: str, web: str, alice_web: str, bob_api: str, carol: str
+) -> list[Opened]:
+    """Plan a promise with its tasks and work some of them through their stages.
+
+    Args:
+        s: The clients.
+        team: The Team's slug.
+        billing: The billing Area's slug.
+        web: The web Area's slug.
+        alice_web: Alice's Assistant in the web app.
+        bob_api: Bob's Assistant in the billing service.
+        carol: Carol's Assistant in the mobile app.
+
+    Raises:
+        httpx.HTTPStatusError: The server refused a step.
+    """
+    alice = s.people["alice"]
+
+    def plan(area: str, title: str, **more: object) -> int:
+        """Put a task in the backlog in the web, as the lead plans.
+
+        Args:
+            area: The Area's slug.
+            title: Its title.
+            **more: More fields.
+        """
+        created = alice.post(f"/api/team/{team}/task", json={"area": area, "title": title, **more})
+        created.raise_for_status()
+        return created.json()["number"]
+
+    promise = plan(
+        billing,
+        "Reports v2 by December",
+        type="promise",
+        description="Customers get `/v2/reports` with ISO dates and a CSV export that keeps them.",
+        links=["ACME-40"],
+    )
+    csv = plan(
+        web,
+        "CSV export keeps ISO dates",
+        parent=promise,
+        assignee="alice",
+        description="`exportCsv` cuts `created_at` with `slice(0, 10)`; read it as a date.",
+        links=["ACME-42"],
+    )
+    contract = plan(billing, "Switch /v2/reports to ISO 8601", parent=promise, assignee="bob")
+    plan(billing, "Document the date format in the API reference", parent=promise)
+    plan(web, "Anchor menu on the settings page", assignee="carol", links=["ACME-77"])
+    plan(web, "Split settings into tabs if people still get lost")
+
+    def take(who: str, number: int, body: str) -> str:
+        """Take a planned task into work by an Assistant.
+
+        Args:
+            who: The Assistant.
+            number: The task's number.
+            body: The first message of its Topic.
+        """
+        path = f"/api/team/{team}/task/{number}"
+        s.client(who).post(f"{path}/take", json={"body": body}).raise_for_status()
+        return path
+
+    def move(who: str, path: str, stage: str, **more: object) -> None:
+        """Move a task to a stage.
+
+        Args:
+            who: The assignee's Assistant.
+            path: The task's address.
+            stage: The stage.
+            **more: Skips and a comment.
+        """
+        s.client(who).post(f"{path}/stage", json={"stage": stage, **more}).raise_for_status()
+
+    csv_path = take(alice_web, csv, "Taking the CSV export fix; dates come as ISO 8601 now.")
+    move(alice_web, csv_path, "Design")
+    move(
+        alice_web,
+        csv_path,
+        "Code",
+        skip={"Documentation": "no documentation changes", "Agreement": "no forks"},
+        comment="web-app",
+    )
+    contract_path = take(bob_api, contract, "Switching the serializer after ACME-42.")
+    move(bob_api, contract_path, "Design")
+    s.client(bob_api).post(
+        f"{contract_path}/wait", json={"what": "a test key from the payments provider"}
+    ).raise_for_status()
+    done = topic(
+        s,
+        team,
+        web,
+        "Fix the date picker on Safari",
+        Say(carol, "Taking the Safari date picker bug.", 600),
+        [Say(carol, "Code: mobile web view", 500, kind="stage")],
+        issue="ACME-38",
+        free=False,
+    )
+    s.client(carol).post(
+        f"{done.path}/close", json={"outcome": "Fixed in web!88, verified on Safari 18."}
+    ).raise_for_status()
+    done.ages.append(400)
+    return [
+        Opened(csv_path, csv_path.removeprefix("/api"), [90, 80, 70]),
+        Opened(contract_path, contract_path.removeprefix("/api"), [60, 50, 40]),
+        done,
+    ]
 
 
 if __name__ == "__main__":

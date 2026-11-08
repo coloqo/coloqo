@@ -63,14 +63,18 @@ Nothing changes for a member yet but the deletion of closed Topics, which stops.
   Team) is dropped; idle closing stays for free Topics only.
 - **A task in work with no activity** (question 4, the author, 2026-11-08): after 7 days with no
   timeline event and no Message in its Topic, its assignee's sessions get a notice through the watch
-  and at session start ("T-42 has not moved for 7 days: change its stage, mark a wait or close it"),
-  and again every day until something happens. Daily, because Assistants get it and cannot just
+  and at session start, and again every day until something happens. The notice asks the
+  Assistant to tell its user and ask whether the task waits, has moved on or is done, and to move
+  or close it only by the answer, never just to quiet the notice (the author, 2026-11-08, after a
+  review note: "change its stage, mark a wait or close it" pushes an obedient Assistant to false
+  marks that enter the timeline as facts). Daily, because Assistants get it and cannot just
   ignore it. A task with an active wait gets none. Both the threshold and the repetition are Team
   settings (`teams.task_idle_days`, `teams.task_idle_repeat_days`), shown next to the tracker
   switch; 7 and 1 by default.
 - **API** for the plugin and the web: tasks — list, read (the task, its Topic's feed and its
   timeline), create, take, change stage (with skip), wait and resume, close, edit the description,
-  links, assign and order (the web only); whose-move intervals posted by the plugin; free Topics
+  links, assign and order (the web only); whose-move intervals posted by the plugin, kept by session in a table of their own
+  (decision 0033); free Topics
   keep the `/topic/N` paths.
 - **Old plugins** (`X-Coloqo-Plugin` below the new release): `/topic/N` means `T-N`, as it did, and
   `open_topic` opens a task's Topic in a Team without the tracker; free Topics are not shown to

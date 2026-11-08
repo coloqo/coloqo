@@ -6,7 +6,8 @@ from datetime import timedelta
 import pytest
 
 from coloqo_server.security import now
-from tests.conftest import Plugin, Setup
+from coloqo_server.settings import Settings
+from tests.conftest import Plugin, Setup, _connect
 
 NEW = "0.7.0"
 """A plugin release that knows tasks and free Topics."""
@@ -409,47 +410,50 @@ def test_a_promise_holds_promises_or_tasks(setup: Setup) -> None:
     assert "only subtasks" in promise_under_task["detail"]
 
 
-def test_moves_go_to_the_tasks_the_session_holds(setup: Setup, new: tuple[Plugin, Plugin]) -> None:
-    """Move intervals land on the unfinished tasks whose Topics the session holds (0033).
+def test_moves_are_kept_by_session_once(
+    setup: Setup, new: tuple[Plugin, Plugin], settings: Settings
+) -> None:
+    """Move intervals are kept as the raw fact of the session, never copied onto its tasks; a
+    repeated, reversed or overlong one is dropped (decision 0033).
 
     Args:
         setup: The Team.
         new: Assistants of the new plugin.
+        settings: Instance settings.
     """
     alice, _ = new
     held = _task(setup, alice)["number"]
-    finished = _task(setup, alice, "Done one")["number"]
-    alice.client.post(f"{_path(setup, finished)}/close", json={"outcome": "done"})
+    _task(setup, alice, "Another held one")
     start = now() - timedelta(minutes=30)
+
+    def at(minutes: float) -> str:
+        """Return a moment some minutes after the start.
+
+        Args:
+            minutes: Offset.
+        """
+        return (start + timedelta(minutes=minutes)).isoformat()
+
     intervals = [
-        {
-            "move": "assistant",
-            "start": start.isoformat(),
-            "end": (start + timedelta(minutes=5)).isoformat(),
-        },
-        {
-            "move": "human",
-            "start": (start + timedelta(minutes=5)).isoformat(),
-            "end": (start + timedelta(minutes=20)).isoformat(),
-        },
-        {
-            "move": "human",
-            "start": start.isoformat(),
-            "end": (start - timedelta(minutes=1)).isoformat(),
-        },
-        {
-            "move": "human",
-            "start": (start - timedelta(hours=13)).isoformat(),
-            "end": start.isoformat(),
-        },
+        {"move": "assistant", "start": at(0), "end": at(5)},
+        {"move": "human", "start": at(5), "end": at(20)},
+        {"move": "human", "start": at(0), "end": at(-1)},
+        {"move": "human", "start": at(-13 * 60), "end": at(0)},
     ]
 
-    recorded = alice.client.post("/api/moves", json={"intervals": intervals}).json()
+    first = alice.client.post("/api/moves", json={"intervals": intervals}).json()
+    again = alice.client.post("/api/moves", json={"intervals": intervals[:2]}).json()
     by_human = setup.alice.post("/api/moves", json={"intervals": intervals})
     timeline = setup.alice.get(_path(setup, held)).json()["timeline"]
+    with _connect(settings.database_url) as connection:
+        kept = connection.execute(
+            "SELECT moves.move, assistants.key FROM moves "
+            "JOIN assistants ON assistants.id = moves.assistant_id ORDER BY started_at"
+        ).fetchall()
 
-    assert recorded == {"recorded": 2, "tasks": [f"T-{held}"]}
+    assert (first, again) == ({"recorded": 2}, {"recorded": 0})
     assert by_human.status_code == 403
+    assert kept == [("assistant", alice.key), ("human", alice.key)]
     assert "move" not in [e["kind"] for e in timeline]
 
 

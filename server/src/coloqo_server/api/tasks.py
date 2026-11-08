@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coloqo_server.api.teams import find_area, team_for
@@ -34,6 +35,7 @@ from coloqo_server.models import (
     Category,
     Member,
     MessageKind,
+    Move,
     Stage,
     StageKind,
     Task,
@@ -150,7 +152,7 @@ class TaskDetail(TaskOut):
 
     Attributes:
         description: Markdown.
-        timeline: Its timeline, oldest first; move intervals are left out.
+        timeline: Its timeline, oldest first.
         topic: Its Topic with some Messages, if it has one.
     """
 
@@ -340,12 +342,10 @@ class MovesOut(BaseModel):
     """What was recorded.
 
     Attributes:
-        recorded: Intervals written to timelines.
-        tasks: The tasks they went to.
+        recorded: Intervals kept; a repeated or a malformed one is not.
     """
 
     recorded: int
-    tasks: list[str]
 
 
 async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
@@ -424,7 +424,7 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
 
 
 async def timeline(db: AsyncSession, task: Task) -> list[TimelineOut]:
-    """Return a task's timeline, oldest first, without the move intervals.
+    """Return a task's timeline, oldest first.
 
     Args:
         db: Database session.
@@ -433,7 +433,7 @@ async def timeline(db: AsyncSession, task: Task) -> list[TimelineOut]:
     events = list(
         await db.scalars(
             select(TaskEvent)
-            .where(TaskEvent.task_id == task.id, TaskEvent.kind != "move")
+            .where(TaskEvent.task_id == task.id)
             .order_by(TaskEvent.created_at, TaskEvent.id)
         )
     )
@@ -1458,12 +1458,12 @@ async def order_task(
 
 @router.post("/moves")
 async def post_moves(body: MovesIn, actor: ActorDep, db: DB) -> MovesOut:
-    """Record whose move it was in the calling session, on the tasks whose Topics it holds.
+    """Keep the intervals of whose move it was in the calling session (decision 0033).
 
     The plugin's hooks mark the human's prompts and the Assistant's stops; the session's watch
-    turns them into intervals and posts them here (decision 0033). An interval goes to every
-    unfinished task whose Topic the session holds; an interval longer than 12 hours, or ending
-    before it starts, is dropped.
+    turns them into intervals and posts them here. They are kept as the raw fact, by session:
+    which task the time belongs to is decided when the measurement reads it. An interval longer
+    than 12 hours, ending before it starts, or posted twice is dropped.
 
     Args:
         body: The intervals.
@@ -1475,26 +1475,22 @@ async def post_moves(body: MovesIn, actor: ActorDep, db: DB) -> MovesOut:
     """
     if actor.assistant is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Assistant's session has moves")
-    tasks = list(
-        await db.scalars(
-            select(Task)
-            .join(Topic, Topic.task_id == Task.id)
-            .where(Topic.holder_assistant_id == actor.assistant.id, Task.finished_at.is_(None))
-        )
-    )
+    rows = [
+        {
+            "assistant_id": actor.assistant.id,
+            "user_id": actor.user.id,
+            "move": interval.move,
+            "started_at": interval.start,
+            "ended_at": interval.end,
+        }
+        for interval in body.intervals
+        if timedelta(0) < interval.end - interval.start <= MOVE_MAX
+    ]
     recorded = 0
-    for interval in body.intervals:
-        if not timedelta(0) < interval.end - interval.start <= MOVE_MAX:
-            continue
-        for task in tasks:
-            record(
-                db,
-                task,
-                "move",
-                actor,
-                {"move": interval.move, "until": interval.end.isoformat()},
-                interval.start,
-            )
-            recorded += 1
+    if rows:
+        result = await db.execute(
+            insert(Move).values(rows).on_conflict_do_nothing().returning(Move.id)
+        )
+        recorded = len(result.all())
     await db.commit()
-    return MovesOut(recorded=recorded, tasks=[ref(t.number) for t in tasks])
+    return MovesOut(recorded=recorded)

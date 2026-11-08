@@ -810,12 +810,12 @@ export interface paths {
         put?: never;
         /**
          * Post Moves
-         * @description Record whose move it was in the calling session, on the tasks whose Topics it holds.
+         * @description Keep the intervals of whose move it was in the calling session (decision 0033).
          *
          *     The plugin's hooks mark the human's prompts and the Assistant's stops; the session's watch
-         *     turns them into intervals and posts them here (decision 0033). An interval goes to every
-         *     unfinished task whose Topic the session holds; an interval longer than 12 hours, or ending
-         *     before it starts, is dropped.
+         *     turns them into intervals and posts them here. They are kept as the raw fact, by session:
+         *     which task the time belongs to is decided when the measurement reads it. An interval longer
+         *     than 12 hours, ending before it starts, or posted twice is dropped.
          *
          *     Args:
          *         body: The intervals.
@@ -2607,14 +2607,11 @@ export interface components {
          * @description What was recorded.
          *
          *     Attributes:
-         *         recorded: Intervals written to timelines.
-         *         tasks: The tasks they went to.
+         *         recorded: Intervals kept; a repeated or a malformed one is not.
          */
         MovesOut: {
             /** Recorded */
             recorded: number;
-            /** Tasks */
-            tasks: string[];
         };
         /**
          * OrderIn
@@ -2759,7 +2756,7 @@ export interface components {
          *
          *     Attributes:
          *         description: Markdown.
-         *         timeline: Its timeline, oldest first; move intervals are left out.
+         *         timeline: Its timeline, oldest first.
          *         topic: Its Topic with some Messages, if it has one.
          */
         TaskDetail: {

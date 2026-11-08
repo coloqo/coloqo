@@ -24,8 +24,8 @@ the bad sense. Who sees which figures is decided inside this frame.
 
 - **A task's timeline is one table of events**: a kind, its time, its author (an Assistant, a Worker
   or a human in the web, and the human behind it) and its data. Creation with its source, changes of
-  stage, skipped stages, assignments, waits, estimates, edits of the description and intervals of
-  whose move are kinds of it; a new kind needs no migration.
+  stage, skipped stages, assignments, waits, estimates and edits of the description are kinds of it;
+  a new kind needs no migration. Whose move it was is kept apart, by session (below).
 - **The timeline lives on the task** and does not depend on the conversation; the task's Topic shows
   its events as service lines in the feed.
 - **Data that cannot be rebuilt afterwards is collected from day one**; the features that read it,
@@ -51,7 +51,13 @@ Over the stage, a task has a move, with four values:
   task's Topic.
 - **A wait is marked by the Assistant**: "waiting: whom or what" and "resumed", with a start, an end
   and a reason.
-- **Intervals are kept**, not every prompt.
+- **Intervals are kept**, not every prompt, **as the raw fact of the session, not of a task**
+  (refined 2026-11-08, the author, after a review note): a session holding several tasks would
+  otherwise count the same hour in each of them, and the tasks left in analysis by the migration
+  would gather time from the first day. Which task an interval belongs to is decided when the
+  measurement reads it, by a rule set with the measurement; a wrong rule can then be changed
+  without the data being wrong. Writing an interval into the one task the session last acted on
+  was weighed and dropped: it fixes the rule before the measurement is designed.
 - **Recorded from day one**, before any measurement: a person sees their own intervals, and when the
   measurement comes the Team has months of history. Recording only once a Team turns the
   measurement on was weighed (less data about people, decision 0014) and dropped.

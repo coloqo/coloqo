@@ -50,9 +50,8 @@ def record(
         created_at=moment,
     )
     db.add(event)
-    if kind != "move":
-        task.updated_at = moment
-        task.idle_noticed_at = None
+    task.updated_at = moment
+    task.idle_noticed_at = None
     return event
 
 

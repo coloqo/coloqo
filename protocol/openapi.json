@@ -1134,23 +1134,15 @@
         "type": "object"
       },
       "MovesOut": {
-        "description": "What was recorded.\n\nAttributes:\n    recorded: Intervals written to timelines.\n    tasks: The tasks they went to.",
+        "description": "What was recorded.\n\nAttributes:\n    recorded: Intervals kept; a repeated or a malformed one is not.",
         "properties": {
           "recorded": {
             "title": "Recorded",
             "type": "integer"
-          },
-          "tasks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tasks",
-            "type": "array"
           }
         },
         "required": [
-          "recorded",
-          "tasks"
+          "recorded"
         ],
         "title": "MovesOut",
         "type": "object"
@@ -1367,7 +1359,7 @@
         "type": "object"
       },
       "TaskDetail": {
-        "description": "A task with its description, timeline and Topic.\n\nAttributes:\n    description: Markdown.\n    timeline: Its timeline, oldest first; move intervals are left out.\n    topic: Its Topic with some Messages, if it has one.",
+        "description": "A task with its description, timeline and Topic.\n\nAttributes:\n    description: Markdown.\n    timeline: Its timeline, oldest first.\n    topic: Its Topic with some Messages, if it has one.",
         "properties": {
           "area": {
             "title": "Area",
@@ -5336,7 +5328,7 @@
     },
     "/api/moves": {
       "post": {
-        "description": "Record whose move it was in the calling session, on the tasks whose Topics it holds.\n\nThe plugin's hooks mark the human's prompts and the Assistant's stops; the session's watch\nturns them into intervals and posts them here (decision 0033). An interval goes to every\nunfinished task whose Topic the session holds; an interval longer than 12 hours, or ending\nbefore it starts, is dropped.\n\nArgs:\n    body: The intervals.\n    actor: The session's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 without an Assistant.",
+        "description": "Keep the intervals of whose move it was in the calling session (decision 0033).\n\nThe plugin's hooks mark the human's prompts and the Assistant's stops; the session's watch\nturns them into intervals and posts them here. They are kept as the raw fact, by session:\nwhich task the time belongs to is decided when the measurement reads it. An interval longer\nthan 12 hours, ending before it starts, or posted twice is dropped.\n\nArgs:\n    body: The intervals.\n    actor: The session's Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 without an Assistant.",
         "operationId": "post_moves_api_moves_post",
         "parameters": [
           {
