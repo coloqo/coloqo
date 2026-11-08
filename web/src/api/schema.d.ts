@@ -256,7 +256,7 @@ export interface paths {
          * @description Tell a starting session who it is in Coloqo and how to work; the server keeps the rules.
          *
          *     A rule changes here, for every project and Team, without a plugin release. A plugin older
-         *     than 0.5.0 gets the former shape and is told to update (decision 0025).
+         *     than the tracker gets the rules it knows, and is told to update (decision 0027).
          *
          *     Args:
          *         request: The incoming request.
@@ -484,7 +484,6 @@ export interface paths {
          *     whole list.
          *
          *     Args:
-         *         request: The incoming request.
          *         actor: The caller.
          *         db: Database session.
          *
@@ -800,6 +799,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Moves
+         * @description Keep the intervals of whose move it was in the calling session (decision 0033).
+         *
+         *     The plugin's hooks mark the human's prompts and the Assistant's stops; the session's watch
+         *     turns them into intervals and posts them here. They are kept as the raw fact, by session:
+         *     which task the time belongs to is decided when the measurement reads it. An interval longer
+         *     than 12 hours, ending before it starts, or posted twice is dropped.
+         *
+         *     Args:
+         *         body: The intervals.
+         *         actor: The session's Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 403 without an Assistant.
+         */
+        post: operations["post_moves_api_moves_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/project": {
         parameters: {
             query?: never;
@@ -922,7 +954,7 @@ export interface paths {
         head?: never;
         /**
          * Update Team
-         * @description Change a Team's name, address or turn limit.
+         * @description Change a Team's name, address, turn limit or tracker settings.
          *
          *     A changed slug is kept as a former one, so links to the Team keep working; going back to a
          *     former slug takes it out of the former ones.
@@ -1077,6 +1109,540 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/team/{team}/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tasks
+         * @description List a Team's tasks, highest first within their order.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         actor: The caller.
+         *         db: Database session.
+         *         area: Only this Area, by slug.
+         *         category: Only to do, in progress or finished.
+         *         assignee: Only those assigned to this pseudonym; ``-`` for unassigned.
+         *         type_filter: Only tasks or only promises.
+         *         limit: At most this many.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team or there is no such Area.
+         */
+        get: operations["list_tasks_api_team__team__task_get"];
+        put?: never;
+        /**
+         * Create Task
+         * @description Put a task in the backlog: planning, so the tracker must be on (decision 0032).
+         *
+         *     Its source is the task within which it is created: the one given, or the one whose Topic
+         *     the calling Assistant holds (decision 0031).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         body: The task.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such Team, Area, parent or source for the caller;
+         *             403 when the caller may not write there; 409 ``no_tracker`` without the tracker;
+         *             422 for an unknown assignee or a parent that cannot hold it.
+         */
+        post: operations["create_task_api_team__team__task_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Task
+         * @description Return a task with its description, timeline and Topic.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         actor: The caller.
+         *         db: Database session.
+         *         limit: How many of its Topic's Messages.
+         *         from_unread: Start at the first unread Message when more than ``limit`` are unread.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task in the caller's Teams.
+         */
+        get: operations["read_task_api_team__team__task__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit Task
+         * @description Edit a task's title, description or Area; the timeline keeps every description.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: What changes.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task or Area; 403 when the caller may not
+         *             write there.
+         */
+        patch: operations["edit_task_api_team__team__task__number__patch"];
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Task
+         * @description Assign a task to a human of the Team, or unassign it: planning (decision 0031).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The assignee's pseudonym, or ``None``.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 when the caller may not write there;
+         *             409 ``no_tracker`` without the tracker, ``finished`` for a finished task; 422 for
+         *             an unknown pseudonym.
+         */
+        post: operations["assign_task_api_team__team__task__number__assign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close
+         * @description Finish a task as done or cancelled, with an outcome; its Topic closes (decision 0032).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The outcome, and whether it is cancelled.
+         *         actor: The assignee's Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 for a human or when the caller may
+         *             not write there; 409 ``not_assignee`` for another Assistant, ``finished`` when it is
+         *             finished already; 422 without an outcome.
+         */
+        post: operations["close_api_team__team__task__number__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Task File
+         * @description Upload a file into a task's Topic; the request body is the content.
+         *
+         *     Args:
+         *         request: The incoming request with the content as its body.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         actor: The caller.
+         *         db: Database session.
+         *         x_file_name: File name, percent-encoded.
+         *         content_type: Media type of the content.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task or it has no Topic yet; 403 when the
+         *             caller may not write there (decision 0020); 422 for an empty name; 413 when the
+         *             file or the Team's storage is over the limit.
+         *         OSError: The file cannot be written.
+         */
+        post: operations["upload_task_file_api_team__team__task__number__file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hold Task Topic
+         * @description Make the calling Assistant the holder of a task's Topic (decision 0024).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         actor: The Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task or it has no Topic yet; 403 without an
+         *             Assistant, or when it may not write there (decision 0020).
+         */
+        post: operations["hold_task_topic_api_team__team__task__number__hold_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Task
+         * @description Link a task to an external issue; no sync (decision 0031).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The issue's key and address.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 when the caller may not write there.
+         */
+        post: operations["link_task_api_team__team__task__number__link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Task Message
+         * @description Write a Message into a task's Topic with the number the writer believes is next (0007).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The Message.
+         *         actor: The writer.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task or it has no Topic yet; 403 when the
+         *             caller may not write there (decision 0020); 409 ``number_taken`` with the unread
+         *             Messages when the number is not next, or ``turn_limit`` when the Topic waits for a
+         *             human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is not an
+         *             earlier Message of the Topic.
+         */
+        post: operations["post_task_message_api_team__team__task__number__message_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Order Task
+         * @description Place a task right above or below another: planning by a human (decision 0032).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The task it goes above or below.
+         *         actor: A human of the Team in the web.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 for a plugin; 409 ``no_tracker``
+         *             without the tracker; 422 without exactly one of ``before`` and ``after``.
+         */
+        post: operations["order_task_api_team__team__task__number__order_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Task Up To
+         * @description Record how far the caller has read a task's Topic.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: Number of the newest Message read.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task or it has no Topic yet; 403 for a plugin
+         *             request without an Assistant.
+         */
+        post: operations["read_task_up_to_api_team__team__task__number__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Task
+         * @description Mark that a task's external wait is over.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         actor: The assignee's Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 for a human or when the caller may
+         *             not write there; 409 ``not_assignee`` for another Assistant, ``finished`` for a
+         *             finished task.
+         */
+        post: operations["resume_task_api_team__team__task__number__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Stage
+         * @description Move a task to another stage of work, maybe passing some at once (decision 0032).
+         *
+         *     Moves are free within work, back ones included; a finished task is final, and finishing
+         *     one goes through ``close``.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The stage, the stages skipped with reasons, and a comment.
+         *         actor: The assignee's Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 for a human or when the caller may
+         *             not write there; 409 ``not_assignee`` for another Assistant, ``finished`` for a
+         *             finished task; 422 for an unknown stage, a finished one, or a skipped stage that is
+         *             not in the workflow.
+         */
+        post: operations["change_stage_api_team__team__task__number__stage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Task
+         * @description Take a task into work: assigned, moved to work, its Topic opened and held (0032).
+         *
+         *     A task in the backlog moves to the first stage of work. A task with no assignee is assigned
+         *     to the caller's human; one assigned to another human only with ``reassign``.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: The first Message and whether to reassign.
+         *         actor: The Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 without an Assistant, or when it may
+         *             not write there; 409 ``finished`` for a finished task, ``assigned`` for one assigned
+         *             to another human without ``reassign``.
+         */
+        post: operations["take_task_api_team__team__task__number__take_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/topic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Task Topic
+         * @description Return a task's Topic with some of its Messages, as ``/topic/{number}`` does a free one.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         actor: The caller.
+         *         db: Database session.
+         *         after: Only Messages with a greater number, the first ``limit`` of them.
+         *         before: Only Messages with a smaller number, the last ``limit`` of them.
+         *         limit: How many Messages.
+         *         from_unread: Start at the first unread Message when more than ``limit`` are unread.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task in the caller's Teams, or it has no Topic
+         *             yet; 403 for a plugin request without an Assistant.
+         */
+        get: operations["read_task_topic_api_team__team__task__number__topic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/task/{number}/wait": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wait Task
+         * @description Mark that a task waits for something outside the Team; its stage stays (decision 0033).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The task's number.
+         *         body: Whom or what it waits for.
+         *         actor: The assignee's Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such task; 403 for a human or when the caller may
+         *             not write there; 409 ``not_assignee`` for another Assistant, ``finished`` for a
+         *             finished task.
+         */
+        post: operations["wait_task_api_team__team__task__number__wait_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/team/{team}/topic": {
         parameters: {
             query?: never;
@@ -1095,6 +1661,7 @@ export interface paths {
          *         db: Database session.
          *         area: Only this Area, by slug.
          *         status_filter: Only open or only closed.
+         *         kind: Only tasks' Topics, or only free ones.
          *         limit: At most this many.
          *
          *     Raises:
@@ -1106,6 +1673,8 @@ export interface paths {
         /**
          * Create Topic
          * @description Open a Topic in an Area with its first Message; the calling Assistant holds it.
+         *
+         *     A Topic for a new task unless ``free`` (decision 0031).
          *
          *     Args:
          *         request: The incoming request.
@@ -1134,15 +1703,16 @@ export interface paths {
         };
         /**
          * Read Topic
-         * @description Return a Topic with some of its Messages (decisions 0007, 0026).
+         * @description Return a free Topic with some of its Messages (decisions 0007, 0026, 0031).
          *
          *     Without ``after`` or ``before``: its last ``limit`` Messages, or with ``from_unread`` from
-         *     the caller's first unread one, at most 500.
+         *     the caller's first unread one, at most 500. The free number of a Topic that became a task's
+         *     gives that task's Topic; to a plugin older than the tracker, the number is a task's.
          *
          *     Args:
          *         request: The incoming request.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number.
          *         actor: The caller.
          *         db: Database session.
          *         after: Only Messages with a greater number, the first ``limit`` of them.
@@ -1162,21 +1732,24 @@ export interface paths {
         head?: never;
         /**
          * Settle Topic
-         * @description Close a Topic with an outcome, or reopen it (decision 0021).
+         * @description Close a Topic with an outcome, or reopen a free one (decisions 0021, 0032).
+         *
+         *     Closing a task's Topic, which a plugin older than the tracker does here, closes its task
+         *     as done.
          *
          *     Args:
          *         request: The incoming request.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number; a task's, to a plugin older than the tracker.
          *         body: New state and outcome.
          *         actor: The holding Assistant or a human of the Team.
          *         db: Database session.
          *
          *     Raises:
          *         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the
-         *             caller may not write there or is an Assistant reopening; 409 ``not_holder`` for an
-         *             Assistant that does not hold it; 422 for an Assistant closing without an outcome;
-         *             410 for a deleted Topic.
+         *             caller may not write there, is an Assistant reopening, or a human closing a task's
+         *             Topic; 409 ``not_holder`` for an Assistant that does not hold it; 422 for an
+         *             Assistant closing without an outcome; 410 for a deleted Topic.
          */
         patch: operations["settle_topic_api_team__team__topic__number__patch"];
         trace?: never;
@@ -1192,14 +1765,14 @@ export interface paths {
         put?: never;
         /**
          * Upload File
-         * @description Upload a file into a Topic; the request body is the content.
+         * @description Upload a file into a free Topic; the request body is the content.
          *
          *     Attach it to a Message by its number.
          *
          *     Args:
          *         request: The incoming request with the content as its body.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number; a task's, to a plugin older than the tracker.
          *         actor: The caller.
          *         db: Database session.
          *         x_file_name: File name, percent-encoded.
@@ -1229,12 +1802,12 @@ export interface paths {
         put?: never;
         /**
          * Hold Topic
-         * @description Make the calling Assistant the Topic's holder; taking over shows in the feed (0024).
+         * @description Make the calling Assistant a free Topic's holder; taking over shows in the feed (0024).
          *
          *     Args:
          *         request: The incoming request.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number; a task's, to a plugin older than the tracker.
          *         actor: The Assistant.
          *         db: Database session.
          *
@@ -1260,12 +1833,12 @@ export interface paths {
         put?: never;
         /**
          * Post Message
-         * @description Write a Message with the number the writer believes is next (decision 0007).
+         * @description Write a Message into a free Topic with the number the writer believes is next (0007).
          *
          *     Args:
          *         request: The incoming request.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number; a task's, to a plugin older than the tracker.
          *         body: The Message.
          *         actor: The writer.
          *         db: Database session.
@@ -1295,12 +1868,11 @@ export interface paths {
         put?: never;
         /**
          * Read Up To
-         * @description Record how far the caller has read a Topic; it leaves the Inbox when read through.
+         * @description Record how far the caller has read a free Topic; it leaves the Inbox when read through.
          *
          *     Args:
-         *         request: The incoming request.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number; a task's, to a plugin older than the tracker.
          *         body: Number of the newest Message read.
          *         actor: The caller.
          *         db: Database session.
@@ -1330,12 +1902,14 @@ export interface paths {
          * @description Note that the holder's work turned to a different kind of activity (decision 0021).
          *
          *     Takes no number: a stage answers nothing, so it needs no check for unread Messages. It is
-         *     not a turn; it takes the Topic out of the archive, since work goes on.
+         *     not a turn; it takes a free Topic out of the archive, since work goes on. A task's stage
+         *     changes with ``/task/{number}/stage`` (decision 0032); a plugin older than the tracker
+         *     still notes its free-text stages here.
          *
          *     Args:
          *         request: The incoming request.
          *         team: The Team's slug.
-         *         number: The Topic's number.
+         *         number: The free Topic's number; a task's, to a plugin older than the tracker.
          *         body: The stage.
          *         actor: The holding Assistant.
          *         db: Database session.
@@ -1346,6 +1920,34 @@ export interface paths {
          *             deleted Topic.
          */
         post: operations["post_stage_api_team__team__topic__number__stage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/workflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workflows
+         * @description Return the Team's workflows with their stages, and which Areas use each.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team.
+         */
+        get: operations["list_workflows_api_team__team__workflow_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1412,6 +2014,17 @@ export interface components {
             name?: string | null;
             /** Slug */
             slug?: string | null;
+        };
+        /**
+         * AssignIn
+         * @description Assigning a task: planning (decision 0031).
+         *
+         *     Attributes:
+         *         assignee: Pseudonym of a human of the Team; ``None`` to unassign.
+         */
+        AssignIn: {
+            /** Assignee */
+            assignee?: string | null;
         };
         /**
          * AssistantIn
@@ -1516,6 +2129,34 @@ export interface components {
             team_name: string | null;
             /** Text */
             text: string;
+        };
+        /**
+         * Category
+         * @description The fixed category of a stage's kind (decision 0032).
+         *
+         *     Attributes:
+         *         ToDo: Work has not started.
+         *         InProgress: Work goes on; a person's time on a task starts with its first move here.
+         *         Finished: Final: a finished task is never reopened.
+         * @enum {string}
+         */
+        Category: "to_do" | "in_progress" | "finished";
+        /**
+         * CloseIn
+         * @description Closing a task.
+         *
+         *     Attributes:
+         *         outcome: A line or two, with the MR or issue links.
+         *         cancelled: Closed without a result.
+         */
+        CloseIn: {
+            /**
+             * Cancelled
+             * @default false
+             */
+            cancelled?: boolean;
+            /** Outcome */
+            outcome: string;
         };
         /**
          * DevLoginIn
@@ -1723,21 +2364,21 @@ export interface components {
             valid: boolean;
         };
         /**
-         * LinkOut
-         * @description A one-time link where the person chooses the project's Team.
+         * LinkIn
+         * @description A link to an external issue.
          *
          *     Attributes:
-         *         url: The page to open.
-         *         expires_at: After this it does not work.
+         *         key: The issue's key or address.
+         *         url: Its address.
          */
-        LinkOut: {
+        LinkIn: {
+            /** Key */
+            key: string;
             /**
-             * Expires At
-             * Format: date-time
+             * Url
+             * @default
              */
-            expires_at: string;
-            /** Url */
-            url: string;
+            url?: string;
         };
         /**
          * LinkPage
@@ -1924,6 +2565,69 @@ export interface components {
             to_assistant: string | null;
         };
         /**
+         * MoveIn
+         * @description An interval of whose move it was, between an Assistant and its human (decision 0033).
+         *
+         *     Attributes:
+         *         move: ``assistant`` from a human's prompt to the Assistant's stop, ``human`` from the
+         *             stop to the next prompt.
+         *         start: When it began.
+         *         end: When it ended.
+         */
+        MoveIn: {
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Move
+             * @enum {string}
+             */
+            move: "assistant" | "human";
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /**
+         * MovesIn
+         * @description Move intervals of the calling session.
+         *
+         *     Attributes:
+         *         intervals: The intervals, any order.
+         */
+        MovesIn: {
+            /** Intervals */
+            intervals: components["schemas"]["MoveIn"][];
+        };
+        /**
+         * MovesOut
+         * @description What was recorded.
+         *
+         *     Attributes:
+         *         recorded: Intervals kept; a repeated or a malformed one is not.
+         */
+        MovesOut: {
+            /** Recorded */
+            recorded: number;
+        };
+        /**
+         * OrderIn
+         * @description Placing a task within its status: higher matters more (decision 0031).
+         *
+         *     Attributes:
+         *         before: The number of the task it goes right above.
+         *         after: The number of the task it goes right below.
+         */
+        OrderIn: {
+            /** After */
+            after?: number | null;
+            /** Before */
+            before?: number | null;
+        };
+        /**
          * ProjectOut
          * @description One of the person's projects with its shown sessions, as their settings list it.
          *
@@ -1986,16 +2690,285 @@ export interface components {
          */
         Role: "owner" | "member";
         /**
-         * StageIn
-         * @description The holder's work turned to a different kind of activity (decisions 0021, 0023).
+         * StageKind
+         * @description The fixed kind of a stage; measurements and boards read it, never the name (0032).
          *
          *     Attributes:
-         *         text: One line, e.g. "code in billing and api" or "MR !17 open".
+         *         Backlog: A task written down; it may have no assignee.
+         *         Analysis: A person asked an Assistant to take the task.
+         *         Design: A plan of changes with forks, approved by the human.
+         *         Documentation: The documentation changes.
+         *         Agreement: The decision goes to the Team or the lead; the docs MR is merged.
+         *         Code: The code, in one or several repositories.
+         *         Review: The MR and its review rounds.
+         *         Delivery: The release and the check in prod.
+         *         Done: Verified in prod.
+         *         Cancelled: Closed without a result.
+         *         Draft: A promise worded, not given yet.
+         *         Given: A promise given for its period.
+         *         Delivered: A promise kept.
+         *         NotDelivered: A promise's period ended without the delivery.
+         *         Withdrawn: A promise removed on purpose.
+         * @enum {string}
          */
-        StageIn: {
-            /** Text */
-            text: string;
+        StageKind: "backlog" | "analysis" | "design" | "documentation" | "agreement" | "code" | "review" | "delivery" | "done" | "cancelled" | "draft" | "given" | "delivered" | "not_delivered" | "withdrawn";
+        /**
+         * StageOut
+         * @description A stage of a workflow.
+         *
+         *     Attributes:
+         *         name: Its name.
+         *         kind: Its fixed kind.
+         *         category: Its kind's category.
+         */
+        StageOut: {
+            category: components["schemas"]["Category"];
+            kind: components["schemas"]["StageKind"];
+            /** Name */
+            name: string;
         };
+        /**
+         * TakeIn
+         * @description Taking a task into work (decision 0032).
+         *
+         *     Attributes:
+         *         body: The first Message of its Topic, when the Topic is opened now.
+         *         reassign: Take a task assigned to another human, as an explicit reassignment.
+         *         with_human: The Assistant's human asked for the first Message or saw its text.
+         */
+        TakeIn: {
+            /** Body */
+            body?: string | null;
+            /**
+             * Reassign
+             * @default false
+             */
+            reassign?: boolean;
+            /**
+             * With Human
+             * @default false
+             */
+            with_human?: boolean;
+        };
+        /**
+         * TaskDetail
+         * @description A task with its description, timeline and Topic.
+         *
+         *     Attributes:
+         *         description: Markdown.
+         *         timeline: Its timeline, oldest first.
+         *         topic: Its Topic with some Messages, if it has one.
+         */
+        TaskDetail: {
+            /** Area */
+            area: string;
+            /** Area Name */
+            area_name: string;
+            /** Assignee */
+            assignee: string | null;
+            category: components["schemas"]["Category"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Description */
+            description: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Has Topic */
+            has_topic: boolean;
+            /** Holder */
+            holder: string | null;
+            /** Holder Key */
+            holder_key: string | null;
+            /** Links */
+            links: components["schemas"]["coloqo_server__api__tasks__LinkOut"][];
+            /** Number */
+            number: number;
+            /** Outcome */
+            outcome: string;
+            /** Parent */
+            parent: number | null;
+            /** Rank */
+            rank: number;
+            /** Ref */
+            ref: string;
+            /** Source */
+            source: number | null;
+            /** Stage */
+            stage: string;
+            stage_kind: components["schemas"]["StageKind"];
+            /** Started At */
+            started_at: string | null;
+            /** Team */
+            team: string;
+            /** Timeline */
+            timeline: components["schemas"]["TimelineOut"][];
+            /** Title */
+            title: string;
+            topic: components["schemas"]["TopicDetail"] | null;
+            type: components["schemas"]["TaskType"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Waiting */
+            waiting: string | null;
+        };
+        /**
+         * TaskIn
+         * @description A new task in the backlog: planning, so the tracker must be on (decision 0032).
+         *
+         *     Attributes:
+         *         area: The Area's slug.
+         *         title: One line.
+         *         description: Markdown.
+         *         type: ``task`` or ``promise``.
+         *         parent: The number of the task or promise it belongs to.
+         *         source: The number of the task within which it is created; by default the task whose
+         *             Topic the calling Assistant holds, if exactly one.
+         *         assignee: Pseudonym of the human to assign it to.
+         *         links: Keys or addresses of external issues.
+         */
+        TaskIn: {
+            /** Area */
+            area: string;
+            /** Assignee */
+            assignee?: string | null;
+            /**
+             * Description
+             * @default
+             */
+            description?: string;
+            /** Links */
+            links?: string[];
+            /** Parent */
+            parent?: number | null;
+            /** Source */
+            source?: number | null;
+            /** Title */
+            title: string;
+            /** @default task */
+            type?: components["schemas"]["TaskType"];
+        };
+        /**
+         * TaskOut
+         * @description A task in a list.
+         *
+         *     Attributes:
+         *         team: The Team's slug.
+         *         number: Its number in the Team.
+         *         ref: Short reference, ``T-<number>``.
+         *         type: ``task`` or ``promise``.
+         *         area: The Area's slug.
+         *         area_name: The Area's name.
+         *         title: One line.
+         *         stage: Its stage's name.
+         *         stage_kind: That stage's fixed kind.
+         *         category: ``to_do``, ``in_progress`` or ``finished``.
+         *         assignee: Pseudonym of the human it is assigned to.
+         *         waiting: What it waits for, while it waits.
+         *         outcome: How it ended.
+         *         parent: The number of the task or promise it belongs to.
+         *         source: The number of the task within which it was created.
+         *         links: Its links to external issues.
+         *         has_topic: It has a Topic.
+         *         holder: Name of the Assistant holding its Topic.
+         *         holder_key: Its key.
+         *         created_by: Pseudonym of whoever created it.
+         *         rank: Its place within its status: smaller stands higher.
+         *         created_at: Creation time.
+         *         updated_at: Time of its newest activity.
+         *         started_at: Its first move into work.
+         *         finished_at: When it was finished.
+         */
+        TaskOut: {
+            /** Area */
+            area: string;
+            /** Area Name */
+            area_name: string;
+            /** Assignee */
+            assignee: string | null;
+            category: components["schemas"]["Category"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Has Topic */
+            has_topic: boolean;
+            /** Holder */
+            holder: string | null;
+            /** Holder Key */
+            holder_key: string | null;
+            /** Links */
+            links: components["schemas"]["coloqo_server__api__tasks__LinkOut"][];
+            /** Number */
+            number: number;
+            /** Outcome */
+            outcome: string;
+            /** Parent */
+            parent: number | null;
+            /** Rank */
+            rank: number;
+            /** Ref */
+            ref: string;
+            /** Source */
+            source: number | null;
+            /** Stage */
+            stage: string;
+            stage_kind: components["schemas"]["StageKind"];
+            /** Started At */
+            started_at: string | null;
+            /** Team */
+            team: string;
+            /** Title */
+            title: string;
+            type: components["schemas"]["TaskType"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Waiting */
+            waiting: string | null;
+        };
+        /**
+         * TaskPatch
+         * @description Editing a task; every description is kept in the timeline.
+         *
+         *     Attributes:
+         *         title: A new title.
+         *         description: A new description.
+         *         area: A new Area, by slug; the number stays.
+         */
+        TaskPatch: {
+            /** Area */
+            area?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * TaskType
+         * @description Type of a task (decision 0031).
+         *
+         *     Attributes:
+         *         Task: A work item; a task with a parent task is a subtask.
+         *         Promise: A commitment for a period that tasks work towards; one holding promises is
+         *             called a goal.
+         * @enum {string}
+         */
+        TaskType: "task" | "promise";
         /**
          * TeamChoice
          * @description The Team a project is linked to, chosen by its person in the web.
@@ -2030,6 +3003,21 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Slug */
             slug: string;
+            /**
+             * Task Idle Days
+             * @default 7
+             */
+            task_idle_days?: number;
+            /**
+             * Task Idle Repeat Days
+             * @default 1
+             */
+            task_idle_repeat_days?: number;
+            /**
+             * Tracker
+             * @default false
+             */
+            tracker?: boolean;
             /** Turn Limit */
             turn_limit: number;
         };
@@ -2056,6 +3044,9 @@ export interface components {
          *         name: Shown name.
          *         role: The caller's role.
          *         turn_limit: Assistants' turns without a human before a Topic waits.
+         *         tracker: The task tracker is on (decision 0031).
+         *         task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
+         *         task_idle_repeat_days: Days between such notices while it stays quiet.
          *         created_at: Creation time.
          */
         TeamOut: {
@@ -2069,6 +3060,21 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Slug */
             slug: string;
+            /**
+             * Task Idle Days
+             * @default 7
+             */
+            task_idle_days?: number;
+            /**
+             * Task Idle Repeat Days
+             * @default 1
+             */
+            task_idle_repeat_days?: number;
+            /**
+             * Tracker
+             * @default false
+             */
+            tracker?: boolean;
             /** Turn Limit */
             turn_limit: number;
         };
@@ -2080,14 +3086,52 @@ export interface components {
          *         name: New name.
          *         slug: New address; the former one keeps leading to the Team.
          *         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
+         *         tracker: Turn the task tracker on or off (decision 0031).
+         *         task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
+         *         task_idle_repeat_days: Days between such notices while it stays quiet.
          */
         TeamPatch: {
             /** Name */
             name?: string | null;
             /** Slug */
             slug?: string | null;
+            /** Task Idle Days */
+            task_idle_days?: number | null;
+            /** Task Idle Repeat Days */
+            task_idle_repeat_days?: number | null;
+            /** Tracker */
+            tracker?: boolean | null;
             /** Turn Limit */
             turn_limit?: number | null;
+        };
+        /**
+         * TimelineOut
+         * @description An entry of a task's timeline (decision 0033).
+         *
+         *     Attributes:
+         *         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
+         *             ``described``, ``linked``, ``closed``, ``move``, ...
+         *         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
+         *         assistant: Name of the Assistant that did it, if any.
+         *         data: What the kind carries.
+         *         created_at: When it happened.
+         */
+        TimelineOut: {
+            /** Assistant */
+            assistant: string | null;
+            /** Author */
+            author: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Kind */
+            kind: string;
         };
         /**
          * TopicDetail
@@ -2108,6 +3152,8 @@ export interface components {
             area: string;
             /** Area Name */
             area_name: string;
+            /** Assignee */
+            assignee?: string | null;
             /** Closed At */
             closed_at: string | null;
             /**
@@ -2129,6 +3175,12 @@ export interface components {
             holder_key: string | null;
             /** Issue */
             issue: string;
+            /**
+             * Kind
+             * @default free
+             * @enum {string}
+             */
+            kind?: "task" | "free";
             /** Last Number */
             last_number: number;
             /** Messages */
@@ -2139,7 +3191,13 @@ export interface components {
             outcome: string;
             /** Ref */
             ref: string;
+            /** Stage */
+            stage?: string | null;
+            /** Stage Kind */
+            stage_kind?: string | null;
             status: components["schemas"]["TopicStatus"];
+            /** Task */
+            task?: number | null;
             /** Team */
             team: string;
             /** Title */
@@ -2155,6 +3213,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Waiting */
+            waiting?: string | null;
         };
         /**
          * TopicIn
@@ -2167,12 +3227,19 @@ export interface components {
          *         issue: Tracker issue key or link, if the Topic is for one.
          *         to: Pseudonym of a Member or an Assistant's name, if the first Message is for them.
          *         with_human: The Assistant's human asked for this Message or saw its text (0026).
+         *         free: A free Topic, not anyone's work item; otherwise the Topic is for a new task, which
+         *             starts in work (decision 0032). A plugin older than the tracker cannot send it.
          */
         TopicIn: {
             /** Area */
             area: string;
             /** Body */
             body: string;
+            /**
+             * Free
+             * @default false
+             */
+            free?: boolean;
             /**
              * Issue
              * @default
@@ -2194,8 +3261,14 @@ export interface components {
          *
          *     Attributes:
          *         team: The Team's slug.
-         *         number: Its number in the Team.
-         *         ref: Short reference, ``T-<number>``.
+         *         kind: ``task`` for a task's Topic, ``free`` for a free Topic (decision 0031).
+         *         number: The task's number for a task's Topic, the free number for a free one.
+         *         ref: Short reference, ``T-<number>`` or ``F-<number>``.
+         *         task: The task's number, for a task's Topic.
+         *         stage: The task's stage, for a task's Topic.
+         *         stage_kind: That stage's fixed kind.
+         *         assignee: Pseudonym of the human the task is assigned to.
+         *         waiting: What the task waits for, while it waits.
          *         area: The Area's slug.
          *         area_name: The Area's name.
          *         title: The question.
@@ -2216,8 +3289,9 @@ export interface components {
          *         created_at: Creation time.
          *         updated_at: Time of the newest Message.
          *         closed_at: When it was closed; ``None`` while open.
-         *         deletes_at: When its conversation will be deleted, while it is in the archive.
-         *         deleted_at: When its conversation was deleted; the rest is its card (decision 0021).
+         *         deletes_at: Always ``None``: Topics are kept (decision 0030); left for older readers.
+         *         deleted_at: When its conversation was deleted, before Topics were kept; the rest is its
+         *             card (decision 0021).
          */
         TopicOut: {
             /** Addressed */
@@ -2230,6 +3304,8 @@ export interface components {
             area: string;
             /** Area Name */
             area_name: string;
+            /** Assignee */
+            assignee?: string | null;
             /** Closed At */
             closed_at: string | null;
             /**
@@ -2249,6 +3325,12 @@ export interface components {
             holder_key: string | null;
             /** Issue */
             issue: string;
+            /**
+             * Kind
+             * @default free
+             * @enum {string}
+             */
+            kind?: "task" | "free";
             /** Last Number */
             last_number: number;
             /** Number */
@@ -2257,7 +3339,13 @@ export interface components {
             outcome: string;
             /** Ref */
             ref: string;
+            /** Stage */
+            stage?: string | null;
+            /** Stage Kind */
+            stage_kind?: string | null;
             status: components["schemas"]["TopicStatus"];
+            /** Task */
+            task?: number | null;
             /** Team */
             team: string;
             /** Title */
@@ -2273,6 +3361,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Waiting */
+            waiting?: string | null;
         };
         /**
          * TopicPatch
@@ -2313,6 +3403,17 @@ export interface components {
             type: string;
         };
         /**
+         * WaitIn
+         * @description An external wait over the task's stage (decision 0033).
+         *
+         *     Attributes:
+         *         what: Whom or what the task waits for.
+         */
+        WaitIn: {
+            /** What */
+            what: string;
+        };
+        /**
          * WordIn
          * @description A new word for an Assistant.
          *
@@ -2322,6 +3423,87 @@ export interface components {
         WordIn: {
             /** Word */
             word: string;
+        };
+        /**
+         * WorkflowOut
+         * @description A workflow with its stages in order.
+         *
+         *     Attributes:
+         *         type: The type of task it serves.
+         *         areas: Slugs of the Areas whose tasks move by it; empty for the promise workflow.
+         *         stages: Its stages.
+         */
+        WorkflowOut: {
+            /** Areas */
+            areas: string[];
+            /** Stages */
+            stages: components["schemas"]["StageOut"][];
+            type: components["schemas"]["TaskType"];
+        };
+        /**
+         * LinkOut
+         * @description A one-time link where the person chooses the project's Team.
+         *
+         *     Attributes:
+         *         url: The page to open.
+         *         expires_at: After this it does not work.
+         */
+        coloqo_server__api__assistants__LinkOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * LinkOut
+         * @description A link to an issue of an external tracker.
+         *
+         *     Attributes:
+         *         key: The issue's key.
+         *         url: Its address, if known.
+         */
+        coloqo_server__api__tasks__LinkOut: {
+            /** Key */
+            key: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * StageIn
+         * @description Moving a task to another stage of work.
+         *
+         *     Attributes:
+         *         stage: The stage's name, any case.
+         *         skip: Stages passed at once, by name, each with its reason ("no documentation
+         *             changes"); the timeline keeps them.
+         *         comment: A line about the move.
+         */
+        coloqo_server__api__tasks__StageIn: {
+            /**
+             * Comment
+             * @default
+             */
+            comment?: string;
+            /** Skip */
+            skip?: {
+                [key: string]: string;
+            };
+            /** Stage */
+            stage: string;
+        };
+        /**
+         * StageIn
+         * @description The holder's work turned to a different kind of activity (decisions 0021, 0023).
+         *
+         *     Attributes:
+         *         text: One line, e.g. "code in billing and api" or "MR !17 open".
+         */
+        coloqo_server__api__topics__StageIn: {
+            /** Text */
+            text: string;
         };
     };
     responses: never;
@@ -3079,7 +4261,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LinkOut"];
+                    "application/json": components["schemas"]["coloqo_server__api__assistants__LinkOut"];
                 };
             };
             /** @description Validation Error */
@@ -3317,6 +4499,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_moves_api_moves_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MovesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MovesOut"];
                 };
             };
             /** @description Validation Error */
@@ -3733,11 +4952,682 @@ export interface operations {
             };
         };
     };
+    list_tasks_api_team__team__task_get: {
+        parameters: {
+            query?: {
+                area?: string | null;
+                category?: components["schemas"]["Category"] | null;
+                assignee?: string | null;
+                type?: components["schemas"]["TaskType"] | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_task_api_team__team__task_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_task_api_team__team__task__number__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                from_unread?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_task_api_team__team__task__number__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_task_api_team__team__task__number__assign_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_api_team__team__task__number__close_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_task_file_api_team__team__task__number__file_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-file-name": string;
+                "content-type"?: string;
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hold_task_topic_api_team__team__task__number__hold_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_task_api_team__team__task__number__link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_task_message_api_team__team__task__number__message_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_task_api_team__team__task__number__order_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_task_up_to_api_team__team__task__number__read_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_task_api_team__team__task__number__resume_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_stage_api_team__team__task__number__stage_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["coloqo_server__api__tasks__StageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_task_api_team__team__task__number__take_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TakeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_task_topic_api_team__team__task__number__topic_get: {
+        parameters: {
+            query?: {
+                after?: number | null;
+                before?: number | null;
+                limit?: number;
+                from_unread?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wait_task_api_team__team__task__number__wait_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_topics_api_team__team__topic_get: {
         parameters: {
             query?: {
                 area?: string | null;
                 status?: components["schemas"]["TopicStatus"] | null;
+                kind?: ("task" | "free") | null;
                 limit?: number;
             };
             header?: {
@@ -4062,7 +5952,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StageIn"];
+                "application/json": components["schemas"]["coloqo_server__api__topics__StageIn"];
             };
         };
         responses: {
@@ -4073,6 +5963,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflows_api_team__team__workflow_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowOut"][];
                 };
             };
             /** @description Validation Error */

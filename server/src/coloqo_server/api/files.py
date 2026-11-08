@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coloqo_server.api.teams import team_for
-from coloqo_server.api.topics import FileOut, check_topic, file_outs, topic_for
+from coloqo_server.api.topics import FileOut, Kind, check_topic, file_outs, path_kind, topic_for
 from coloqo_server.images import SIGNATURE_BYTES, image_type
 from coloqo_server.models import File, Team, Topic
 from coloqo_server.security import DB, Actor, ActorDep, require_reader
@@ -118,6 +118,40 @@ async def store_upload(
     return file
 
 
+async def _upload(
+    request: Request,
+    db: AsyncSession,
+    actor: Actor,
+    team: str,
+    number: int,
+    kind: Kind,
+    x_file_name: str,
+    content_type: str,
+) -> FileOut:
+    """Upload a file into a Topic; the request body is the content.
+
+    Args:
+        request: The incoming request with the content as its body.
+        db: Database session.
+        actor: The caller.
+        team: The Team's slug.
+        number: The task's or the free Topic's number.
+        kind: Which of the two.
+        x_file_name: File name, percent-encoded.
+        content_type: Media type of the content.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+            there (decision 0020); 410 for a deleted Topic; 422 for an empty name; 413 when
+            the file or the Team's storage is over the limit.
+        OSError: The file cannot be written.
+    """
+    topic, _ = await topic_for(db, team, number, actor, kind, write=True)
+    file = await store_upload(request, db, actor, topic, x_file_name, content_type)
+    (out,) = await file_outs(db, [file], request.app.state.settings.preview_max_bytes)
+    return out
+
+
 @router.post("/team/{team}/topic/{number}/file", status_code=status.HTTP_201_CREATED)
 async def upload_file(
     request: Request,
@@ -128,14 +162,14 @@ async def upload_file(
     x_file_name: Annotated[str, Header()],
     content_type: Annotated[str, Header()] = "application/octet-stream",
 ) -> FileOut:
-    """Upload a file into a Topic; the request body is the content.
+    """Upload a file into a free Topic; the request body is the content.
 
     Attach it to a Message by its number.
 
     Args:
         request: The incoming request with the content as its body.
         team: The Team's slug.
-        number: The Topic's number.
+        number: The free Topic's number; a task's, to a plugin older than the tracker.
         actor: The caller.
         db: Database session.
         x_file_name: File name, percent-encoded.
@@ -147,10 +181,39 @@ async def upload_file(
             the file or the Team's storage is over the limit.
         OSError: The file cannot be written.
     """
-    topic, _ = await topic_for(db, team, number, actor, write=True)
-    file = await store_upload(request, db, actor, topic, x_file_name, content_type)
-    (out,) = await file_outs(db, [file], request.app.state.settings.preview_max_bytes)
-    return out
+    return await _upload(
+        request, db, actor, team, number, path_kind(actor), x_file_name, content_type
+    )
+
+
+@router.post("/team/{team}/task/{number}/file", status_code=status.HTTP_201_CREATED)
+async def upload_task_file(
+    request: Request,
+    team: str,
+    number: int,
+    actor: ActorDep,
+    db: DB,
+    x_file_name: Annotated[str, Header()],
+    content_type: Annotated[str, Header()] = "application/octet-stream",
+) -> FileOut:
+    """Upload a file into a task's Topic; the request body is the content.
+
+    Args:
+        request: The incoming request with the content as its body.
+        team: The Team's slug.
+        number: The task's number.
+        actor: The caller.
+        db: Database session.
+        x_file_name: File name, percent-encoded.
+        content_type: Media type of the content.
+
+    Raises:
+        HTTPException: 404 when there is no such task or it has no Topic yet; 403 when the
+            caller may not write there (decision 0020); 422 for an empty name; 413 when the
+            file or the Team's storage is over the limit.
+        OSError: The file cannot be written.
+    """
+    return await _upload(request, db, actor, team, number, "task", x_file_name, content_type)
 
 
 async def _team_usage(db: AsyncSession, team_id: int) -> int:

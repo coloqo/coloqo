@@ -1,16 +1,17 @@
-"""Topics, Messages and the Inbox, by a Team's slug and a Topic's number (decisions 0006, 0007,
-0024, 0025, 0026).
+"""Topics, Messages and the Inbox, by a Team's slug and a number (decisions 0006, 0007, 0024,
+0025, 0026, 0031).
 
-The operations here serve both the paths of decision 0025 and, through ``api.legacy``, the
-former paths of plugins older than 0.5.0, which stay for one more release.
+A Topic is a task's Topic, named by its task, ``T-42`` at ``/task/42``, or a free Topic,
+``F-5`` at ``/topic/5``. A free Topic that became a task's Topic, and every Topic made before the
+tracker, keeps its free number and leads to the task. A plugin older than the tracker knows only
+``T-N``, so ``/topic/N`` means the task N to it and free Topics are hidden from it.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select, update
@@ -22,6 +23,7 @@ from coloqo_server.events import add_event
 from coloqo_server.models import (
     Area,
     Assistant,
+    Category,
     File,
     HumanPart,
     Member,
@@ -29,6 +31,9 @@ from coloqo_server.models import (
     MessageKind,
     Participant,
     Project,
+    Stage,
+    Task,
+    TaskType,
     Team,
     Topic,
     TopicStatus,
@@ -53,13 +58,35 @@ FEED_LIMIT = 500
 """The most Messages one request returns."""
 
 
+Kind = Literal["task", "free"]
+"""How a Topic is named: by its task, or by its free number (decision 0031)."""
+
+
 def ref(number: int) -> str:
-    """Return the short reference of a Topic in its Team.
+    """Return the short reference of a task, and of its Topic, in its Team.
 
     Args:
-        number: The Topic's number.
+        number: The task's number.
     """
     return f"T-{number}"
+
+
+def free_ref(number: int) -> str:
+    """Return the short reference of a free Topic in its Team.
+
+    Args:
+        number: The free Topic's number.
+    """
+    return f"F-{number}"
+
+
+def path_kind(actor: Actor) -> Kind:
+    """Return what ``/topic/N`` names for this caller (decision 0031).
+
+    Args:
+        actor: The caller.
+    """
+    return "task" if actor.before_tasks else "free"
 
 
 class FileOut(BaseModel):
@@ -134,8 +161,14 @@ class TopicOut(BaseModel):
 
     Attributes:
         team: The Team's slug.
-        number: Its number in the Team.
-        ref: Short reference, ``T-<number>``.
+        kind: ``task`` for a task's Topic, ``free`` for a free Topic (decision 0031).
+        number: The task's number for a task's Topic, the free number for a free one.
+        ref: Short reference, ``T-<number>`` or ``F-<number>``.
+        task: The task's number, for a task's Topic.
+        stage: The task's stage, for a task's Topic.
+        stage_kind: That stage's fixed kind.
+        assignee: Pseudonym of the human the task is assigned to.
+        waiting: What the task waits for, while it waits.
         area: The Area's slug.
         area_name: The Area's name.
         title: The question.
@@ -156,13 +189,20 @@ class TopicOut(BaseModel):
         created_at: Creation time.
         updated_at: Time of the newest Message.
         closed_at: When it was closed; ``None`` while open.
-        deletes_at: When its conversation will be deleted, while it is in the archive.
-        deleted_at: When its conversation was deleted; the rest is its card (decision 0021).
+        deletes_at: Always ``None``: Topics are kept (decision 0030); left for older readers.
+        deleted_at: When its conversation was deleted, before Topics were kept; the rest is its
+            card (decision 0021).
     """
 
     team: str
+    kind: Kind = "free"
     number: int
     ref: str
+    task: int | None = None
+    stage: str | None = None
+    stage_kind: str | None = None
+    assignee: str | None = None
+    waiting: str | None = None
     area: str
     area_name: str
     title: str
@@ -208,6 +248,8 @@ class TopicIn(BaseModel):
         issue: Tracker issue key or link, if the Topic is for one.
         to: Pseudonym of a Member or an Assistant's name, if the first Message is for them.
         with_human: The Assistant's human asked for this Message or saw its text (0026).
+        free: A free Topic, not anyone's work item; otherwise the Topic is for a new task, which
+            starts in work (decision 0032). A plugin older than the tracker cannot send it.
     """
 
     area: str = Field(min_length=1, max_length=40)
@@ -216,6 +258,7 @@ class TopicIn(BaseModel):
     issue: str = Field(default="", max_length=300)
     to: str | None = None
     with_human: bool = False
+    free: bool = False
 
 
 class MessageIn(BaseModel):
@@ -296,7 +339,7 @@ class Who:
     """What events and views tell about an Assistant.
 
     Attributes:
-        id: Its database id, for plugins older than 0.5.0 only.
+        id: Its database id, never shown.
         key: Its public key.
         name: Its shown name.
         project: Its project's key, so the project's other sessions know it (decision 0024).
@@ -339,46 +382,59 @@ async def pseudonyms(db: AsyncSession, ids: set[int | None]) -> dict[int, str | 
     return {u.id: u.pseudonym for u in await db.scalars(select(User).where(User.id.in_(wanted)))}
 
 
-def stored(new: dict, old: dict) -> dict:
-    """Return an event's data in both shapes: plugins older than 0.5.0 get ``legacy``.
+async def task_number(db: AsyncSession, topic: Topic) -> int | None:
+    """Return the number of a Topic's task; ``None`` for a free Topic.
 
     Args:
-        new: The data of decision 0025.
-        old: The former data, with database ids.
+        db: Database session.
+        topic: The Topic.
     """
-    return {**new, "legacy": old}
+    if topic.task_id is None:
+        return None
+    return await db.scalar(select(Task.number).where(Task.id == topic.task_id))
 
 
-def topic_head(topic: Topic, team: Team, area: Area | None) -> tuple[dict, dict]:
-    """Return what every event about a Topic carries, in both shapes.
+def label_of(topic: Topic, task: int | None) -> str:
+    """Return a Topic's short reference: its task's, or its free number's.
+
+    Args:
+        topic: The Topic.
+        task: Its task's number, if it has a task.
+    """
+    if task is not None:
+        return ref(task)
+    assert topic.number is not None
+    return free_ref(topic.number)
+
+
+def topic_head(topic: Topic, team: Team, area: Area | None, task: int | None) -> dict:
+    """Return what every event about a Topic carries.
+
+    ``topic`` is the number a reader opens it by: the task's for a task's Topic, so plugins older
+    than the tracker go on reading it as ``T-N``; ``topic_kind`` tells the two apart (decision
+    0031). ``kind`` stays free for a Message's kind, which plugins already read.
 
     Args:
         topic: The Topic.
         team: Its Team.
         area: Its Area.
+        task: Its task's number, if it has a task.
     """
-    new = {
+    return {
         "team": team.slug,
-        "topic": topic.number,
-        "ref": ref(topic.number),
+        "topic_kind": "task" if task is not None else "free",
+        "topic": task if task is not None else topic.number,
+        "task": task,
+        "ref": label_of(topic, task),
         "title": topic.title,
         "area": area.name if area else "",
     }
-    old = {
-        "topic_id": topic.id,
-        "ref": f"T-{topic.id}",
-        "title": topic.title,
-        "team_id": topic.team_id,
-        "area": area.name if area else "",
-    }
-    return new, old
 
 
 async def topic_outs(
     db: AsyncSession,
     topics: list[Topic],
     user_id: int,
-    archive_days: int,
     assistant_id: int | None = None,
 ) -> list[TopicOut]:
     """Build the list view of Topics for a User.
@@ -387,12 +443,23 @@ async def topic_outs(
         db: Database session.
         topics: The Topics.
         user_id: The caller, for unread counts.
-        archive_days: The instance's days in the archive, for Teams without their own.
         assistant_id: The calling Assistant, whose own Messages are not another session's.
     """
     if not topics:
         return []
     ids = [topic.id for topic in topics]
+    tasks = {
+        task.id: task
+        for task in await db.scalars(
+            select(Task).where(Task.id.in_({t.task_id for t in topics} - {None}))
+        )
+    }
+    stages = {
+        stage.id: stage
+        for stage in await db.scalars(
+            select(Stage).where(Stage.id.in_({task.stage_id for task in tasks.values()}))
+        )
+    }
     areas = {
         area.id: area
         for area in await db.scalars(select(Area).where(Area.id.in_({t.area_id for t in topics})))
@@ -407,7 +474,9 @@ async def topic_outs(
             select(Participant).where(Participant.topic_id.in_(ids), Participant.user_id == user_id)
         )
     }
-    users = await pseudonyms(db, {t.created_by for t in topics})
+    users = await pseudonyms(
+        db, {t.created_by for t in topics} | {task.assignee_id for task in tasks.values()}
+    )
     holders = await assistants_by_id(db, {t.holder_assistant_id for t in topics})
     # Whom of the caller's the unread Messages addressed to them went to, by Topic, in order.
     targets: dict[int, list[int | None]] = {}
@@ -442,12 +511,21 @@ async def topic_outs(
         team = teams[topic.team_id]
         area = areas.get(topic.area_id)
         holder = holders.get(topic.holder_assistant_id or 0)
-        days = team.archive_days or archive_days
+        task = tasks.get(topic.task_id or 0)
+        stage = stages.get(task.stage_id) if task else None
+        number = task.number if task else topic.number
+        assert number is not None
         result.append(
             TopicOut(
                 team=team.slug,
-                number=topic.number,
-                ref=ref(topic.number),
+                kind="task" if task else "free",
+                number=number,
+                ref=label_of(topic, task.number if task else None),
+                task=task.number if task else None,
+                stage=stage.name if stage else None,
+                stage_kind=stage.kind.value if stage else None,
+                assignee=users.get(task.assignee_id) if task and task.assignee_id else None,
+                waiting=task.waiting if task else None,
                 area=area.slug if area else "",
                 area_name=area.name if area else "",
                 title=topic.title,
@@ -467,11 +545,7 @@ async def topic_outs(
                 created_at=topic.created_at,
                 updated_at=topic.updated_at,
                 closed_at=topic.closed_at,
-                deletes_at=(
-                    topic.closed_at + timedelta(days=days)
-                    if topic.closed_at and not topic.deleted_at
-                    else None
-                ),
+                deletes_at=None,
                 deleted_at=topic.deleted_at,
             )
         )
@@ -594,28 +668,52 @@ async def topic_for(
     team: str,
     number: int,
     actor: Actor,
+    kind: Kind,
     lock: bool = False,
     write: bool = False,
 ) -> tuple[Topic, Team]:
-    """Return a Topic by its Team's slug and its number.
+    """Return a Topic by its Team's slug and a number: its task's, or its free number.
+
+    A free number of a Topic that became a task's leads to that Topic (decision 0031). A plugin
+    older than the tracker is never shown a free Topic.
 
     Args:
         db: Database session.
         team: The Team's slug, current or former.
-        number: The Topic's number in the Team.
+        number: The task's number, or the free Topic's.
         actor: The caller.
+        kind: Which of the two ``number`` is.
         lock: Lock the row until the transaction ends, to number a new Message.
         write: The caller is about to change the Topic.
 
     Raises:
-        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the
-            caller may not write there; 410 to write into a deleted Topic.
+        HTTPException: 404 when there is no such Topic in the caller's Teams, or the task has
+            no Topic yet; 403 when the caller may not write there; 410 to write into a deleted
+            Topic.
     """
     require_reader(actor)
     found, _ = await team_for(db, team, actor.user.id)
-    query = select(Topic).where(Topic.team_id == found.id, Topic.number == number)
-    topic = await db.scalar(query.with_for_update() if lock else query)
-    return await check_topic(db, topic, actor, f"{found.slug}/{ref(number)}", write), found
+    if kind == "task":
+        query = (
+            select(Topic)
+            .join(Task, Task.id == Topic.task_id)
+            .where(Task.team_id == found.id, Task.number == number)
+        )
+        label = ref(number)
+    else:
+        query = select(Topic).where(Topic.team_id == found.id, Topic.number == number)
+        label = free_ref(number)
+    topic = await db.scalar(query.with_for_update(of=Topic) if lock else query)
+    if topic is not None and topic.task_id is None and actor.before_tasks:
+        topic = None
+    if topic is None and kind == "task":
+        task = await db.scalar(select(Task).where(Task.team_id == found.id, Task.number == number))
+        if task is not None and await db.get(Member, (found.id, actor.user.id)) is not None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                f"{found.slug}/{label} has no Topic yet: take the task to open it",
+            )
+    return await check_topic(db, topic, actor, f"{found.slug}/{label}", write), found
 
 
 async def addressee(
@@ -694,9 +792,7 @@ def human_part(
 ) -> HumanPart | None:
     """Return the mark of a Message by who wrote it and what the Assistant declared (0026).
 
-    A human's own Message, a progress note and a service line carry none. A plugin older than
-    0.5.0 cannot declare "with", so its replies stay unmarked unless they relay the human's
-    words.
+    A human's own Message, a progress note and a service line carry none.
 
     Args:
         actor: The writer.
@@ -708,8 +804,6 @@ def human_part(
         return None
     if as_human:
         return HumanPart.Words
-    if actor.legacy:
-        return None
     return HumanPart.With if with_human else HumanPart.Without
 
 
@@ -724,7 +818,7 @@ async def post(
     as_human: bool = False,
     with_human: bool = False,
     counts_as_turn: bool = True,
-    extra: tuple[dict, dict] | None = None,
+    extra: dict | None = None,
 ) -> tuple[Message, set[int]]:
     """Write the next Message into a locked Topic and queue its events.
 
@@ -740,7 +834,7 @@ async def post(
         with_human: The Assistant's human asked for this Message or saw its text.
         counts_as_turn: An Assistant's Message counts against the turn limit; the opening
             Message of a Topic does not.
-        extra: More event data, in the new and the former shape.
+        extra: More event data.
 
     Raises:
         HTTPException: 422 for an unknown addressee; 409 when the Topic waits for a human
@@ -750,11 +844,12 @@ async def post(
     human = actor.is_human or as_human
     team = await db.get(Team, topic.team_id)
     assert team is not None
+    task = await task_number(db, topic)
     if human:
         topic.turns_since_human = 0
     elif kind == MessageKind.Message and counts_as_turn:
         if topic.turns_since_human >= team.turn_limit:
-            label = f"T-{topic.id}" if actor.legacy else ref(topic.number)
+            label = label_of(topic, task)
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 {
@@ -771,12 +866,13 @@ async def post(
     topic.last_number += 1
     topic.updated_at = now()
     topic.idle_warned_at = None
-    if topic.status == TopicStatus.Closed and kind in (
-        MessageKind.Message,
-        MessageKind.Stage,
-        MessageKind.Taken,
+    if (
+        topic.task_id is None
+        and topic.status == TopicStatus.Closed
+        and kind in (MessageKind.Message, MessageKind.Stage, MessageKind.Taken)
     ):
-        # A new turn or stage takes the Topic out of the archive (decision 0021).
+        # A new turn or stage takes a free Topic out of the archive (decision 0021); a task's
+        # Topic follows its task, and a finished task is final (decision 0032).
         topic.status = TopicStatus.Open
         topic.closed_at = None
     message = Message(
@@ -821,7 +917,7 @@ async def post(
     holder = who.get(topic.holder_assistant_id or 0)
     users = await pseudonyms(db, {to_user_id})
     area = await db.get(Area, topic.area_id)
-    new, old = topic_head(topic, team, area)
+    new = topic_head(topic, team, area, task)
     author = who.get(message.author_assistant_id or 0)
     new |= {
         "number": message.number,
@@ -838,24 +934,9 @@ async def post(
         "holder_project": holder.project if holder else None,
         "assistants": sorted(who[i].key for i in posters | {topic.holder_assistant_id} if i in who),
     }
-    old |= {
-        "number": message.number,
-        # Plugins before 0.5.0 know no "taken" line; as a stage line they leave it out.
-        "kind": MessageKind.Stage.value if kind == MessageKind.Taken else kind.value,
-        "author": actor.user.pseudonym,
-        "author_user_id": actor.user.id,
-        "author_assistant_id": message.author_assistant_id,
-        "assistant": author.name if author else None,
-        "human": human,
-        "to_user_id": to_user_id,
-        "to_assistant_id": to_assistant_id,
-        "holder_assistant_id": topic.holder_assistant_id,
-        "assistant_ids": sorted(posters | {topic.holder_assistant_id} - {None}),
-    }
     if extra:
-        new |= extra[0]
-        old |= extra[1]
-    recipients = await add_event(db, topic.team_id, "message", stored(new, old))
+        new |= extra
+    recipients = await add_event(db, topic.team_id, "message", new)
     return message, recipients
 
 
@@ -899,11 +980,14 @@ async def open_topic(
     issue: str,
     to: str | None,
     with_human: bool,
+    free: bool = False,
 ) -> tuple[Topic, set[int]]:
     """Open a Topic with its first Message; the calling Assistant holds it.
 
-    The Topic takes the next number of its Team under a lock on the Team's row, so numbers
-    have no gaps (decision 0025).
+    A Topic for a task creates the task at once, in the first stage of work, assigned to the
+    caller's human (decision 0032), with or without the tracker; it has no number of its own. A
+    free Topic takes the next free number of its Team. Either number is taken under a lock on
+    the Team's row, so numbers have no gaps (decision 0025).
 
     Args:
         db: Database session.
@@ -911,19 +995,35 @@ async def open_topic(
         area: The Area.
         title: The question.
         body: The first Message.
-        issue: Tracker issue key or link.
+        issue: Tracker issue key or link; for a task, its first link.
         to: Addressee of the first Message.
         with_human: The Assistant's human asked for it or saw its text.
+        free: A free Topic rather than one for a new task.
 
     Raises:
         HTTPException: 422 for an unknown addressee.
     """
+    from coloqo_server.tracker import add_link, new_task
+    from coloqo_server.workflows import first_of, stages_of, workflow_for
+
     team = await db.scalar(select(Team).where(Team.id == area.team_id).with_for_update())
     assert team is not None
-    team.last_topic += 1
+    to_user_id, to_assistant_id, meant_for_id = await addressee(db, team.id, to)
+    task = None
+    number = None
+    if free:
+        team.last_topic += 1
+        number = team.last_topic
+    else:
+        workflow = await workflow_for(db, team.id, TaskType.Task, area)
+        stage = first_of(await stages_of(db, workflow.id), Category.InProgress)
+        task = await new_task(db, actor, team, area, title, TaskType.Task, stage, actor.user.id)
+        if issue.strip():
+            await add_link(db, actor, task, issue)
     topic = Topic(
         team_id=team.id,
-        number=team.last_topic,
+        number=number,
+        task_id=task.id if task else None,
         area_id=area.id,
         title=title.strip(),
         issue=issue.strip(),
@@ -934,13 +1034,12 @@ async def open_topic(
         last_number=0,
         turns_since_human=0,
     )
-    to_user_id, to_assistant_id, meant_for_id = await addressee(db, team.id, to)
     db.add(topic)
     await db.flush()
     who = await assistants_by_id(db, {topic.holder_assistant_id, to_assistant_id, meant_for_id})
     users = await pseudonyms(db, {to_user_id})
     holder = who.get(topic.holder_assistant_id or 0)
-    new, old = topic_head(topic, team, area)
+    new = topic_head(topic, team, area, task.number if task else None)
     new |= {
         "author": actor.user.pseudonym,
         "author_assistant": holder.key if holder else None,
@@ -950,15 +1049,7 @@ async def open_topic(
         "to_assistant_name": who[to_assistant_id].name if to_assistant_id in who else None,
         "meant_for": who[meant_for_id].name if meant_for_id in who else None,
     }
-    old |= {
-        "author": actor.user.pseudonym,
-        "author_user_id": actor.user.id,
-        "author_assistant_id": topic.holder_assistant_id,
-        "holder_assistant_id": topic.holder_assistant_id,
-        "to_user_id": to_user_id,
-        "to_assistant_id": to_assistant_id,
-    }
-    recipients = await add_event(db, team.id, "topic", stored(new, old))
+    recipients = await add_event(db, team.id, "topic", new)
     # The opening Message is not a turn: the conversation starts with it.
     _, more = await post(
         db,
@@ -1004,7 +1095,7 @@ async def hold(db: AsyncSession, actor: Actor, topic: Topic) -> set[int]:
         MessageKind.Taken,
         None,
         [],
-        extra=({"from": was.key if was else None}, {}),
+        extra={"from": was.key if was else None},
     )
     return recipients
 
@@ -1051,10 +1142,40 @@ async def settle(
         body: New state and outcome.
         label: How the caller names the Topic, for refusals.
 
+    A task's Topic closes with its task: only an Assistant closes it, as done, and a finished
+    task is never reopened (decision 0032).
+
     Raises:
-        HTTPException: 403 for an Assistant reopening; 409 ``not_holder`` for an Assistant that
-            does not hold it; 422 for an Assistant closing without an outcome.
+        HTTPException: 403 for an Assistant reopening, for a human closing a task's Topic, or
+            for reopening one; 409 ``not_holder`` for an Assistant that does not hold it, or
+            ``finished`` for a task already finished; 422 for an Assistant closing without an
+            outcome.
     """
+    if topic.task_id is not None:
+        from coloqo_server.api.tasks import close_task
+
+        if actor.assistant is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "A task is closed by its assignee's Assistant: ask yours to close it",
+            )
+        if body.status != TopicStatus.Closed:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "A finished task is not reopened: a fix is a new task (decision 0032)",
+            )
+        task = await db.scalar(select(Task).where(Task.id == topic.task_id).with_for_update())
+        assert task is not None
+        if actor.assistant.id != topic.holder_assistant_id and actor.user.id != task.assignee_id:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "not_holder",
+                    "message": f"Only the Assistant holding {label}, or one of its assignee, "
+                    "closes it; tell the holder it can be closed.",
+                },
+            )
+        return await close_task(db, actor, task, body.outcome or "", False, label, topic)
     if actor.assistant is not None or actor.installation is not None:
         if body.status != TopicStatus.Closed:
             raise HTTPException(
@@ -1086,6 +1207,20 @@ async def settle(
         topic.idle_warned_at = None
     topic.status = body.status
     topic.updated_at = now()
+    return recipients | await status_event(db, actor, topic)
+
+
+async def status_event(db: AsyncSession, actor: Actor, topic: Topic) -> set[int]:
+    """Tell the Team that a Topic was closed or reopened.
+
+    Args:
+        db: Database session.
+        actor: Who did it.
+        topic: The Topic, in its new state.
+
+    Returns:
+        The Users who got the event, to wake after the commit.
+    """
     team = await db.get(Team, topic.team_id)
     area = await db.get(Area, topic.area_id)
     assert team is not None
@@ -1094,7 +1229,7 @@ async def settle(
     )
     holder = who.get(topic.holder_assistant_id or 0)
     author = who.get(actor.assistant.id) if actor.assistant else None
-    new, old = topic_head(topic, team, area)
+    new = topic_head(topic, team, area, await task_number(db, topic))
     new |= {
         "status": topic.status.value,
         "author": author.name if author else actor.user.pseudonym,
@@ -1104,16 +1239,7 @@ async def settle(
         "outcome": topic.outcome,
         "automatic": False,
     }
-    old |= {
-        "status": topic.status.value,
-        "author": author.name if author else actor.user.pseudonym,
-        "author_assistant_id": actor.assistant.id if actor.assistant else None,
-        "holder_assistant_id": topic.holder_assistant_id,
-        "outcome": topic.outcome,
-        "automatic": False,
-    }
-    recipients |= await add_event(db, topic.team_id, "topic_status", stored(new, old))
-    return recipients
+    return await add_event(db, topic.team_id, "topic_status", new)
 
 
 async def mark_read(db: AsyncSession, actor: Actor, topic: Topic, number: int) -> None:
@@ -1207,11 +1333,7 @@ async def topic_detail(
     )
     files = await file_outs(db, file_rows, settings.preview_max_bytes)
     (summary,) = await topic_outs(
-        db,
-        [topic],
-        actor.user.id,
-        settings.archive_days,
-        actor.assistant.id if actor.assistant else None,
+        db, [topic], actor.user.id, actor.assistant.id if actor.assistant else None
     )
     return TopicDetail(
         **summary.model_dump(),
@@ -1221,7 +1343,7 @@ async def topic_detail(
 
 
 async def number_taken(
-    request: Request, db: AsyncSession, topic: Topic, number: int, label: str, legacy: bool
+    request: Request, db: AsyncSession, topic: Topic, number: int, label: str
 ) -> JSONResponse:
     """Refuse a Message whose number is not next, with the Messages the writer missed (0007).
 
@@ -1231,7 +1353,6 @@ async def number_taken(
         topic: The Topic.
         number: The number the writer sent.
         label: How the caller names the Topic.
-        legacy: Show the Messages the way plugins older than 0.5.0 read them.
     """
     unread_rows = list(
         await db.scalars(
@@ -1242,15 +1363,8 @@ async def number_taken(
         )
     )
     file_rows = list(await db.scalars(select(File).where(File.topic_id == topic.id)))
-    if legacy:
-        from coloqo_server.api.legacy import legacy_messages
-
-        unread = await legacy_messages(
-            db, unread_rows[:UNREAD_LIMIT], file_rows, request.app.state.settings
-        )
-    else:
-        files = await file_outs(db, file_rows, request.app.state.settings.preview_max_bytes)
-        unread = await message_outs(db, unread_rows[:UNREAD_LIMIT], files, file_rows)
+    files = await file_outs(db, file_rows, request.app.state.settings.preview_max_bytes)
+    unread = await message_outs(db, unread_rows[:UNREAD_LIMIT], files, file_rows)
     too_many = len(unread_rows) > UNREAD_LIMIT
     next_number = topic.last_number + 1
     await db.rollback()
@@ -1283,6 +1397,7 @@ async def list_topics(
     db: DB,
     area: Annotated[str | None, Query()] = None,
     status_filter: Annotated[TopicStatus | None, Query(alias="status")] = None,
+    kind: Annotated[Kind | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[TopicOut]:
     """List a Team's Topics, newest activity first; deleted ones are left out.
@@ -1294,6 +1409,7 @@ async def list_topics(
         db: Database session.
         area: Only this Area, by slug.
         status_filter: Only open or only closed.
+        kind: Only tasks' Topics, or only free ones.
         limit: At most this many.
 
     Raises:
@@ -1310,13 +1426,13 @@ async def list_topics(
         query = query.where(Topic.area_id == row.id)
     if status_filter is not None:
         query = query.where(Topic.status == status_filter)
+    if kind == "task" or actor.before_tasks:
+        query = query.where(Topic.task_id.is_not(None))
+    elif kind == "free":
+        query = query.where(Topic.task_id.is_(None))
     topics = list(await db.scalars(query.order_by(Topic.updated_at.desc()).limit(limit)))
     return await topic_outs(
-        db,
-        topics,
-        actor.user.id,
-        request.app.state.settings.archive_days,
-        actor.assistant.id if actor.assistant else None,
+        db, topics, actor.user.id, actor.assistant.id if actor.assistant else None
     )
 
 
@@ -1325,6 +1441,8 @@ async def create_topic(
     request: Request, team: str, body: TopicIn, actor: ActorDep, db: DB
 ) -> TopicDetail:
     """Open a Topic in an Area with its first Message; the calling Assistant holds it.
+
+    A Topic for a new task unless ``free`` (decision 0031).
 
     Args:
         request: The incoming request.
@@ -1344,11 +1462,54 @@ async def create_topic(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No Area {body.area!r} in the Team")
     await require_writer(db, actor, found.id)
     topic, recipients = await open_topic(
-        db, actor, area, body.title, body.body, body.issue, body.to, body.with_human
+        db,
+        actor,
+        area,
+        body.title,
+        body.body,
+        body.issue,
+        body.to,
+        body.with_human,
+        free=body.free and not actor.before_tasks,
     )
     await db.commit()
     request.app.state.bus.wake(recipients)
     messages = await feed(db, actor, topic, None, None, 50, False)
+    return await topic_detail(request, db, actor, topic, messages)
+
+
+async def _read(
+    request: Request,
+    db: AsyncSession,
+    actor: Actor,
+    team: str,
+    number: int,
+    kind: Kind,
+    after: int | None,
+    before: int | None,
+    limit: int,
+    from_unread: bool,
+) -> TopicDetail:
+    """Return a Topic with some of its Messages (decisions 0007, 0026).
+
+    Args:
+        request: The incoming request.
+        db: Database session.
+        actor: The caller.
+        team: The Team's slug.
+        number: The task's or the free Topic's number.
+        kind: Which of the two.
+        after: Only Messages with a greater number.
+        before: Only Messages with a smaller number.
+        limit: How many Messages.
+        from_unread: Start at the first unread Message when more than ``limit`` are unread.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
+            plugin request without an Assistant.
+    """
+    topic, _ = await topic_for(db, team, number, actor, kind)
+    messages = await feed(db, actor, topic, after, before, limit, from_unread)
     return await topic_detail(request, db, actor, topic, messages)
 
 
@@ -1364,15 +1525,16 @@ async def read_topic(
     limit: Annotated[int, Query(ge=1, le=FEED_LIMIT)] = 50,
     from_unread: Annotated[bool, Query()] = False,
 ) -> TopicDetail:
-    """Return a Topic with some of its Messages (decisions 0007, 0026).
+    """Return a free Topic with some of its Messages (decisions 0007, 0026, 0031).
 
     Without ``after`` or ``before``: its last ``limit`` Messages, or with ``from_unread`` from
-    the caller's first unread one, at most 500.
+    the caller's first unread one, at most 500. The free number of a Topic that became a task's
+    gives that task's Topic; to a plugin older than the tracker, the number is a task's.
 
     Args:
         request: The incoming request.
         team: The Team's slug.
-        number: The Topic's number.
+        number: The free Topic's number.
         actor: The caller.
         db: Database session.
         after: Only Messages with a greater number, the first ``limit`` of them.
@@ -1384,36 +1546,73 @@ async def read_topic(
         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
             plugin request without an Assistant.
     """
-    topic, _ = await topic_for(db, team, number, actor)
-    messages = await feed(db, actor, topic, after, before, limit, from_unread)
-    return await topic_detail(request, db, actor, topic, messages)
+    return await _read(
+        request, db, actor, team, number, path_kind(actor), after, before, limit, from_unread
+    )
 
 
-@router.post("/team/{team}/topic/{number}/message", status_code=status.HTTP_201_CREATED)
-async def post_message(
-    request: Request, team: str, number: int, body: MessageIn, actor: ActorDep, db: DB
-) -> MessageOut:
-    """Write a Message with the number the writer believes is next (decision 0007).
+@router.get("/team/{team}/task/{number}/topic")
+async def read_task_topic(
+    request: Request,
+    team: str,
+    number: int,
+    actor: ActorDep,
+    db: DB,
+    after: Annotated[int | None, Query(ge=0)] = None,
+    before: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=FEED_LIMIT)] = 50,
+    from_unread: Annotated[bool, Query()] = False,
+) -> TopicDetail:
+    """Return a task's Topic with some of its Messages, as ``/topic/{number}`` does a free one.
 
     Args:
         request: The incoming request.
         team: The Team's slug.
-        number: The Topic's number.
-        body: The Message.
-        actor: The writer.
+        number: The task's number.
+        actor: The caller.
         db: Database session.
+        after: Only Messages with a greater number, the first ``limit`` of them.
+        before: Only Messages with a smaller number, the last ``limit`` of them.
+        limit: How many Messages.
+        from_unread: Start at the first unread Message when more than ``limit`` are unread.
+
+    Raises:
+        HTTPException: 404 when there is no such task in the caller's Teams, or it has no Topic
+            yet; 403 for a plugin request without an Assistant.
+    """
+    return await _read(request, db, actor, team, number, "task", after, before, limit, from_unread)
+
+
+async def _post_message(
+    request: Request,
+    db: AsyncSession,
+    actor: Actor,
+    team: str,
+    number: int,
+    kind: Kind,
+    body: MessageIn,
+) -> MessageOut | JSONResponse:
+    """Write a Message with the number the writer believes is next (decision 0007).
+
+    Args:
+        request: The incoming request.
+        db: Database session.
+        actor: The writer.
+        team: The Team's slug.
+        number: The task's or the free Topic's number.
+        kind: Which of the two.
+        body: The Message.
 
     Raises:
         HTTPException: 404 when there is no such Topic; 403 when the caller may not write
-            there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the
-            unread Messages when the number is not next, or ``turn_limit`` when the Topic
+            there (decision 0020); 410 for a deleted Topic; 409 ``turn_limit`` when the Topic
             waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to``
             that is not an earlier Message of the Topic.
     """
-    topic, found = await topic_for(db, team, number, actor, lock=True, write=True)
-    label = f"{found.slug}/{ref(topic.number)}"
+    topic, found = await topic_for(db, team, number, actor, kind, lock=True, write=True)
+    label = f"{found.slug}/{label_of(topic, await task_number(db, topic))}"
     if body.number != topic.last_number + 1:
-        return await number_taken(request, db, topic, body.number, label, legacy=False)
+        return await number_taken(request, db, topic, body.number, label)
     if body.reply_to is not None and body.reply_to > topic.last_number:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1440,16 +1639,74 @@ async def post_message(
     return out
 
 
-@router.post("/team/{team}/topic/{number}/hold")
-async def hold_topic(request: Request, team: str, number: int, actor: ActorDep, db: DB) -> TopicOut:
-    """Make the calling Assistant the Topic's holder; taking over shows in the feed (0024).
+@router.post(
+    "/team/{team}/topic/{number}/message",
+    status_code=status.HTTP_201_CREATED,
+    response_model=MessageOut,
+)
+async def post_message(
+    request: Request, team: str, number: int, body: MessageIn, actor: ActorDep, db: DB
+) -> MessageOut | JSONResponse:
+    """Write a Message into a free Topic with the number the writer believes is next (0007).
 
     Args:
         request: The incoming request.
         team: The Team's slug.
-        number: The Topic's number.
-        actor: The Assistant.
+        number: The free Topic's number; a task's, to a plugin older than the tracker.
+        body: The Message.
+        actor: The writer.
         db: Database session.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic; 403 when the caller may not write
+            there (decision 0020); 410 for a deleted Topic; 409 ``number_taken`` with the
+            unread Messages when the number is not next, or ``turn_limit`` when the Topic
+            waits for a human; 422 for an unknown addressee, foreign files or a ``reply_to``
+            that is not an earlier Message of the Topic.
+    """
+    return await _post_message(request, db, actor, team, number, path_kind(actor), body)
+
+
+@router.post(
+    "/team/{team}/task/{number}/message",
+    status_code=status.HTTP_201_CREATED,
+    response_model=MessageOut,
+)
+async def post_task_message(
+    request: Request, team: str, number: int, body: MessageIn, actor: ActorDep, db: DB
+) -> MessageOut | JSONResponse:
+    """Write a Message into a task's Topic with the number the writer believes is next (0007).
+
+    Args:
+        request: The incoming request.
+        team: The Team's slug.
+        number: The task's number.
+        body: The Message.
+        actor: The writer.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when there is no such task or it has no Topic yet; 403 when the
+            caller may not write there (decision 0020); 409 ``number_taken`` with the unread
+            Messages when the number is not next, or ``turn_limit`` when the Topic waits for a
+            human; 422 for an unknown addressee, foreign files or a ``reply_to`` that is not an
+            earlier Message of the Topic.
+    """
+    return await _post_message(request, db, actor, team, number, "task", body)
+
+
+async def _hold(
+    request: Request, db: AsyncSession, actor: Actor, team: str, number: int, kind: Kind
+) -> TopicOut:
+    """Make the calling Assistant the Topic's holder; taking over shows in the feed (0024).
+
+    Args:
+        request: The incoming request.
+        db: Database session.
+        actor: The Assistant.
+        team: The Team's slug.
+        number: The task's or the free Topic's number.
+        kind: Which of the two.
 
     Raises:
         HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when
@@ -1457,18 +1714,50 @@ async def hold_topic(request: Request, team: str, number: int, actor: ActorDep, 
     """
     if actor.assistant is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Assistant holds a Topic")
-    topic, _ = await topic_for(db, team, number, actor, lock=True, write=True)
+    topic, _ = await topic_for(db, team, number, actor, kind, lock=True, write=True)
     recipients = await hold(db, actor, topic)
     await db.commit()
     request.app.state.bus.wake(recipients)
-    (out,) = await topic_outs(
-        db,
-        [topic],
-        actor.user.id,
-        request.app.state.settings.archive_days,
-        actor.assistant.id if actor.assistant else None,
-    )
+    (out,) = await topic_outs(db, [topic], actor.user.id, actor.assistant.id)
     return out
+
+
+@router.post("/team/{team}/topic/{number}/hold")
+async def hold_topic(request: Request, team: str, number: int, actor: ActorDep, db: DB) -> TopicOut:
+    """Make the calling Assistant a free Topic's holder; taking over shows in the feed (0024).
+
+    Args:
+        request: The incoming request.
+        team: The Team's slug.
+        number: The free Topic's number; a task's, to a plugin older than the tracker.
+        actor: The Assistant.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic; 403 without an Assistant, or when
+            it may not write there (decision 0020); 410 for a deleted Topic.
+    """
+    return await _hold(request, db, actor, team, number, path_kind(actor))
+
+
+@router.post("/team/{team}/task/{number}/hold")
+async def hold_task_topic(
+    request: Request, team: str, number: int, actor: ActorDep, db: DB
+) -> TopicOut:
+    """Make the calling Assistant the holder of a task's Topic (decision 0024).
+
+    Args:
+        request: The incoming request.
+        team: The Team's slug.
+        number: The task's number.
+        actor: The Assistant.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when there is no such task or it has no Topic yet; 403 without an
+            Assistant, or when it may not write there (decision 0020).
+    """
+    return await _hold(request, db, actor, team, number, "task")
 
 
 @router.post("/team/{team}/topic/{number}/stage", status_code=status.HTTP_201_CREATED)
@@ -1478,12 +1767,14 @@ async def post_stage(
     """Note that the holder's work turned to a different kind of activity (decision 0021).
 
     Takes no number: a stage answers nothing, so it needs no check for unread Messages. It is
-    not a turn; it takes the Topic out of the archive, since work goes on.
+    not a turn; it takes a free Topic out of the archive, since work goes on. A task's stage
+    changes with ``/task/{number}/stage`` (decision 0032); a plugin older than the tracker
+    still notes its free-text stages here.
 
     Args:
         request: The incoming request.
         team: The Team's slug.
-        number: The Topic's number.
+        number: The free Topic's number; a task's, to a plugin older than the tracker.
         body: The stage.
         actor: The holding Assistant.
         db: Database session.
@@ -1493,10 +1784,9 @@ async def post_stage(
             there; 409 ``not_holder`` unless the caller is the holding Assistant; 410 for a
             deleted Topic.
     """
-    topic, found = await topic_for(db, team, number, actor, lock=True, write=True)
-    message, recipients = await note_stage(
-        db, actor, topic, body.text, f"{found.slug}/{ref(topic.number)}"
-    )
+    topic, found = await topic_for(db, team, number, actor, path_kind(actor), lock=True, write=True)
+    label = f"{found.slug}/{label_of(topic, await task_number(db, topic))}"
+    message, recipients = await note_stage(db, actor, topic, body.text, label)
     await db.commit()
     request.app.state.bus.wake(recipients)
     (out,) = await message_outs(db, [message], [], [])
@@ -1507,46 +1797,68 @@ async def post_stage(
 async def settle_topic(
     request: Request, team: str, number: int, body: TopicPatch, actor: ActorDep, db: DB
 ) -> TopicOut:
-    """Close a Topic with an outcome, or reopen it (decision 0021).
+    """Close a Topic with an outcome, or reopen a free one (decisions 0021, 0032).
+
+    Closing a task's Topic, which a plugin older than the tracker does here, closes its task
+    as done.
 
     Args:
         request: The incoming request.
         team: The Team's slug.
-        number: The Topic's number.
+        number: The free Topic's number; a task's, to a plugin older than the tracker.
         body: New state and outcome.
         actor: The holding Assistant or a human of the Team.
         db: Database session.
 
     Raises:
         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 when the
-            caller may not write there or is an Assistant reopening; 409 ``not_holder`` for an
-            Assistant that does not hold it; 422 for an Assistant closing without an outcome;
-            410 for a deleted Topic.
+            caller may not write there, is an Assistant reopening, or a human closing a task's
+            Topic; 409 ``not_holder`` for an Assistant that does not hold it; 422 for an
+            Assistant closing without an outcome; 410 for a deleted Topic.
     """
-    topic, found = await topic_for(db, team, number, actor, lock=True, write=True)
-    recipients = await settle(db, actor, topic, body, f"{found.slug}/{ref(topic.number)}")
+    topic, found = await topic_for(db, team, number, actor, path_kind(actor), lock=True, write=True)
+    label = f"{found.slug}/{label_of(topic, await task_number(db, topic))}"
+    recipients = await settle(db, actor, topic, body, label)
     await db.commit()
     request.app.state.bus.wake(recipients)
     (out,) = await topic_outs(
-        db,
-        [topic],
-        actor.user.id,
-        request.app.state.settings.archive_days,
-        actor.assistant.id if actor.assistant else None,
+        db, [topic], actor.user.id, actor.assistant.id if actor.assistant else None
+    )
+    return out
+
+
+async def _read_up_to(
+    db: AsyncSession, actor: Actor, team: str, number: int, kind: Kind, body: ReadIn
+) -> TopicOut:
+    """Record how far the caller has read a Topic; it leaves the Inbox when read through.
+
+    Args:
+        db: Database session.
+        actor: The caller.
+        team: The Team's slug.
+        number: The task's or the free Topic's number.
+        kind: Which of the two.
+        body: Number of the newest Message read.
+
+    Raises:
+        HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
+            plugin request without an Assistant.
+    """
+    topic, _ = await topic_for(db, team, number, actor, kind)
+    await mark_read(db, actor, topic, body.number)
+    (out,) = await topic_outs(
+        db, [topic], actor.user.id, actor.assistant.id if actor.assistant else None
     )
     return out
 
 
 @router.post("/team/{team}/topic/{number}/read")
-async def read_up_to(
-    request: Request, team: str, number: int, body: ReadIn, actor: ActorDep, db: DB
-) -> TopicOut:
-    """Record how far the caller has read a Topic; it leaves the Inbox when read through.
+async def read_up_to(team: str, number: int, body: ReadIn, actor: ActorDep, db: DB) -> TopicOut:
+    """Record how far the caller has read a free Topic; it leaves the Inbox when read through.
 
     Args:
-        request: The incoming request.
         team: The Team's slug.
-        number: The Topic's number.
+        number: The free Topic's number; a task's, to a plugin older than the tracker.
         body: Number of the newest Message read.
         actor: The caller.
         db: Database session.
@@ -1555,16 +1867,27 @@ async def read_up_to(
         HTTPException: 404 when there is no such Topic in the caller's Teams; 403 for a
             plugin request without an Assistant.
     """
-    topic, _ = await topic_for(db, team, number, actor)
-    await mark_read(db, actor, topic, body.number)
-    (out,) = await topic_outs(
-        db,
-        [topic],
-        actor.user.id,
-        request.app.state.settings.archive_days,
-        actor.assistant.id if actor.assistant else None,
-    )
-    return out
+    return await _read_up_to(db, actor, team, number, path_kind(actor), body)
+
+
+@router.post("/team/{team}/task/{number}/read")
+async def read_task_up_to(
+    team: str, number: int, body: ReadIn, actor: ActorDep, db: DB
+) -> TopicOut:
+    """Record how far the caller has read a task's Topic.
+
+    Args:
+        team: The Team's slug.
+        number: The task's number.
+        body: Number of the newest Message read.
+        actor: The caller.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when there is no such task or it has no Topic yet; 403 for a plugin
+            request without an Assistant.
+    """
+    return await _read_up_to(db, actor, team, number, "task", body)
 
 
 async def inbox_topics(db: AsyncSession, actor: Actor) -> list[Topic]:
@@ -1590,6 +1913,8 @@ async def inbox_topics(db: AsyncSession, actor: Actor) -> list[Topic]:
     scope = pushed_teams(actor)
     if scope is not None:
         query = query.where(Topic.team_id.in_(scope))
+    if actor.before_tasks:
+        query = query.where(Topic.task_id.is_not(None))
     return list(
         await db.scalars(
             query.order_by(Participant.addressed.desc(), Topic.updated_at.desc()).limit(100)
@@ -1597,15 +1922,14 @@ async def inbox_topics(db: AsyncSession, actor: Actor) -> list[Topic]:
     )
 
 
-@router.get("/inbox", response_model=list[TopicOut])
-async def inbox(request: Request, actor: ActorDep, db: DB) -> list[TopicOut] | JSONResponse:
+@router.get("/inbox")
+async def inbox(actor: ActorDep, db: DB) -> list[TopicOut]:
     """List Topics the caller takes part in that have unread Messages (decision 0006).
 
     The web shows those addressed to the person as "For you" (decision 0026); an agent gets the
     whole list.
 
     Args:
-        request: The incoming request.
         actor: The caller.
         db: Database session.
 
@@ -1614,18 +1938,6 @@ async def inbox(request: Request, actor: ActorDep, db: DB) -> list[TopicOut] | J
     """
     require_reader(actor)
     topics = await inbox_topics(db, actor)
-    if actor.legacy:
-        from coloqo_server.api.legacy import legacy_topics
-
-        return JSONResponse(
-            jsonable_encoder(
-                await legacy_topics(db, topics, actor.user.id, request.app.state.settings)
-            )
-        )
     return await topic_outs(
-        db,
-        topics,
-        actor.user.id,
-        request.app.state.settings.archive_days,
-        actor.assistant.id if actor.assistant else None,
+        db, topics, actor.user.id, actor.assistant.id if actor.assistant else None
     )

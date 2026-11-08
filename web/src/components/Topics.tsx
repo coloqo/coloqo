@@ -23,7 +23,7 @@ export function TopicRow({ topic, teamName }: { topic: Topic; teamName?: string 
   return (
     <li>
       <Link
-        to={topicPath(topic.team, topic.number)}
+        to={topicPath(topic.team, topic.number, topic.kind)}
         className="flex gap-3 px-4 py-3 hover:bg-stone-50 dark:hover:bg-stone-800/50"
       >
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -36,6 +36,8 @@ export function TopicRow({ topic, teamName }: { topic: Topic; teamName?: string 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
             {teamName && <span>{teamName}</span>}
             <span>{topic.area_name}</span>
+            {topic.stage && <Badge tone="stone">{topic.stage}</Badge>}
+            {topic.waiting && <span title={t('topic.waiting')}>⏸ {topic.waiting}</span>}
             {topic.holder && <span title={t('topic.holder')}>{topic.holder}</span>}
             {topic.status === 'closed' && <StatusBadge status="closed" />}
             {waiting && <Badge tone="amber">{t('topic.waitsForHuman')}</Badge>}

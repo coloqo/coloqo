@@ -44,7 +44,7 @@ def test_renamed_team_keeps_its_former_address(
     carol = human("carol")
 
     old_team = setup.bob.get("/api/team/acme").json()
-    old_topic = setup.bob.get(f"/api/team/acme/topic/{number}").json()
+    old_topic = setup.bob.get(f"/api/team/acme/task/{number}/topic").json()
     squatted = carol.post("/api/team", json={"name": "Acme", "slug": "acme"})
     offered = carol.post("/api/team", json={"name": "Acme"}).json()
     back = setup.alice.patch("/api/team/acme-inc", json={"slug": "acme"}).json()
@@ -100,15 +100,15 @@ def test_files_are_numbered_per_team(setup: Setup, human: Callable[[str], TestCl
         f"/api/team/{globex}/topic", json={"area": "dev", "title": "Q", "body": "x"}
     ).json()["number"]
     c = setup.alice.post(
-        f"/api/team/{globex}/topic/{topic}/file", content=b"c", headers={"X-File-Name": "c.txt"}
+        f"/api/team/{globex}/task/{topic}/file", content=b"c", headers={"X-File-Name": "c.txt"}
     ).json()
 
     attached = setup.bob.post(
-        f"/api/team/{setup.team}/topic/{second}/message",
+        f"/api/team/{setup.team}/task/{second}/message",
         json={"number": 2, "body": "see", "files": [b["number"]]},
     )
     foreign = setup.bob.post(
-        f"/api/team/{setup.team}/topic/{second}/message",
+        f"/api/team/{setup.team}/task/{second}/message",
         json={"number": 3, "body": "see", "files": [a["number"]]},
     )
 
@@ -130,7 +130,7 @@ def _messages(setup: Setup, number: int, count: int) -> None:
     """
     for n in range(2, count + 2):
         response = setup.bob.post(
-            f"/api/team/{setup.team}/topic/{number}/message", json={"number": n, "body": str(n)}
+            f"/api/team/{setup.team}/task/{number}/message", json={"number": n, "body": str(n)}
         )
         assert response.status_code == 201, response.text
 
@@ -143,7 +143,7 @@ def test_feed_window(setup: Setup) -> None:
     """
     number = _open(setup)["number"]
     _messages(setup, number, 9)
-    path = f"/api/team/{setup.team}/topic/{number}"
+    path = f"/api/team/{setup.team}/task/{number}/topic"
 
     def numbers(**params: object) -> list[int]:
         """Return the numbers of the Messages a request brings.
@@ -167,13 +167,14 @@ def test_feed_starts_at_the_first_unread_when_more_are_unread(setup: Setup) -> N
     """
     number = _open(setup, to="bob")["number"]
     _messages(setup, number, 3)
-    path = f"/api/team/{setup.team}/topic/{number}"
+    path = f"/api/team/{setup.team}/task/{number}"
     setup.alice.post(f"{path}/read", json={"number": 2})
     for n in range(5, 10):
         setup.bob.post(f"{path}/message", json={"number": n, "body": str(n)})
 
-    unread_first = setup.alice.get(path, params={"limit": 3, "from_unread": True}).json()
-    few_unread = setup.bob.get(path, params={"limit": 3, "from_unread": True}).json()
+    query = {"limit": 3, "from_unread": True}
+    unread_first = setup.alice.get(f"{path}/topic", params=query).json()
+    few_unread = setup.bob.get(f"{path}/topic", params=query).json()
 
     assert [m["number"] for m in unread_first["messages"]] == [3, 4, 5, 6, 7, 8, 9]
     assert [m["number"] for m in few_unread["messages"]] == [7, 8, 9]
@@ -189,16 +190,18 @@ def test_every_reply_of_an_assistant_names_the_human_part(
         plugin: Factory of plugin installations.
     """
     number = _open(setup)["number"]
-    path = f"/api/team/{setup.team}/topic/{number}"
+    path = f"/api/team/{setup.team}/task/{number}"
     bob = setup.bob_web.client
     bob.post(f"{path}/message", json={"number": 2, "body": "own"})
     bob.post(f"{path}/message", json={"number": 3, "body": "asked", "with_human": True})
     bob.post(f"{path}/message", json={"number": 4, "body": "said", "as_human": True})
     bob.post(f"{path}/message", json={"number": 5, "body": "note", "kind": "progress"})
     setup.bob.post(f"{path}/message", json={"number": 6, "body": "typed"})
-    setup.alice_api.client.post(f"{path}/stage", json={"text": "code"})
+    setup.alice_api.client.post(
+        f"/api/team/{setup.team}/topic/{number}/stage", json={"text": "code"}
+    )
 
-    messages = setup.alice.get(path).json()["messages"]
+    messages = setup.alice.get(f"{path}/topic").json()["messages"]
 
     assert [m["human_part"] for m in messages] == [
         "without",

@@ -785,7 +785,10 @@ the measurement").
   - A move to another person Coloqo sees by a Message addressed to them and the answer to it.
   - External waits (CI, an account, a colleague's release) are marked by the Assistant
     explicitly, as are statuses and skipped stages: only it knows their meaning.
-  - Intervals are kept ("the Assistant's move 10:02–10:17"), not every prompt.
+  - Intervals are kept ("the Assistant's move 10:02–10:17"), not every prompt; by session, not
+    by task (2026-11-08, the author, after a review note that a session holding several tasks
+    would count the same time in each): which task the time belongs to is decided when the
+    measurement reads it. Written into decision 0033.
   - "Not read yet" and "reading and thinking" are not told apart, and need not be: the human's
     share grows with the number of parallel sessions, and the figures show where a person's
     efficiency starts to drop because of it. When a person's move in task A coincides with their

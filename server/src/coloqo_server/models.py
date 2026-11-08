@@ -57,6 +57,91 @@ class TopicStatus(enum.StrEnum):
     Closed = "closed"
 
 
+class TaskType(enum.StrEnum):
+    """Type of a task (decision 0031).
+
+    Attributes:
+        Task: A work item; a task with a parent task is a subtask.
+        Promise: A commitment for a period that tasks work towards; one holding promises is
+            called a goal.
+    """
+
+    Task = "task"
+    Promise = "promise"
+
+
+class Category(enum.StrEnum):
+    """The fixed category of a stage's kind (decision 0032).
+
+    Attributes:
+        ToDo: Work has not started.
+        InProgress: Work goes on; a person's time on a task starts with its first move here.
+        Finished: Final: a finished task is never reopened.
+    """
+
+    ToDo = "to_do"
+    InProgress = "in_progress"
+    Finished = "finished"
+
+
+class StageKind(enum.StrEnum):
+    """The fixed kind of a stage; measurements and boards read it, never the name (0032).
+
+    Attributes:
+        Backlog: A task written down; it may have no assignee.
+        Analysis: A person asked an Assistant to take the task.
+        Design: A plan of changes with forks, approved by the human.
+        Documentation: The documentation changes.
+        Agreement: The decision goes to the Team or the lead; the docs MR is merged.
+        Code: The code, in one or several repositories.
+        Review: The MR and its review rounds.
+        Delivery: The release and the check in prod.
+        Done: Verified in prod.
+        Cancelled: Closed without a result.
+        Draft: A promise worded, not given yet.
+        Given: A promise given for its period.
+        Delivered: A promise kept.
+        NotDelivered: A promise's period ended without the delivery.
+        Withdrawn: A promise removed on purpose.
+    """
+
+    Backlog = "backlog"
+    Analysis = "analysis"
+    Design = "design"
+    Documentation = "documentation"
+    Agreement = "agreement"
+    Code = "code"
+    Review = "review"
+    Delivery = "delivery"
+    Done = "done"
+    Cancelled = "cancelled"
+    Draft = "draft"
+    Given = "given"
+    Delivered = "delivered"
+    NotDelivered = "not_delivered"
+    Withdrawn = "withdrawn"
+
+
+CATEGORY: dict[StageKind, Category] = {
+    StageKind.Backlog: Category.ToDo,
+    StageKind.Analysis: Category.InProgress,
+    StageKind.Design: Category.InProgress,
+    StageKind.Documentation: Category.InProgress,
+    StageKind.Agreement: Category.InProgress,
+    StageKind.Code: Category.InProgress,
+    StageKind.Review: Category.InProgress,
+    StageKind.Delivery: Category.InProgress,
+    StageKind.Done: Category.Finished,
+    StageKind.Cancelled: Category.Finished,
+    StageKind.Draft: Category.ToDo,
+    StageKind.Given: Category.InProgress,
+    StageKind.Delivered: Category.Finished,
+    StageKind.NotDelivered: Category.Finished,
+    StageKind.Withdrawn: Category.Finished,
+}
+"""The category of each stage kind."""
+
+
 class HumanPart(enum.StrEnum):
     """A human's part in a reply of an Assistant (decision 0026).
 
@@ -300,11 +385,16 @@ class Team(Base):
         slug: Its only public identifier, ``acme`` (decision 0025).
         name: Shown name.
         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
-        archive_days: Days a closed Topic stays before deletion; ``None`` takes the instance's
-            setting (decision 0021).
-        last_topic: Number of its newest Topic; the next one gets ``last_topic + 1``.
+        last_topic: Number of its newest free Topic, ``F-<number>``; the next one gets
+            ``last_topic + 1``. Topics made before the tracker took their numbers from it too and
+            keep them (decision 0031).
+        last_task: Number of its newest task, ``T-<number>``, the same way.
         last_file: Number of its newest file, the same way.
         last_event: Number of its newest event, the same way (decision 0028).
+        tracker: The task tracker is on: planning, the board and the workflow editor (0031).
+        task_idle_days: Days a task in work may go without activity before its assignee is told
+            (decision 0032).
+        task_idle_repeat_days: Days between such notices while it stays quiet.
         created_at: Creation time.
     """
 
@@ -314,10 +404,13 @@ class Team(Base):
     slug: Mapped[str] = mapped_column(String(40), unique=True)
     name: Mapped[str] = mapped_column(String(100))
     turn_limit: Mapped[int] = mapped_column(Integer, default=10)
-    archive_days: Mapped[int | None] = mapped_column(Integer)
     last_topic: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_task: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_file: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_event: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tracker: Mapped[bool] = mapped_column(default=False, server_default="false")
+    task_idle_days: Mapped[int] = mapped_column(Integer, default=7, server_default="7")
+    task_idle_repeat_days: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -392,6 +485,7 @@ class Area(Base):
         slug: Its public identifier within the Team, ``releases`` (decision 0025).
         name: Shown name, unique in the Team.
         description: What the Area is about.
+        workflow_id: The workflow its tasks move by (decision 0032).
         created_at: Creation time.
     """
 
@@ -403,6 +497,7 @@ class Area(Base):
     slug: Mapped[str] = mapped_column(String(40))
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text, default="")
+    workflow_id: Mapped[int | None] = mapped_column(ForeignKey("workflows.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -425,35 +520,40 @@ class FormerAreaSlug(Base):
 
 
 class Topic(Base):
-    """A discussion of one question in an Area.
+    """A discussion in an Area: a task's Topic, or a free Topic (decision 0031).
 
     Attributes:
         id: Identifier, never shown (decision 0025).
         team_id: The Team, denormalised for access checks.
-        number: Its number in the Team, from 1 without gaps, shown as ``T-<number>``.
+        number: Its number in the Team's free series, ``F-<number>``, given once; ``None`` for a
+            task's Topic opened as such, which is named by its task. A free Topic that became a
+            task's Topic, and every Topic made before the tracker, keeps it and leads to the task.
+        task_id: The task it belongs to; ``None`` for a free Topic. One Topic per task for now.
         area_id: The Area.
-        title: One line: the question.
-        issue: Tracker issue key or link, if the Topic is for one.
-        status: Open or closed.
-        outcome: How it was settled, with a link to the MR or issue.
+        title: One line: the question; a task's Topic mirrors its task's title.
+        issue: Tracker issue key or link; a task's Topic mirrors its task's first link.
+        status: Open or closed; a task's Topic is closed when its task is finished.
+        outcome: How it was settled, with a link to the MR or issue; mirrors the task's.
         created_by: The User who opened it.
         holder_assistant_id: The Assistant that holds it (decision 0006).
         last_number: Number of the newest Message; the next one gets ``last_number + 1``.
         turns_since_human: Assistants' turns since the last human Message (decision 0007).
         created_at: Creation time.
         updated_at: Time of the newest Message.
-        closed_at: When it was closed; ``None`` while open. The archive time runs from it.
+        closed_at: When it was closed; ``None`` while open.
         idle_warned_at: When its people were told it would close for inactivity; cleared by a
-            new Message.
-        deleted_at: When its Messages and files were deleted; the row stays as its card.
+            new Message. Free Topics only.
+        deleted_at: When its Messages and files were deleted, before Topics were kept (decision
+            0030); the row stays as its card.
     """
 
     __tablename__ = "topics"
-    __table_args__ = (UniqueConstraint("team_id", "number"),)
+    __table_args__ = (UniqueConstraint("team_id", "number"), UniqueConstraint("task_id"))
 
     id: Mapped[int] = mapped_column(primary_key=True)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
-    number: Mapped[int] = mapped_column(Integer)
+    number: Mapped[int | None] = mapped_column(Integer)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
     area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     issue: Mapped[str] = mapped_column(String(300), default="")
@@ -619,3 +719,183 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class Workflow(Base):
+    """A Team's workflow: the stages tasks of one type move by (decision 0032).
+
+    An Area points to the task workflow its tasks take; several Areas may share one.
+
+    Attributes:
+        id: Identifier.
+        team_id: The Team.
+        type: The type of task it serves.
+        created_at: Creation time.
+    """
+
+    __tablename__ = "workflows"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    type: Mapped[TaskType] = mapped_column(_enum(TaskType, "task_type"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Stage(Base):
+    """A stage of a workflow: the Team's name over a fixed kind (decision 0032).
+
+    Attributes:
+        id: Identifier.
+        workflow_id: The workflow.
+        name: Shown name, unique in the workflow.
+        kind: The fixed kind the measurement and boards read.
+        position: Order in the workflow, from 1.
+        removed_at: When the owner removed it; history still names it.
+    """
+
+    __tablename__ = "stages"
+    __table_args__ = (UniqueConstraint("workflow_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workflow_id: Mapped[int] = mapped_column(
+        ForeignKey("workflows.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(60))
+    kind: Mapped[StageKind] = mapped_column(_enum(StageKind, "stage_kind"))
+    position: Mapped[int] = mapped_column(Integer)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Task(Base):
+    """A Team's work item, ``T-<number>`` (decision 0031).
+
+    Attributes:
+        id: Identifier, never shown (decision 0025).
+        team_id: The Team.
+        number: Its number in the Team, from 1 without gaps.
+        type: A task or a promise.
+        area_id: Its Area, which gives its workflow.
+        parent_id: The promise or task it belongs to: a promise holds promises or tasks, never
+            both; a task holds only subtasks.
+        title: One line.
+        description: Markdown; every edit is kept in the timeline (decision 0033).
+        stage_id: Its stage.
+        assignee_id: The human answering for it; ``None`` in the backlog.
+        outcome: How it ended, with links; set when it is finished.
+        waiting: What it waits for, while an external wait is marked (decision 0033).
+        rank: Its place within its status: a smaller rank stands higher (decision 0031).
+        source_id: The task within which it was created, if any.
+        created_by: The User on whose behalf it was created.
+        created_at: Creation time.
+        updated_at: Time of its newest timeline entry; its Topic's ``updated_at`` holds that of
+            its newest Message.
+        started_at: Its first move into work.
+        finished_at: When it reached a finished stage.
+        idle_noticed_at: When its assignee was last told it had no activity.
+    """
+
+    __tablename__ = "tasks"
+    __table_args__ = (UniqueConstraint("team_id", "number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    number: Mapped[int] = mapped_column(Integer)
+    type: Mapped[TaskType] = mapped_column(_enum(TaskType, "task_type"), default=TaskType.Task)
+    area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    stage_id: Mapped[int] = mapped_column(ForeignKey("stages.id"))
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    outcome: Mapped[str] = mapped_column(Text, default="")
+    waiting: Mapped[str | None] = mapped_column(String(300))
+    rank: Mapped[float] = mapped_column(default=0.0)
+    source_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    idle_noticed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TaskLink(Base):
+    """A link from a task to an issue of an external tracker: no sync (decision 0031).
+
+    Attributes:
+        id: Identifier.
+        task_id: The task.
+        key: The issue's key, ``ACME-42``.
+        url: The issue's address, if given.
+        created_at: When it was added.
+    """
+
+    __tablename__ = "task_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(100))
+    url: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TaskEvent(Base):
+    """An entry of a task's timeline, kept for good (decision 0033).
+
+    Unlike the stream's events (a week, decision 0008), the timeline is data: creation, stages,
+    skipped stages, assignments, waits, description edits, closing. A new kind needs no
+    migration. Whose move it was is kept apart, by session (``Move``).
+
+    Attributes:
+        id: Identifier; orders entries of the same moment.
+        task_id: The task.
+        kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
+            ``described``, ``linked``, ``closed``, ...
+        author_user_id: The human on whose behalf it happened; ``None`` for Coloqo itself.
+        author_assistant_id: The Assistant that did it, if not the human in the web.
+        data: What the kind needs, e.g. the stages moved between.
+        created_at: When it happened.
+    """
+
+    __tablename__ = "task_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    author_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    author_assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Move(Base):
+    """An interval of whose move it was in a session: its Assistant's or its human's (0033).
+
+    Kept as the raw fact, by session, never by task: which task the time belongs to is decided
+    when the measurement reads it, so a rule can change without the data being wrong.
+
+    Attributes:
+        id: Identifier.
+        assistant_id: The session's Assistant.
+        user_id: Its human.
+        move: ``assistant`` from a prompt to the Assistant's stop, ``human`` from the stop to
+            the next prompt.
+        started_at: When it began.
+        ended_at: When it ended.
+        created_at: When the session's watch posted it.
+    """
+
+    __tablename__ = "moves"
+    __table_args__ = (UniqueConstraint("assistant_id", "started_at", "move"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    assistant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assistants.id", ondelete="SET NULL"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    move: Mapped[str] = mapped_column(String(16))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

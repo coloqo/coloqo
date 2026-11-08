@@ -1,33 +1,38 @@
-"""How long a Topic lives: idle ones close, archived ones lose their conversation (0021)."""
+"""Quiet work: idle free Topics close, quiet tasks are noticed (decisions 0021, 0030, 0032).
+
+Topics are no longer deleted by time (decision 0030).
+"""
 
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from coloqo_server.api.teams import online
-from coloqo_server.api.topics import assistants_by_id, stored, topic_head
+from coloqo_server.api.topics import assistants_by_id, ref, topic_head
 from coloqo_server.events import add_event
 from coloqo_server.models import (
+    CATEGORY,
     Area,
     Assistant,
-    Event,
-    File,
+    Category,
     Message,
     MessageKind,
-    Participant,
+    Stage,
+    Task,
     Team,
     Topic,
     TopicStatus,
+    User,
 )
 from coloqo_server.settings import Settings
 
 IDLE_OUTCOME = "Closed for inactivity: no Messages for {days} days."
 
 
-async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict, dict]:
-    """Return what an event about a Topic carries, in both shapes, with its holder.
+async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> dict:
+    """Return what an event about a free Topic carries, with its holder.
 
     The holder's project goes with it, and whether the holder is online, so the project's
     other sessions hear about the Topic when its holder is gone (decisions 0024, 0029).
@@ -40,7 +45,7 @@ async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict,
     team = await db.get(Team, topic.team_id)
     area = await db.get(Area, topic.area_id)
     assert team is not None
-    new, old = topic_head(topic, team, area)
+    new = topic_head(topic, team, area, None)
     holder = (await assistants_by_id(db, {topic.holder_assistant_id})).get(
         topic.holder_assistant_id or 0
     )
@@ -50,12 +55,11 @@ async def _head(db: AsyncSession, topic: Topic, moment: datetime) -> tuple[dict,
         "holder_project": holder.project if holder else None,
         "holder_live": bool(row and online(row, moment)),
     }
-    old |= {"holder_assistant_id": topic.holder_assistant_id}
-    return new, old
+    return new
 
 
 async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> set[int]:
-    """Tell the Team of Topics about to close for inactivity, once per quiet spell.
+    """Tell the Team of free Topics about to close for inactivity, once per quiet spell.
 
     The event goes to the whole Team, as every event (decision 0028); a plugin shows it to the
     holder and to the holder's project's other sessions, the web shows it to nobody.
@@ -73,6 +77,7 @@ async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> s
         await db.scalars(
             select(Topic)
             .where(
+                Topic.task_id.is_(None),
                 Topic.status == TopicStatus.Open,
                 Topic.deleted_at.is_(None),
                 Topic.idle_warned_at.is_(None),
@@ -85,14 +90,16 @@ async def warn_idle(db: AsyncSession, settings: Settings, moment: datetime) -> s
     for topic in topics:
         topic.idle_warned_at = moment
         closes_at = topic.updated_at + timedelta(days=settings.idle_close_days)
-        new, old = await _head(db, topic, moment)
-        new["closes_at"] = old["closes_at"] = closes_at.isoformat()
-        recipients |= await add_event(db, topic.team_id, "topic_idle", stored(new, old))
+        new = await _head(db, topic, moment)
+        new["closes_at"] = closes_at.isoformat()
+        recipients |= await add_event(db, topic.team_id, "topic_idle", new)
     return recipients
 
 
 async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> set[int]:
-    """Close open Topics without Messages for the idle time, with a line in their feed.
+    """Close open free Topics without Messages for the idle time, with a line in their feed.
+
+    A task's Topic is never closed this way: that would write a false outcome (decision 0032).
 
     Args:
         db: Database session.
@@ -106,6 +113,7 @@ async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> 
         await db.scalars(
             select(Topic)
             .where(
+                Topic.task_id.is_(None),
                 Topic.status == TopicStatus.Open,
                 Topic.deleted_at.is_(None),
                 Topic.updated_at < moment - timedelta(days=settings.idle_close_days),
@@ -131,66 +139,117 @@ async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> 
         topic.status = TopicStatus.Closed
         topic.outcome = topic.outcome or outcome
         topic.closed_at = moment
-        new, old = await _head(db, topic, moment)
+        new = await _head(db, topic, moment)
         closing = {
             "status": TopicStatus.Closed.value,
             "author": "Coloqo",
             "outcome": topic.outcome,
             "automatic": True,
         }
+        recipients |= await add_event(db, topic.team_id, "topic_status", new | closing)
+    return recipients
+
+
+async def last_activity(db: AsyncSession, ids: list[int]) -> dict[int, datetime]:
+    """Return when each task's subtree was last active: the task, its descendants, their Topics.
+
+    Work on a subtask moves its task and the promise above it (the author, 2026-11-08): a task
+    or a promise is quiet only when its whole subtree is.
+
+    Args:
+        db: Database session.
+        ids: The tasks.
+    """
+    if not ids:
+        return {}
+    tree = (
+        select(Task.id.label("root"), Task.id.label("node"))
+        .where(Task.id.in_(ids))
+        .cte("tree", recursive=True)
+    )
+    child = aliased(Task)
+    tree = tree.union_all(select(tree.c.root, child.id).where(child.parent_id == tree.c.node))
+    node = aliased(Task)
+    rows = await db.execute(
+        select(
+            tree.c.root,
+            func.max(
+                func.greatest(node.updated_at, func.coalesce(Topic.updated_at, node.updated_at))
+            ),
+        )
+        .join(node, node.id == tree.c.node)
+        .outerjoin(Topic, Topic.task_id == node.id)
+        .group_by(tree.c.root)
+    )
+    return dict(rows.all())
+
+
+async def notice_quiet_tasks(db: AsyncSession, moment: datetime) -> set[int]:
+    """Tell the human answering for a task in work that has gone quiet, and again while it does.
+
+    Quiet means no timeline entry and no Message in its Topic, nor in any of its descendants
+    and theirs, for the Team's ``task_idle_days``; the notice repeats every
+    ``task_idle_repeat_days``. A task with an active external wait is not quiet: it waits
+    (decision 0032). A given promise is a task in work too, quiet only when its tasks are. The
+    event goes to the Team, as every event; the plugin shows it to the assignee's sessions.
+
+    Args:
+        db: Database session.
+        moment: Now.
+
+    Returns:
+        The Users who got events, to wake after the commit.
+    """
+    working = [kind for kind, category in CATEGORY.items() if category == Category.InProgress]
+    rows = (
+        await db.execute(
+            select(Task, Stage, Team)
+            .join(Stage, Stage.id == Task.stage_id)
+            .join(Team, Team.id == Task.team_id)
+            .where(
+                Task.finished_at.is_(None),
+                Stage.kind.in_(working),
+                Task.assignee_id.is_not(None),
+                Task.waiting.is_(None),
+                Task.updated_at < moment - Team.task_idle_days * timedelta(days=1),
+                or_(
+                    Task.idle_noticed_at.is_(None),
+                    Task.idle_noticed_at < moment - Team.task_idle_repeat_days * timedelta(days=1),
+                ),
+            )
+            .with_for_update(of=Task, skip_locked=True)
+        )
+    ).all()
+    active = await last_activity(db, [task.id for task, _, _ in rows])
+    recipients: set[int] = set()
+    for task, stage, team in rows:
+        last = active.get(task.id, task.updated_at)
+        if last >= moment - timedelta(days=team.task_idle_days):
+            continue
+        task.idle_noticed_at = moment
+        assignee = await db.get(User, task.assignee_id)
+        area = await db.get(Area, task.area_id)
         recipients |= await add_event(
-            db, topic.team_id, "topic_status", stored(new | closing, old | closing)
+            db,
+            team.id,
+            "task_idle",
+            {
+                "team": team.slug,
+                "task": task.number,
+                "ref": ref(task.number),
+                "title": task.title,
+                "area": area.name if area else "",
+                "stage": stage.name,
+                "assignee": assignee.pseudonym if assignee else None,
+                "quiet_since": last.isoformat(),
+                "days": (moment - last).days,
+            },
         )
     return recipients
 
 
-async def delete_archived(db: AsyncSession, settings: Settings, moment: datetime) -> list[Path]:
-    """Delete the conversation of Topics past their archive time; keep each Topic as a card.
-
-    Messages, files, read marks and events go; the Topic row with its title, outcome, holder
-    and dates stays, so a link to it says what became of it.
-
-    Args:
-        db: Database session.
-        settings: Instance settings.
-        moment: Now.
-
-    Returns:
-        Files on disk to remove once the deletion is committed.
-    """
-    days = func.coalesce(Team.archive_days, settings.archive_days)
-    topics = list(
-        await db.scalars(
-            select(Topic)
-            .join(Team, Team.id == Topic.team_id)
-            .where(
-                Topic.status == TopicStatus.Closed,
-                Topic.deleted_at.is_(None),
-                Topic.closed_at.is_not(None),
-                Topic.closed_at < moment - days * timedelta(days=1),
-            )
-            .with_for_update(of=Topic, skip_locked=True)
-        )
-    )
-    gone: list[Path] = []
-    for topic in topics:
-        files = list(await db.scalars(select(File).where(File.topic_id == topic.id)))
-        gone += [Path(settings.files_dir) / str(topic.team_id) / str(f.id) for f in files]
-        await db.execute(delete(File).where(File.topic_id == topic.id))
-        await db.execute(delete(Message).where(Message.topic_id == topic.id))
-        await db.execute(delete(Participant).where(Participant.topic_id == topic.id))
-        await db.execute(
-            delete(Event).where(
-                Event.team_id == topic.team_id,
-                Event.data["topic"].astext == str(topic.number),
-            )
-        )
-        topic.deleted_at = moment
-    return gone
-
-
 async def tend(db: AsyncSession, settings: Settings, moment: datetime) -> set[int]:
-    """Run the Topics' life cycle once: warn, close idle ones, delete archived ones.
+    """Run the life cycle once: warn and close idle free Topics, notice quiet tasks.
 
     Args:
         db: Database session.
@@ -199,15 +258,9 @@ async def tend(db: AsyncSession, settings: Settings, moment: datetime) -> set[in
 
     Returns:
         The Users who got events, to wake after the commit.
-
-    Raises:
-        OSError: A deleted Topic's file could not be removed from disk; the database change is
-            committed already.
     """
     recipients = await warn_idle(db, settings, moment)
     recipients |= await close_idle(db, settings, moment)
-    gone = await delete_archived(db, settings, moment)
+    recipients |= await notice_quiet_tasks(db, moment)
     await db.commit()
-    for path in gone:
-        path.unlink(missing_ok=True)
     return recipients

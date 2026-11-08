@@ -386,7 +386,14 @@ class ServerAnswers:
             "messages": [],
             "turns_since_human": 0,
             "turn_limit": 8,
-            "deletes_at": "2026-10-27T10:00:00Z",
+            "type": "task",
+            "stage": "Code",
+            "category": "in_progress",
+            "assignee": "alice",
+            "waiting": "a token",
+            "description": "",
+            "links": [],
+            "topic": None,
         }
 
 
@@ -396,11 +403,24 @@ class ServerAnswers:
         (lambda: mcp_server.open_topic("dev", "Fix export", "Took ACME-42"), True),
         (lambda: mcp_server.post_message("T-3", 6, "Done."), True),
         (lambda: mcp_server.hold_topic("T-3"), True),
-        (lambda: mcp_server.note_stage("T-3", "code in billing"), True),
+        (lambda: mcp_server.note_stage("F-3", "code in billing"), True),
         (lambda: mcp_server.close_topic("T-3", "Fixed in ACME-42"), True),
+        (lambda: mcp_server.change_stage("T-3", "Code"), True),
+        (lambda: mcp_server.take_task("T-3"), True),
+        (lambda: mcp_server.wait_task("T-3", "a token"), True),
         (lambda: mcp_server.read_topic("T-3"), False),
     ],
-    ids=["open_topic", "post_message", "hold_topic", "note_stage", "close_topic", "read_topic"],
+    ids=[
+        "open_topic",
+        "post_message",
+        "hold_topic",
+        "note_stage",
+        "close_topic",
+        "change_stage",
+        "take_task",
+        "wait_task",
+        "read_topic",
+    ],
 )
 def test_a_write_to_coloqo_marks_the_session(
     trail_dir: Path, monkeypatch: pytest.MonkeyPatch, tool: Any, writes: bool
@@ -611,3 +631,50 @@ def test_session_start_registers_the_hook_s_session(
 
     assert Briefed.sessions == ["s7"]
     assert "Coloqo: briefed." in capsys.readouterr().out
+
+
+def test_moves_turn_prompts_and_stops_into_intervals() -> None:
+    """From a prompt to a stop the move is the Assistant's, from a stop to a prompt the human's;
+    a repeated mark keeps the earlier one, and the last mark stays open (decision 0033)."""
+    found, last = trail.intervals([("p", 10), ("p", 12), ("s", 20), ("s", 21), ("p", 50)], None)
+    more, still = trail.intervals([("s", 60)], last)
+
+    assert found == [("assistant", 10, 20), ("human", 20, 50)]
+    assert last == ("p", 50)
+    assert (more, still) == ([("assistant", 50, 60)], ("s", 60))
+
+
+def test_the_hooks_log_moves_and_the_watch_reads_only_what_is_new(trail_dir: Path) -> None:
+    """A watch starting late sends nothing old; then it gets each finished interval once.
+
+    Args:
+        trail_dir: Where the trail marks are kept.
+    """
+    trail.log_move("s9", "p")
+    trail.log_move("s9", "s")
+    log = trail.MoveLog("s9")
+    nothing = log.take()
+    trail.log_move("s9", "p")
+    trail.log_move("s9", "s")
+    first = log.take()
+    again = log.take()
+
+    assert nothing == []
+    assert [move for move, _, _ in first] == ["human", "assistant"]
+    assert again == []
+
+
+def test_the_watch_reads_a_log_written_anew(trail_dir: Path) -> None:
+    """A log removed by the cleanup and written again is read from its start, not lost.
+
+    Args:
+        trail_dir: Where the trail marks are kept.
+    """
+    for mark in "pspsps":
+        trail.log_move("s8", mark)
+    log = trail.MoveLog("s8")
+    log.path.unlink()
+    trail.log_move("s8", "p")
+    trail.log_move("s8", "s")
+
+    assert [move for move, _, _ in log.take()] == ["human", "assistant"]

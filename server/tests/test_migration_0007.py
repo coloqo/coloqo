@@ -89,13 +89,13 @@ def test_migration_keeps_the_pilot_s_data(
     teams = {t["name"]: t for t in alice.get("/api/team").json()}
     pay = teams["Платёжный сервис"]["slug"]
     topics = alice.get(f"/api/team/{pay}/topic").json()
-    detail = bob.get(f"/api/team/{pay}/topic/2").json()
+    detail = bob.get(f"/api/team/{pay}/task/2/topic").json()
     team = alice.get(f"/api/team/{pay}").json()
 
     assert (pay, teams["Globex"]["slug"]) == ("platyozhnyy-servis", "globex")
     assert team["areas"][0]["slug"] == "razrabotka"
     assert sorted(t["number"] for t in topics) == [1, 2]
-    assert alice.get("/api/team/globex/topic/1").json()["number"] == 1
+    assert alice.get("/api/team/globex/task/1/topic").json()["number"] == 1
     assert [m["human_part"] for m in detail["messages"]] == [None, "words"]
     holder, word = detail["holder"].rsplit(" · ", 1)
     assert holder == "alice · billing-api"

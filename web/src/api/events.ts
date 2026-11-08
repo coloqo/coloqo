@@ -39,7 +39,8 @@ export function useEventStream(enabled: boolean) {
     const onTopicChange = (event: MessageEvent<string>) => {
       const data = parse(event)
       if (data.team !== undefined && data.topic !== undefined) {
-        void queryClient.invalidateQueries({ queryKey: ['topic', data.team, data.topic] })
+        // A task's Topic and a free one share numbers: refresh the Team's open Topic pages.
+        void queryClient.invalidateQueries({ queryKey: ['topic', data.team] })
       }
       refreshLists(data)
     }

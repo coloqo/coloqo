@@ -24,7 +24,7 @@ def test_github_login_creates_user_without_pseudonym(app: FastAPI) -> None:
         assert callback.status_code == 200
         assert 'content="0;url=/teams"' in callback.text
         assert client.get("/api/me").json()["pseudonym"] is None
-        assert client.get("/api/teams").status_code == 403
+        assert client.get("/api/team").status_code == 403
         assert client.put("/api/me/pseudonym", json={"pseudonym": "alice"}).status_code == 200
         assert client.get("/api/me").json()["pseudonym"] == "alice"
 

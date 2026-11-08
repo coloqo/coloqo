@@ -52,7 +52,10 @@ Nothing changes for a member yet but the deletion of closed Topics, which stops.
   (question 1, the author, 2026-11-08; guessing from the last stage note's text was dropped: a wrong
   guess would enter the timeline as a fact).
 - The timeline is seeded with "created" at the Topic's creation and "closed" at its closing; old
-  stage notes stay as Messages.
+  stage notes stay as Messages. An open task's "stage set by the migration" is dated at the
+  migration, and so is its activity: a Topic quiet for weeks gets a week before its first quiet
+  notice, for its holder to set the real stage (the author, 2026-11-08, after a review note that
+  every such Topic would start daily notices at once).
 - `last_task = last_topic` per Team; both counters continue from there.
 
 **Behaviour:**
@@ -63,14 +66,21 @@ Nothing changes for a member yet but the deletion of closed Topics, which stops.
   Team) is dropped; idle closing stays for free Topics only.
 - **A task in work with no activity** (question 4, the author, 2026-11-08): after 7 days with no
   timeline event and no Message in its Topic, its assignee's sessions get a notice through the watch
-  and at session start ("T-42 has not moved for 7 days: change its stage, mark a wait or close it"),
-  and again every day until something happens. Daily, because Assistants get it and cannot just
-  ignore it. A task with an active wait gets none. Both the threshold and the repetition are Team
+  and at session start, and again every day until something happens. The notice asks the
+  Assistant to tell its user and ask whether the task waits, has moved on or is done, and to move
+  or close it only by the answer, never just to quiet the notice (the author, 2026-11-08, after a
+  review note: "change its stage, mark a wait or close it" pushes an obedient Assistant to false
+  marks that enter the timeline as facts). Daily, because Assistants get it and cannot just
+  ignore it. A task with an active wait gets none. Activity counts over the subtree: a task or a
+  given promise is quiet only when its descendants and their Topics are too (the author, round 1
+  of PR A's review: "if I move a subtask of a task tied to a promise, I move the task and the
+  promise too; the work goes on"). Both the threshold and the repetition are Team
   settings (`teams.task_idle_days`, `teams.task_idle_repeat_days`), shown next to the tracker
   switch; 7 and 1 by default.
 - **API** for the plugin and the web: tasks — list, read (the task, its Topic's feed and its
   timeline), create, take, change stage (with skip), wait and resume, close, edit the description,
-  links, assign and order (the web only); whose-move intervals posted by the plugin; free Topics
+  links, assign and order (the web only); whose-move intervals posted by the plugin, kept by session in a table of their own
+  (decision 0033); free Topics
   keep the `/topic/N` paths.
 - **Old plugins** (`X-Coloqo-Plugin` below the new release): `/topic/N` means `T-N`, as it did, and
   `open_topic` opens a task's Topic in a Team without the tracker; free Topics are not shown to
@@ -101,7 +111,7 @@ board comes. The switch is not set by the migration: that would name the pilot t
 - **Tools:** `create_task`, `take_task`, `change_stage` (with `skipped`), `wait` / `resumed`,
   `close_task` (outcome), `edit_task` (description, links); `open_topic` opens a free Topic or a
   Topic for a new task; `read_topic` and the renderer take `T-` and `F-`; `note_stage` becomes
-  `change_stage` for tasks and stays a progress line for free Topics.
+  `change_stage` for tasks and stays a stage line for free Topics (decision 0021).
 - **Whose move:** the hooks already write the marks — `UserPromptSubmit` (`trail.prompt_arrived`,
   which tells a human's prompt from one made by an event) and `Stop` (`trail.turn_ended`). The
   hooks stay offline; the watch, which runs as long as the session, turns the marks into intervals

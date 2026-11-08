@@ -103,7 +103,7 @@ def test_addressed_topic_lands_in_inbox_until_read(setup: Setup) -> None:
 
     (entry,) = bob.get("/api/inbox").json()
     assert (entry["number"], entry["unread"], entry["addressed"]) == (topic["number"], 1, True)
-    bob.post(f"/api/team/{setup.team}/topic/{topic['number']}/read", json={"number": 1})
+    bob.post(f"/api/team/{setup.team}/task/{topic['number']}/read", json={"number": 1})
     assert bob.get("/api/inbox").json() == []
 
 
@@ -116,7 +116,7 @@ def test_reply_with_taken_number_returns_unread(setup: Setup) -> None:
     topic = _open(setup)
     bob = setup.bob_web.client
     first = bob.post(
-        f"/api/team/{setup.team}/topic/{topic['number']}/message",
+        f"/api/team/{setup.team}/task/{topic['number']}/message",
         json={"number": 2, "body": "Yes", "to": "alice"},
     )
     assert first.status_code == 201, first.text
@@ -143,18 +143,18 @@ def test_reply_points_to_an_earlier_message(setup: Setup) -> None:
     bob = setup.bob_web.client
 
     reply = bob.post(
-        f"/api/team/{setup.team}/topic/{tid}/message",
+        f"/api/team/{setup.team}/task/{tid}/message",
         json={"number": 2, "body": "Yes", "reply_to": 1},
     )
     to_itself = bob.post(
-        f"/api/team/{setup.team}/topic/{tid}/message",
+        f"/api/team/{setup.team}/task/{tid}/message",
         json={"number": 3, "body": "?", "reply_to": 3},
     )
     to_none = bob.post(
-        f"/api/team/{setup.team}/topic/{tid}/message",
+        f"/api/team/{setup.team}/task/{tid}/message",
         json={"number": 3, "body": "?", "reply_to": 0},
     )
-    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/task/{tid}/topic").json()
 
     assert reply.status_code == 201, reply.text
     assert reply.json()["reply_to"] == 1
@@ -171,17 +171,17 @@ def test_messages_of_the_holder_are_marked(setup: Setup) -> None:
     """
     tid = _open(setup)["number"]
     alice, bob = setup.alice_api.client, setup.bob_web.client
-    bob.post(f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "Before"})
-    bob.post(f"/api/team/{setup.team}/topic/{tid}/hold")
-    bob.post(f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 3, "body": "Holding"})
+    bob.post(f"/api/team/{setup.team}/task/{tid}/message", json={"number": 2, "body": "Before"})
+    bob.post(f"/api/team/{setup.team}/task/{tid}/hold")
+    bob.post(f"/api/team/{setup.team}/task/{tid}/message", json={"number": 3, "body": "Holding"})
     alice.post(
-        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 4, "body": "Not any more"}
+        f"/api/team/{setup.team}/task/{tid}/message", json={"number": 4, "body": "Not any more"}
     )
     setup.alice.post(
-        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 5, "body": "Human"}
+        f"/api/team/{setup.team}/task/{tid}/message", json={"number": 5, "body": "Human"}
     )
 
-    messages = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()["messages"]
+    messages = setup.alice.get(f"/api/team/{setup.team}/task/{tid}/topic").json()["messages"]
 
     assert [m["by_holder"] for m in messages] == [True, False, True, False, False]
     assert [m["assistant_key"] for m in messages] == [
@@ -210,7 +210,7 @@ def test_migration_marks_messages_of_the_current_holder(setup: Setup, settings: 
     command.downgrade(config, "0004")
 
     migrate(settings.database_url, settings.files_dir)
-    messages = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()["messages"]
+    messages = setup.alice.get(f"/api/team/{setup.team}/task/{tid}/topic").json()["messages"]
 
     assert [m["by_holder"] for m in messages] == [True, False]
 
@@ -264,35 +264,35 @@ def test_turn_limit_waits_for_a_human(setup: Setup) -> None:
 
     assert (
         bob.post(
-            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "a"}
+            f"/api/team/{setup.team}/task/{tid}/message", json={"number": 2, "body": "a"}
         ).status_code
         == 201
     )
     assert (
         alice.post(
-            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 3, "body": "b"}
+            f"/api/team/{setup.team}/task/{tid}/message", json={"number": 3, "body": "b"}
         ).status_code
         == 201
     )
     blocked = bob.post(
-        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 4, "body": "c"}
+        f"/api/team/{setup.team}/task/{tid}/message", json={"number": 4, "body": "c"}
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "turn_limit"
     progress = alice.post(
-        f"/api/team/{setup.team}/topic/{tid}/message",
+        f"/api/team/{setup.team}/task/{tid}/message",
         json={"number": 4, "body": "working", "kind": "progress"},
     )
     assert progress.status_code == 201
     assert (
         setup.bob.post(
-            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 5, "body": "go on"}
+            f"/api/team/{setup.team}/task/{tid}/message", json={"number": 5, "body": "go on"}
         ).status_code
         == 201
     )
     assert (
         bob.post(
-            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 6, "body": "c"}
+            f"/api/team/{setup.team}/task/{tid}/message", json={"number": 6, "body": "c"}
         ).status_code
         == 201
     )
@@ -307,74 +307,123 @@ def test_relayed_human_words_reset_the_turns(setup: Setup) -> None:
     setup.alice.patch(f"/api/team/{setup.team}", json={"turn_limit": 1})
     tid = _open(setup)["number"]
     bob = setup.bob_web.client
-    bob.post(f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "a"})
+    bob.post(f"/api/team/{setup.team}/task/{tid}/message", json={"number": 2, "body": "a"})
 
     relayed = bob.post(
-        f"/api/team/{setup.team}/topic/{tid}/message",
+        f"/api/team/{setup.team}/task/{tid}/message",
         json={"number": 3, "body": "Bob says: go", "as_human": True},
     )
 
     assert relayed.status_code == 201
     assert relayed.json()["human_part"] == "words"
-    assert bob.get(f"/api/team/{setup.team}/topic/{tid}").json()["turns_since_human"] == 0
+    assert bob.get(f"/api/team/{setup.team}/task/{tid}/topic").json()["turns_since_human"] == 0
 
 
-def test_holder_closes_and_a_new_turn_reopens(setup: Setup) -> None:
-    """The holder closes its Topic with an outcome, leaving a line; a new turn reopens it.
+def _open_free(setup: Setup) -> int:
+    """Open a free Topic by Alice's Assistant, as a plugin that knows tasks; return its number.
 
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["number"]
-    closing = {"status": "closed", "outcome": "Renamed in ACME-42"}
+    response = setup.alice_api.client.post(
+        f"/api/team/{setup.team}/topic",
+        json={"area": setup.area, "title": "Which date format?", "body": "?", "free": True},
+        headers=NEW,
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["number"]
 
-    by_other = setup.bob_web.client.patch(f"/api/team/{setup.team}/topic/{tid}", json=closing)
-    no_outcome = setup.alice_api.client.patch(
-        f"/api/team/{setup.team}/topic/{tid}", json={"status": "closed"}
-    )
-    closed = setup.alice_api.client.patch(
-        f"/api/team/{setup.team}/topic/{tid}", json=closing
-    ).json()
-    reopen_by_patch = setup.alice_api.client.patch(
-        f"/api/team/{setup.team}/topic/{tid}", json={"status": "open"}
-    )
-    line = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()["messages"][-1]
-    setup.bob_web.client.post(
-        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 3, "body": "One more"}
-    )
-    reopened = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+
+NEW = {"X-Coloqo-Plugin": "0.7.0"}
+"""Headers of a plugin that knows tasks and free Topics."""
+
+
+def test_holder_closes_a_free_topic_and_a_new_turn_reopens(setup: Setup) -> None:
+    """The holder closes a free Topic with an outcome, leaving a line; a new turn reopens it.
+
+    Args:
+        setup: The Team.
+    """
+    number = _open_free(setup)
+    path = f"/api/team/{setup.team}/topic/{number}"
+    closing = {"status": "closed", "outcome": "ISO dates, see ACME-42"}
+
+    by_other = setup.bob_web.client.patch(path, json=closing, headers=NEW)
+    no_outcome = setup.alice_api.client.patch(path, json={"status": "closed"}, headers=NEW)
+    closed = setup.alice_api.client.patch(path, json=closing, headers=NEW).json()
+    reopen_by_patch = setup.alice_api.client.patch(path, json={"status": "open"}, headers=NEW)
+    line = setup.alice.get(path).json()["messages"][-1]
+    setup.bob.post(f"{path}/message", json={"number": 3, "body": "One more"})
+    reopened = setup.alice.get(path).json()
 
     assert by_other.json()["detail"]["code"] == "not_holder"
     assert no_outcome.status_code == 422
     assert (closed["status"], closed["closed_at"] is not None) == ("closed", True)
-    assert closed["deletes_at"] is not None
+    assert (closed["ref"], closed["kind"], closed["deletes_at"]) == (f"F-{number}", "free", None)
     assert reopen_by_patch.status_code == 403
     assert (line["kind"], line["body"], line["assistant"]) == (
         "closed",
-        "Renamed in ACME-42",
+        "ISO dates, see ACME-42",
         setup.alice_api.assistant,
     )
     assert (reopened["status"], reopened["outcome"], reopened["closed_at"]) == (
         "open",
-        "Renamed in ACME-42",
+        "ISO dates, see ACME-42",
         None,
     )
 
 
-def test_human_closes_and_reopens(setup: Setup) -> None:
-    """A human of the Team closes a Topic, without an outcome if they wish, and reopens it.
+def test_an_old_plugin_closing_a_task_s_topic_closes_the_task(setup: Setup) -> None:
+    """A plugin older than the tracker closes the Topic; the task is done and stays so (0032).
 
     Args:
         setup: The Team.
     """
-    tid = _open(setup)["number"]
+    number = _open(setup)["number"]
+    path = f"/api/team/{setup.team}/topic/{number}"
+    closing = {"status": "closed", "outcome": "Renamed in ACME-42"}
+
+    by_other = setup.bob_web.client.patch(path, json=closing)
+    no_outcome = setup.alice_api.client.patch(path, json={"status": "closed"})
+    closed = setup.alice_api.client.patch(path, json=closing).json()
+    reopen_by_patch = setup.alice_api.client.patch(path, json={"status": "open"})
+    by_human = setup.bob.patch(path, json=closing)
+    setup.bob.post(
+        f"/api/team/{setup.team}/task/{number}/message", json={"number": 3, "body": "One more"}
+    )
+    task = setup.alice.get(f"/api/team/{setup.team}/task/{number}").json()
+
+    assert by_other.json()["detail"]["code"] == "not_holder"
+    assert no_outcome.status_code == 422
+    assert (closed["status"], closed["ref"], closed["kind"]) == ("closed", f"T-{number}", "task")
+    assert reopen_by_patch.status_code == 403
+    assert by_human.status_code == 404
+    assert (task["stage"], task["category"], task["outcome"]) == (
+        "Done",
+        "finished",
+        "Renamed in ACME-42",
+    )
+    assert task["topic"]["status"] == "closed"
+    assert [m["kind"] for m in task["topic"]["messages"]] == ["message", "closed", "message"]
+
+
+def test_human_closes_and_reopens_a_free_topic(setup: Setup) -> None:
+    """A human closes a free Topic, without an outcome if they wish, and reopens it; a task's
+    Topic is closed only by its assignee's Assistant (decision 0032).
+
+    Args:
+        setup: The Team.
+    """
+    number = _open_free(setup)
+    task = _open(setup)["number"]
 
     closed = setup.bob.patch(
-        f"/api/team/{setup.team}/topic/{tid}", json={"status": "closed"}
+        f"/api/team/{setup.team}/topic/{number}", json={"status": "closed"}
     ).json()
     reopened = setup.bob.patch(
-        f"/api/team/{setup.team}/topic/{tid}", json={"status": "open"}
+        f"/api/team/{setup.team}/topic/{number}", json={"status": "open"}
     ).json()
+    on_task = setup.bob.post(f"/api/team/{setup.team}/task/{task}/close", json={"outcome": "done"})
 
     assert closed["status"] == "closed"
     assert (reopened["status"], reopened["closed_at"], reopened["deletes_at"]) == (
@@ -382,6 +431,7 @@ def test_human_closes_and_reopens(setup: Setup) -> None:
         None,
         None,
     )
+    assert on_task.status_code == 403
 
 
 def test_stage_is_a_line_of_the_holder_without_a_number(setup: Setup) -> None:
@@ -402,7 +452,7 @@ def test_stage_is_a_line_of_the_holder_without_a_number(setup: Setup) -> None:
         f"/api/team/{setup.team}/topic/{tid}/message",
         json={"number": 3, "body": "x", "kind": "stage"},
     )
-    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/task/{tid}/topic").json()
 
     assert stage.status_code == 201, stage.text
     assert (stage.json()["number"], stage.json()["kind"], stage.json()["body"]) == (
@@ -441,10 +491,10 @@ def test_outsider_sees_nothing(
     tid = _open(setup)["number"]
     eve = plugin(human("eve"), "x").client
 
-    assert eve.get(f"/api/team/{setup.team}/topic/{tid}").status_code == 404
+    assert eve.get(f"/api/team/{setup.team}/task/{tid}/topic").status_code == 404
     assert (
         eve.post(
-            f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "hi"}
+            f"/api/team/{setup.team}/task/{tid}/message", json={"number": 2, "body": "hi"}
         ).status_code
         == 404
     )
@@ -460,7 +510,7 @@ def test_file_upload_attach_download(setup: Setup) -> None:
     tid = _open(setup)["number"]
     alice = setup.alice_api.client
     uploaded = alice.post(
-        f"/api/team/{setup.team}/topic/{tid}/file",
+        f"/api/team/{setup.team}/task/{tid}/file",
         content=b"select 1;\n",
         headers={"X-File-Name": "query%20one.sql", "Content-Type": "text/plain"},
     )
@@ -468,7 +518,7 @@ def test_file_upload_attach_download(setup: Setup) -> None:
     file = uploaded.json()
 
     message = alice.post(
-        f"/api/team/{setup.team}/topic/{tid}/message",
+        f"/api/team/{setup.team}/task/{tid}/message",
         json={"number": 2, "body": "The script", "files": [file["number"]]},
     ).json()
     download = setup.bob_web.client.get(f"/api/team/{setup.team}/file/{file['number']}")
@@ -490,13 +540,13 @@ def _upload(client: TestClient, topic: int, name: str, content: bytes, kind: str
 
     Args:
         client: The uploader.
-        topic: The Topic's number.
+        topic: The task's number.
         name: File name.
         content: The content.
         kind: The media type the uploader declares.
     """
     response = client.post(
-        f"/api/team/acme/topic/{topic}/file",
+        f"/api/team/acme/task/{topic}/file",
         content=content,
         headers={"X-File-Name": name, "Content-Type": kind},
     )
@@ -597,7 +647,7 @@ def test_large_image_is_not_previewed(setup: Setup) -> None:
     tid = _open(setup)["number"]
     file = _upload(setup.alice, tid, "big.png", PNG + bytes(600), "image/png")
 
-    topic = setup.bob.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    topic = setup.bob.get(f"/api/team/{setup.team}/task/{tid}/topic").json()
 
     assert not file["preview"]
     assert not topic["files"][0]["preview"]
@@ -623,7 +673,7 @@ def test_migration_recognises_earlier_images(setup: Setup, settings: Settings) -
     command.downgrade(config, "0002")
 
     migrate(settings.database_url, settings.files_dir)
-    topic = setup.bob.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    topic = setup.bob.get(f"/api/team/{setup.team}/task/{tid}/topic").json()
     files = {f["number"]: f for f in topic["files"]}
 
     assert files[image["number"]]["preview"]
@@ -642,20 +692,20 @@ def test_file_limits(setup: Setup) -> None:
 
     assert (
         alice.post(
-            f"/api/team/{setup.team}/topic/{tid}/file", content=b"x" * 2000, headers=headers
+            f"/api/team/{setup.team}/task/{tid}/file", content=b"x" * 2000, headers=headers
         ).status_code
         == 413
     )
     for _ in range(4):
         assert (
             alice.post(
-                f"/api/team/{setup.team}/topic/{tid}/file", content=b"x" * 1000, headers=headers
+                f"/api/team/{setup.team}/task/{tid}/file", content=b"x" * 1000, headers=headers
             ).status_code
             == 201
         )
     assert (
         alice.post(
-            f"/api/team/{setup.team}/topic/{tid}/file", content=b"x" * 200, headers=headers
+            f"/api/team/{setup.team}/task/{tid}/file", content=b"x" * 200, headers=headers
         ).status_code
         == 413
     )
@@ -670,11 +720,11 @@ def test_file_of_another_topic_cannot_be_attached(setup: Setup) -> None:
     first, second = _open(setup)["number"], _open(setup)["number"]
     alice = setup.alice_api.client
     file_id = alice.post(
-        f"/api/team/{setup.team}/topic/{first}/file", content=b"a", headers={"X-File-Name": "a.txt"}
+        f"/api/team/{setup.team}/task/{first}/file", content=b"a", headers={"X-File-Name": "a.txt"}
     ).json()["number"]
 
     response = alice.post(
-        f"/api/team/{setup.team}/topic/{second}/message",
+        f"/api/team/{setup.team}/task/{second}/message",
         json={"number": 2, "body": "x", "files": [file_id]},
     )
 
@@ -735,7 +785,7 @@ def test_stream_wakes_on_new_message(setup: Setup, live_url: str) -> None:
         assert next(lines).startswith("data: ")
         with httpx.Client(base_url=live_url, headers=headers) as writer:
             posted = writer.post(
-                f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 2, "body": "hi"}
+                f"/api/team/{setup.team}/task/{tid}/message", json={"number": 2, "body": "hi"}
             )
             assert posted.status_code == 201
         frame = [next(lines) for _ in range(3)]

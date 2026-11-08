@@ -1,15 +1,17 @@
-"""Tests of how long a Topic lives: idle notice, closing for inactivity, deletion (0021)."""
+"""Tests of quiet work: idle free Topics close, quiet tasks are noticed, nothing is deleted
+(decisions 0021, 0030, 0032)."""
 
 import asyncio
 from datetime import timedelta
-from pathlib import Path
 
 from coloqo_server import retention
 from coloqo_server.db import Database
 from coloqo_server.security import now
 from coloqo_server.settings import Settings
 from tests.conftest import Setup, _connect
-from tests.test_topics import PNG, _open, _upload
+from tests.test_topics import _open
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 
 def _tend(settings: Settings) -> set[int]:
@@ -31,12 +33,29 @@ def _tend(settings: Settings) -> set[int]:
     return asyncio.run(run())
 
 
+def _open_free(setup: Setup, to: str | None = None) -> int:
+    """Open a free Topic by Alice's Assistant, as a plugin that knows tasks; return its number.
+
+    Args:
+        setup: The Team.
+        to: Addressee of the first Message.
+    """
+    response = setup.alice_api.client.post(
+        f"/api/team/{setup.team}/topic",
+        json={"area": setup.area, "title": "Q", "body": "Hi", "to": to, "free": True},
+        headers={"X-Coloqo-Plugin": "0.7.0"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["ref"].startswith("F-")
+    return response.json()["number"]
+
+
 def _age(settings: Settings, number: int, column: str, days: float) -> None:
-    """Move a Topic's time back, as if that much time had passed.
+    """Move a free Topic's time back, as if that much time had passed.
 
     Args:
         settings: Instance settings.
-        number: The Topic's number; the tests have one Team.
+        number: The free Topic's number; the tests have one Team.
         column: ``updated_at`` or ``closed_at``.
         days: How far back.
     """
@@ -47,6 +66,43 @@ def _age(settings: Settings, number: int, column: str, days: float) -> None:
         )
 
 
+def _age_task(settings: Settings, number: int, days: float, noticed: float | None = None) -> None:
+    """Move a task's activity, and its Topic's, back, as if that much time had passed.
+
+    Args:
+        settings: Instance settings.
+        number: The task's number; the tests have one Team.
+        days: How far back its last activity goes.
+        noticed: How long ago its assignee was last told; ``None`` for never.
+    """
+    with _connect(settings.database_url) as connection:
+        connection.execute(
+            "UPDATE tasks SET updated_at = now() - %s, idle_noticed_at = %s WHERE number = %s",
+            (timedelta(days=days), now() - timedelta(days=noticed) if noticed else None, number),
+        )
+        connection.execute(
+            "UPDATE topics SET updated_at = now() - %s FROM tasks "
+            "WHERE tasks.id = topics.task_id AND tasks.number = %s",
+            (timedelta(days=days), number),
+        )
+
+
+def _events(settings: Settings, kind: str) -> list[dict]:
+    """Return the data of the stored events of a kind, oldest first.
+
+    Args:
+        settings: Instance settings.
+        kind: The event kind.
+    """
+    with _connect(settings.database_url) as connection:
+        return [
+            row[0]
+            for row in connection.execute(
+                "SELECT data FROM events WHERE kind = %s ORDER BY id", (kind,)
+            ).fetchall()
+        ]
+
+
 def test_idle_topic_is_announced_once(setup: Setup, settings: Settings) -> None:
     """Three days before closing, the Team is told once (decision 0028).
 
@@ -54,105 +110,248 @@ def test_idle_topic_is_announced_once(setup: Setup, settings: Settings) -> None:
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup, to="bob")["number"]
-    _age(settings, tid, "updated_at", 28)
+    number = _open_free(setup, to="bob")
+    _age(settings, number, "updated_at", 28)
 
     first, second = _tend(settings), _tend(settings)
-    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
-    with _connect(settings.database_url) as connection:
-        (data,) = connection.execute(
-            "SELECT data FROM events WHERE kind = 'topic_idle' LIMIT 1"
-        ).fetchone()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{number}").json()
+    (data,) = _events(settings, "topic_idle")
 
     assert len(first) == 2
     assert second == set()
     assert topic["status"] == "open"
     assert (data["holder"], data["holder_live"]) == (setup.alice_api.key, True)
     assert data["holder_project"] == setup.alice_api.project_key
+    assert (data["topic_kind"], data["ref"]) == ("free", f"F-{number}")
 
 
 def test_idle_topic_closes_with_a_line(setup: Setup, settings: Settings) -> None:
-    """After 30 quiet days a Topic is closed by Coloqo, with the outcome in its feed.
+    """After 30 quiet days a free Topic is closed by Coloqo, with the outcome in its feed.
 
     Args:
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["number"]
-    _age(settings, tid, "updated_at", 31)
+    number = _open_free(setup)
+    _age(settings, number, "updated_at", 31)
 
     told = _tend(settings)
-    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{number}").json()
     line = topic["messages"][-1]
 
     assert topic["status"] == "closed"
     assert topic["outcome"].startswith("Closed for inactivity")
-    assert topic["deletes_at"] is not None
+    assert topic["deletes_at"] is None
     assert (line["kind"], line["system"], line["assistant"]) == ("closed", True, None)
     assert len(told) == 2
 
 
-def test_archive_keeps_the_card_and_drops_the_rest(setup: Setup, settings: Settings) -> None:
-    """After the archive time the conversation, files and events go; the Topic stays as a card.
+def test_closed_topics_are_kept(setup: Setup, settings: Settings) -> None:
+    """A Topic closed long ago keeps its conversation and files (decision 0030).
 
     Args:
         setup: The Team.
         settings: Instance settings.
     """
-    tid = _open(setup)["number"]
-    other = _open(setup)["number"]
-    # Another Team's Topic of the same number keeps its events.
-    globex = setup.alice.post("/api/team", json={"name": "Globex"}).json()["slug"]
-    setup.alice.post(f"/api/team/{globex}/area", json={"name": "Dev"})
-    setup.alice.post(f"/api/team/{globex}/topic", json={"area": "dev", "title": "Q", "body": "x"})
-    file = _upload(setup.alice_api.client, tid, "shot.png", PNG, "image/png")
-    setup.alice_api.client.patch(
-        f"/api/team/{setup.team}/topic/{tid}",
-        json={"status": "closed", "outcome": "Done in ACME-42"},
+    number = _open_free(setup)
+    file = setup.alice.post(
+        f"/api/team/{setup.team}/topic/{number}/file",
+        content=PNG,
+        headers={"X-File-Name": "shot.png", "Content-Type": "image/png"},
     )
-    with _connect(settings.database_url) as connection:
-        team_id, file_id = connection.execute(
-            "SELECT team_id, id FROM files WHERE number = %s", (file["number"],)
-        ).fetchone()
-    path = Path(settings.files_dir) / str(team_id) / str(file_id)
-    _age(settings, tid, "closed_at", 8)
+    assert file.status_code == 201, file.text
+    setup.alice.patch(
+        f"/api/team/{setup.team}/topic/{number}", json={"status": "closed", "outcome": "Done"}
+    )
+    _age(settings, number, "closed_at", 400)
 
     _tend(settings)
-    with _connect(settings.database_url) as connection:
-        events = connection.execute(
-            "SELECT DISTINCT data->>'team', (data->>'topic')::int FROM events ORDER BY 1, 2"
-        ).fetchall()
-    card = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
-    listed = setup.alice.get(f"/api/team/{setup.team}/topic").json()
-    write = setup.bob_web.client.post(
-        f"/api/team/{setup.team}/topic/{tid}/message", json={"number": 9, "body": "x"}
-    )
-
-    assert (card["title"], card["outcome"]) == ("Rename field amount", "Done in ACME-42")
-    assert card["deleted_at"] is not None
-    assert (card["messages"], card["files"]) == ([], [])
-    assert not path.exists()
-    assert setup.alice.get(f"/api/team/{setup.team}/file/{file['number']}").status_code == 404
-    assert tid not in [t["number"] for t in listed]
-    assert write.status_code == 410
-    assert events == [(setup.team, other), (globex, tid)]
-
-
-def test_team_keeps_its_own_archive_time(setup: Setup, settings: Settings) -> None:
-    """A Team with a longer archive keeps a Topic the instance's default would delete.
-
-    Args:
-        setup: The Team.
-        settings: Instance settings.
-    """
-    tid = _open(setup)["number"]
-    setup.alice.patch(f"/api/team/{setup.team}/topic/{tid}", json={"status": "closed"})
-    with _connect(settings.database_url) as connection:
-        connection.execute("UPDATE teams SET archive_days = 30 WHERE slug = %s", (setup.team,))
-    _age(settings, tid, "closed_at", 8)
-
-    _tend(settings)
-    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{tid}").json()
+    topic = setup.alice.get(f"/api/team/{setup.team}/topic/{number}").json()
 
     assert topic["deleted_at"] is None
     assert len(topic["messages"]) == 2
+    assert [f["name"] for f in topic["files"]] == ["shot.png"]
+    assert (
+        setup.alice.get(f"/api/team/{setup.team}/file/{file.json()['number']}").status_code == 200
+    )
+
+
+def test_a_task_s_topic_never_closes_for_inactivity(setup: Setup, settings: Settings) -> None:
+    """A quiet task is noticed, never closed: that would write a false outcome (decision 0032).
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    number = _open(setup)["number"]
+    _age_task(settings, number, 40)
+
+    _tend(settings)
+    topic = setup.alice.get(f"/api/team/{setup.team}/task/{number}/topic").json()
+
+    assert topic["status"] == "open"
+    assert _events(settings, "topic_idle") == []
+    assert [e["ref"] for e in _events(settings, "task_idle")] == [f"T-{number}"]
+
+
+def test_a_quiet_task_is_noticed_every_day(setup: Setup, settings: Settings) -> None:
+    """After 7 quiet days its assignee is told, then again every day while it stays quiet.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    number = _open(setup)["number"]
+    _age_task(settings, number, 6)
+    _tend(settings)
+    early = _events(settings, "task_idle")
+
+    _age_task(settings, number, 8)
+    _tend(settings)
+    _tend(settings)
+    once = _events(settings, "task_idle")
+
+    _age_task(settings, number, 9, noticed=1.1)
+    _tend(settings)
+    (first, second) = _events(settings, "task_idle")
+
+    assert early == []
+    assert len(once) == 1
+    assert (first["task"], first["stage"], first["assignee"]) == (number, "Analysis", "alice")
+    assert second["days"] == 9
+
+
+def test_a_waiting_task_is_not_quiet(setup: Setup, settings: Settings) -> None:
+    """A task marked as waiting for something outside the Team gets no notice (decision 0032).
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    number = _open(setup)["number"]
+    waited = setup.alice_api.client.post(
+        f"/api/team/{setup.team}/task/{number}/wait", json={"what": "a token from infra"}
+    )
+    assert waited.status_code == 200, waited.text
+    _age_task(settings, number, 30)
+
+    _tend(settings)
+
+    assert _events(settings, "task_idle") == []
+
+
+def test_the_team_sets_the_quiet_days(setup: Setup, settings: Settings) -> None:
+    """The threshold and the repetition are the Team's settings.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    number = _open(setup)["number"]
+    changed = setup.alice.patch(
+        f"/api/team/{setup.team}", json={"task_idle_days": 14, "task_idle_repeat_days": 3}
+    )
+    _age_task(settings, number, 10)
+    _tend(settings)
+    before = _events(settings, "task_idle")
+    _age_task(settings, number, 15, noticed=2)
+    _tend(settings)
+    still = _events(settings, "task_idle")
+    _age_task(settings, number, 16, noticed=3.1)
+    _tend(settings)
+
+    assert (changed.json()["task_idle_days"], changed.json()["task_idle_repeat_days"]) == (14, 3)
+    assert before == still == []
+    assert len(_events(settings, "task_idle")) == 1
+
+
+def test_a_message_in_the_topic_is_activity(setup: Setup, settings: Settings) -> None:
+    """A task whose Topic was written in lately is not quiet, though its stage stood still.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    number = _open(setup)["number"]
+    _age_task(settings, number, 8)
+    with _connect(settings.database_url) as connection:
+        connection.execute(
+            "UPDATE topics SET updated_at = now() - interval '1 day' FROM tasks "
+            "WHERE tasks.id = topics.task_id AND tasks.number = %s",
+            (number,),
+        )
+
+    _tend(settings)
+
+    assert _events(settings, "task_idle") == []
+
+
+def test_only_a_task_in_work_is_noticed(setup: Setup, settings: Settings) -> None:
+    """A finished task and a planned one in the backlog stay quiet without a notice.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    finished = _open(setup)["number"]
+    setup.alice_api.client.post(
+        f"/api/team/{setup.team}/task/{finished}/close", json={"outcome": "done"}
+    )
+    setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
+    planned = setup.alice.post(
+        f"/api/team/{setup.team}/task",
+        json={"area": setup.area, "title": "Later", "assignee": "bob"},
+    ).json()["number"]
+    _age_task(settings, finished, 30)
+    _age_task(settings, planned, 30)
+
+    _tend(settings)
+
+    assert _events(settings, "task_idle") == []
+
+
+def test_work_below_keeps_the_task_and_the_promise_going(setup: Setup, settings: Settings) -> None:
+    """A subtask that moved keeps its task and the promise above it from being quiet; once the
+    whole subtree is quiet, each of them is noticed.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
+
+    def create(title: str, parent: int | None = None, type_: str = "task") -> int:
+        """Create a task assigned to Alice in the web.
+
+        Args:
+            title: Its title.
+            parent: Its parent's number.
+            type_: ``task`` or ``promise``.
+        """
+        return setup.alice.post(
+            f"/api/team/{setup.team}/task",
+            json={
+                "area": setup.area,
+                "title": title,
+                "type": type_,
+                "parent": parent,
+                "assignee": "alice",
+            },
+        ).json()["number"]
+
+    promise = create("Reports by December", type_="promise")
+    task = create("API", promise)
+    subtask = create("Schema", task)
+    for number in (promise, task, subtask):
+        setup.alice_api.client.post(f"/api/team/{setup.team}/task/{number}/take", json={})
+    _age_task(settings, promise, 20)
+    _age_task(settings, task, 20)
+    _age_task(settings, subtask, 1)
+
+    _tend(settings)
+    while_working = _events(settings, "task_idle")
+    _age_task(settings, subtask, 20)
+    _tend(settings)
+
+    assert while_working == []
+    assert sorted(e["task"] for e in _events(settings, "task_idle")) == [promise, task, subtask]

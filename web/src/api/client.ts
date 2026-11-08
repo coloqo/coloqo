@@ -78,10 +78,13 @@ export async function call<D>(
 }
 
 /** Upload a file into a Topic; the body is the raw content. */
-export async function uploadFile(team: string, topic: number, file: File): Promise<FileInfo> {
+/** How a Topic is named: by its task, ``T-42``, or by its free number, ``F-5`` (decision 0031). */
+export type TopicKind = 'task' | 'free'
+
+export async function uploadFile(team: string, topic: number, file: File, kind: TopicKind = 'free'): Promise<FileInfo> {
   // The upload endpoint takes a raw body, which the OpenAPI document does not
   // describe, so it goes through plain fetch.
-  const response = await fetch(`/api/team/${encodeURIComponent(team)}/topic/${topic}/file`, {
+  const response = await fetch(`/api/team/${encodeURIComponent(team)}/${kind === 'task' ? 'task' : 'topic'}/${topic}/file`, {
     method: 'POST',
     headers: {
       'X-File-Name': encodeURIComponent(file.name),
@@ -128,8 +131,34 @@ export const teamPath = (team: string) => `/team/${encodeURIComponent(team)}`
 /** The address of an Area's page. */
 export const areaPath = (team: string, area: string) => `${teamPath(team)}/area/${encodeURIComponent(area)}`
 
-/** The address of a Topic's page. */
-export const topicPath = (team: string, number: number) => `${teamPath(team)}/topic/${number}`
+/** The address of a Topic's page: a task's at /task/N, a free one's at /topic/N (decision 0031). */
+export const topicPath = (team: string, number: number, kind: TopicKind = 'free') =>
+  `${teamPath(team)}/${kind === 'task' ? 'task' : 'topic'}/${number}`
+
+type FeedQuery = { from_unread?: boolean; limit?: number; after?: number; before?: number }
+
+/** Read a task's or a free Topic with some of its Messages. */
+export const readTopic = (kind: TopicKind, team: string, number: number, query: FeedQuery) =>
+  kind === 'task'
+    ? api.GET('/api/team/{team}/task/{number}/topic', { params: { path: { team, number }, query } })
+    : api.GET('/api/team/{team}/topic/{number}', { params: { path: { team, number }, query } })
+
+/** Write a Message into a task's or a free Topic. */
+export const postMessage = (
+  kind: TopicKind,
+  team: string,
+  number: number,
+  body: Schemas['MessageIn'],
+) =>
+  kind === 'task'
+    ? api.POST('/api/team/{team}/task/{number}/message', { params: { path: { team, number } }, body })
+    : api.POST('/api/team/{team}/topic/{number}/message', { params: { path: { team, number } }, body })
+
+/** Record how far a task's or a free Topic is read. */
+export const markRead = (kind: TopicKind, team: string, number: number, upTo: number) =>
+  kind === 'task'
+    ? api.POST('/api/team/{team}/task/{number}/read', { params: { path: { team, number } }, body: { number: upTo } })
+    : api.POST('/api/team/{team}/topic/{number}/read', { params: { path: { team, number } }, body: { number: upTo } })
 
 /** Where a logged-out person goes to log in with a provider and come back. */
 export function loginUrl(provider: string, next: string): string {

@@ -18,10 +18,12 @@ from coloqo_server.models import (
     Member,
     Project,
     Role,
+    TaskType,
     Team,
     Topic,
     TopicStatus,
     User,
+    Workflow,
 )
 from coloqo_server.naming import SLUG, numbered, slugify
 from coloqo_server.security import (
@@ -34,6 +36,7 @@ from coloqo_server.security import (
     require_reader,
     token_hash,
 )
+from coloqo_server.workflows import seed
 
 router = APIRouter(tags=["teams"])
 
@@ -104,11 +107,17 @@ class TeamPatch(BaseModel):
         name: New name.
         slug: New address; the former one keeps leading to the Team.
         turn_limit: Assistants' turns in a Topic without a human before it waits (0007).
+        tracker: Turn the task tracker on or off (decision 0031).
+        task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
+        task_idle_repeat_days: Days between such notices while it stays quiet.
     """
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
     slug: str | None = None
     turn_limit: int | None = Field(default=None, ge=1, le=100)
+    tracker: bool | None = None
+    task_idle_days: int | None = Field(default=None, ge=1, le=365)
+    task_idle_repeat_days: int | None = Field(default=None, ge=1, le=365)
 
     _check_slug = field_validator("slug")(_slug)
 
@@ -121,6 +130,9 @@ class TeamOut(BaseModel):
         name: Shown name.
         role: The caller's role.
         turn_limit: Assistants' turns without a human before a Topic waits.
+        tracker: The task tracker is on (decision 0031).
+        task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
+        task_idle_repeat_days: Days between such notices while it stays quiet.
         created_at: Creation time.
     """
 
@@ -128,6 +140,9 @@ class TeamOut(BaseModel):
     name: str
     role: Role
     turn_limit: int
+    tracker: bool = False
+    task_idle_days: int = 7
+    task_idle_repeat_days: int = 1
     created_at: datetime
 
 
@@ -377,6 +392,9 @@ def _team_out(team: Team, role: Role) -> TeamOut:
         name=team.name,
         role=role,
         turn_limit=team.turn_limit,
+        tracker=team.tracker,
+        task_idle_days=team.task_idle_days,
+        task_idle_repeat_days=team.task_idle_repeat_days,
         created_at=team.created_at,
     )
 
@@ -466,6 +484,7 @@ async def create_team(body: TeamIn, actor: HumanDep, db: DB) -> TeamOut:
     )
     db.add(team)
     await db.flush()
+    await seed(db, team.id)
     db.add(Member(team_id=team.id, user_id=actor.user.id, role=Role.Owner))
     await db.commit()
     return _team_out(team, Role.Owner)
@@ -542,7 +561,7 @@ async def get_team(team: str, actor: ActorDep, db: DB) -> TeamDetail:
 
 @router.patch("/team/{team}")
 async def update_team(team: str, body: TeamPatch, actor: HumanDep, db: DB) -> TeamOut:
-    """Change a Team's name, address or turn limit.
+    """Change a Team's name, address, turn limit or tracker settings.
 
     A changed slug is kept as a former one, so links to the Team keep working; going back to a
     former slug takes it out of the former ones.
@@ -570,6 +589,12 @@ async def update_team(team: str, body: TeamPatch, actor: HumanDep, db: DB) -> Te
         found.name = body.name.strip()
     if body.turn_limit is not None:
         found.turn_limit = body.turn_limit
+    if body.tracker is not None:
+        found.tracker = body.tracker
+    if body.task_idle_days is not None:
+        found.task_idle_days = body.task_idle_days
+    if body.task_idle_repeat_days is not None:
+        found.task_idle_repeat_days = body.task_idle_repeat_days
     await db.commit()
     return _team_out(found, Role.Owner)
 
@@ -701,11 +726,18 @@ async def create_area(team: str, body: AreaIn, actor: HumanDep, db: DB) -> AreaO
     taken = await _taken_area_slugs(db, found.id)
     if body.slug is not None and body.slug in taken:
         raise HTTPException(status.HTTP_409_CONFLICT, f"The address {body.slug!r} is taken")
+    workflow = await db.scalar(
+        select(Workflow)
+        .where(Workflow.team_id == found.id, Workflow.type == TaskType.Task)
+        .order_by(Workflow.id)
+        .limit(1)
+    )
     area = Area(
         team_id=found.id,
         name=body.name.strip(),
         description=body.description,
         slug=body.slug or numbered(slugify(body.name, "area"), taken),
+        workflow_id=workflow.id if workflow else None,
     )
     db.add(area)
     try:

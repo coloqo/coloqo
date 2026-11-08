@@ -40,8 +40,8 @@ def test_unlinked_assistant_reads_but_does_not_write(
     number = _topic(two.bob, "acme")
     alice = plugin(two.alice, "notes").client
 
-    read = alice.get(f"/api/team/acme/topic/{number}")
-    post = alice.post(f"/api/team/acme/topic/{number}/message", json={"number": 2, "body": "x"})
+    read = alice.get(f"/api/team/acme/task/{number}/topic")
+    post = alice.post(f"/api/team/acme/task/{number}/message", json={"number": 2, "body": "x"})
     opened = alice.post("/api/team/acme/topic", json={"area": "dev", "title": "Q", "body": "x"})
 
     assert read.status_code == 200
@@ -63,9 +63,9 @@ def test_linked_assistant_writes_only_in_its_team(two: Two, plugin: Callable[...
     alice = plugin(two.alice, "acme-api", "acme").client
     message = {"number": 2, "body": "x"}
 
-    here = alice.post(f"/api/team/acme/topic/{acme_topic}/message", json=message)
-    there = alice.post(f"/api/team/globex/topic/{globex_topic}/message", json=message)
-    looked = alice.get(f"/api/team/globex/topic/{globex_topic}")
+    here = alice.post(f"/api/team/acme/task/{acme_topic}/message", json=message)
+    there = alice.post(f"/api/team/globex/task/{globex_topic}/message", json=message)
+    looked = alice.get(f"/api/team/globex/task/{globex_topic}/topic")
 
     assert here.status_code == 201
     assert there.status_code == 403
@@ -82,7 +82,7 @@ def test_topics_are_numbered_per_team(two: Two) -> None:
     numbers = [_topic(two.bob, team) for team in ("acme", "globex", "acme", "globex", "acme")]
 
     assert numbers == [1, 1, 2, 2, 3]
-    assert two.alice.get("/api/team/globex/topic/2").json()["ref"] == "T-2"
+    assert two.alice.get("/api/team/globex/task/2/topic").json()["ref"] == "T-2"
 
 
 def test_reading_another_team_leaves_its_inbox(two: Two, plugin: Callable[..., Plugin]) -> None:

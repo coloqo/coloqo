@@ -9,3 +9,6 @@ dist/
 
 # The built web, copied in by the release workflow (decision 0016)
 server/src/coloqo_server/static/
+
+# Uploaded files of a development server started in server/
+server/var/

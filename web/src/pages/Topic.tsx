@@ -10,7 +10,11 @@ import {
   call,
   downloadUrl,
   fileUrl,
+  markRead,
+  postMessage,
+  readTopic,
   topicPath,
+  type TopicKind,
   uploadFile,
   type FileInfo,
   type Me,
@@ -41,8 +45,9 @@ function usePageVisible() {
 }
 
 /** A draft kept per Topic for this browser tab, so that a reload does not lose it. */
-function useDraft(team: string, number: number) {
-  const key = `coloqo.draft.${team}.${number}`
+function useDraft(team: string, kind: TopicKind, number: number) {
+  // A task and a free Topic may share a number: the draft is kept per kind (decision 0031).
+  const key = `coloqo.draft.${team}.${kind}.${number}`
   const [draft, setDraftState] = useState(() => {
     try {
       return sessionStorage.getItem(key) ?? ''
@@ -371,7 +376,7 @@ function Compose({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const team = useTeam(topic.team)
-  const [body, setBody] = useDraft(topic.team, topic.number)
+  const [body, setBody] = useDraft(topic.team, topic.kind ?? 'free', topic.number)
   const [attached, setAttached] = useState<FileInfo[]>([])
   const [uploading, setUploading] = useState(0)
   const [uploadError, setUploadError] = useState<unknown>(null)
@@ -379,7 +384,7 @@ function Compose({
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ['topic', topic.team, topic.number] })
+    void queryClient.invalidateQueries({ queryKey: ['topic', topic.team] })
     void queryClient.invalidateQueries({ queryKey: ['topics', topic.team] })
     void queryClient.invalidateQueries({ queryKey: ['team', topic.team] })
     void queryClient.invalidateQueries({ queryKey: ['inbox'] })
@@ -387,15 +392,12 @@ function Compose({
   const send = useMutation({
     mutationFn: () =>
       call(
-        api.POST('/api/team/{team}/topic/{number}/message', {
-          params: { path: { team: topic.team, number: topic.number } },
-          body: {
-            number: topic.last_number + 1,
-            body,
-            to: to || null,
-            files: attached.map((file) => file.number),
-            reply_to: replying?.number ?? null,
-          },
+        postMessage(topic.kind ?? 'free', topic.team, topic.number, {
+          number: topic.last_number + 1,
+          body,
+          to: to || null,
+          files: attached.map((file) => file.number),
+          reply_to: replying?.number ?? null,
         }),
       ),
     onSuccess: () => {
@@ -420,9 +422,9 @@ function Compose({
     for (const file of Array.from(files)) {
       setUploading((n) => n + 1)
       try {
-        const info = await uploadFile(topic.team, topic.number, file)
+        const info = await uploadFile(topic.team, topic.number, file, topic.kind ?? 'free')
         setAttached((list) => [...list, info])
-        void queryClient.invalidateQueries({ queryKey: ['topic', topic.team, topic.number] })
+        void queryClient.invalidateQueries({ queryKey: ['topic', topic.team] })
       } catch (error) {
         setUploadError(error)
       } finally {
@@ -545,7 +547,7 @@ function Settle({ topic }: { topic: TopicDetail }) {
     onSuccess: () => {
       setClosing(false)
       setOutcome('')
-      void queryClient.invalidateQueries({ queryKey: ['topic', topic.team, topic.number] })
+      void queryClient.invalidateQueries({ queryKey: ['topic', topic.team] })
       void queryClient.invalidateQueries({ queryKey: ['topics', topic.team] })
       void queryClient.invalidateQueries({ queryKey: ['team', topic.team] })
       void queryClient.invalidateQueries({ queryKey: ['inbox'] })
@@ -647,9 +649,22 @@ function TopicHeader({ topic }: { topic: TopicDetail }) {
           {topic.area_name}
         </Link>
         <StatusBadge status={topic.status} />
+        {topic.stage && <Badge tone="stone">{topic.stage}</Badge>}
       </div>
       <h1 className="text-2xl font-semibold tracking-tight break-words">{topic.title}</h1>
       <dl className="flex flex-wrap gap-x-6 gap-y-1.5 text-sm">
+        {topic.kind === 'task' && (
+          <div className="flex gap-1.5">
+            <dt className="text-stone-500 dark:text-stone-400">{t('topic.assignee')}:</dt>
+            <dd>{topic.assignee ?? t('topic.noAssignee')}</dd>
+          </div>
+        )}
+        {topic.waiting && (
+          <div className="flex gap-1.5">
+            <dt className="text-stone-500 dark:text-stone-400">{t('topic.waiting')}:</dt>
+            <dd>{topic.waiting}</dd>
+          </div>
+        )}
         <div className="flex gap-1.5">
           <dt className="text-stone-500 dark:text-stone-400">{t('topic.holder')}:</dt>
           <dd>{topic.holder ?? t('topic.noHolder')}</dd>
@@ -718,26 +733,18 @@ function joined(...lists: Message[][]): Message[] {
  * earlier ones loaded by hand (decision 0026). Each refresh joins the new window to what is
  * cached, and fetches what lies between when more arrived than the window holds.
  */
-function useTopicFeed(team: string, number: number) {
+function useTopicFeed(team: string, kind: TopicKind, number: number) {
   const queryClient = useQueryClient()
-  const key = ['topic', team, number]
+  const key = ['topic', team, kind, number]
   const query = useQuery({
     queryKey: key,
     queryFn: async () => {
-      const fresh = await call(
-        api.GET('/api/team/{team}/topic/{number}', {
-          params: { path: { team, number }, query: { from_unread: true, limit: PAGE } },
-        }),
-      )
+      const fresh = await call(readTopic(kind, team, number, { from_unread: true, limit: PAGE }))
       const cached = queryClient.getQueryData<TopicDetail>(key)?.messages ?? []
       let gap: Message[] = []
       const last = cached.length > 0 ? cached[cached.length - 1].number : null
       if (last !== null && fresh.messages.length > 0 && fresh.messages[0].number > last + 1) {
-        const between = await call(
-          api.GET('/api/team/{team}/topic/{number}', {
-            params: { path: { team, number }, query: { after: last, limit: 500 } },
-          }),
-        )
+        const between = await call(readTopic(kind, team, number, { after: last, limit: 500 }))
         gap = between.messages
       }
       return { ...fresh, messages: joined(cached, gap, fresh.messages) }
@@ -749,11 +756,7 @@ function useTopicFeed(team: string, number: number) {
     let first = queryClient.getQueryData<TopicDetail>(key)?.messages[0]?.number
     while (first !== undefined && first > 1 && (until === undefined || first > until)) {
       const limit = until === undefined ? PAGE : Math.min(first - until, 500)
-      const earlier = await call(
-        api.GET('/api/team/{team}/topic/{number}', {
-          params: { path: { team, number }, query: { before: first, limit } },
-        }),
-      )
+      const earlier = await call(readTopic(kind, team, number, { before: first, limit }))
       queryClient.setQueryData<TopicDetail>(key, (old) =>
         old ? { ...old, messages: joined(earlier.messages, old.messages) } : old,
       )
@@ -784,12 +787,12 @@ function Arrow({ up }: { up?: boolean }) {
   )
 }
 
-export function TopicPage({ me }: { me: Me }) {
+export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
   const { t } = useTranslation()
   const params = useParams()
   const slug = params.team ?? ''
   const number = Number(params.number)
-  const feed = useTopicFeed(slug, number)
+  const feed = useTopicFeed(slug, kind, number)
   const topic = feed.query
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -815,9 +818,11 @@ export function TopicPage({ me }: { me: Me }) {
   const unread = data?.unread ?? 0
 
   useEffect(() => {
-    // A former slug answers with the current one: the address follows it (decision 0025).
-    if (data && data.team !== slug) void navigate(topicPath(data.team, data.number), { replace: true })
-  }, [data, slug, navigate])
+    // A former slug answers with the current one, and a free number that became a task's Topic
+    // with the task: the address follows (decisions 0025, 0031).
+    if (data && (data.team !== slug || (data.kind ?? 'free') !== kind))
+      void navigate(topicPath(data.team, data.number, data.kind ?? 'free'), { replace: true })
+  }, [data, slug, kind, navigate])
 
   useEffect(() => {
     // Open where the reading is: at the first unread Message, or at the latest (decision 0026).
@@ -848,14 +853,9 @@ export function TopicPage({ me }: { me: Me }) {
   useEffect(() => {
     if (!data || !visible || !bottomOnScreen || unread === 0 || lastNumber <= marking.current) return
     marking.current = lastNumber
-    void call(
-      api.POST('/api/team/{team}/topic/{number}/read', {
-        params: { path: { team: data.team, number: data.number } },
-        body: { number: lastNumber },
-      }),
-    )
+    void call(markRead(data.kind ?? 'free', data.team, data.number, lastNumber))
       .then((out) => {
-        queryClient.setQueryData<TopicDetail>(['topic', slug, number], (old) =>
+        queryClient.setQueryData<TopicDetail>(['topic', slug, kind, number], (old) =>
           old ? { ...old, unread: out.unread, addressed: out.addressed } : old,
         )
         void queryClient.invalidateQueries({ queryKey: ['inbox'] })
@@ -864,7 +864,7 @@ export function TopicPage({ me }: { me: Me }) {
       .catch(() => {
         marking.current = 0
       })
-  }, [data, visible, bottomOnScreen, unread, lastNumber, slug, number, queryClient])
+  }, [data, visible, bottomOnScreen, unread, lastNumber, slug, kind, number, queryClient])
 
   if (topic.isPending) return <Page><Loading /></Page>
   if (topic.error || !data) {
@@ -998,7 +998,7 @@ export function TopicPage({ me }: { me: Me }) {
           <Compose topic={data} to={to} setTo={setTo} replying={replying} setReplying={setReplying} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
-          <Settle topic={data} />
+          {data.kind === 'task' ? <Notice>{t('settle.task')}</Notice> : <Settle topic={data} />}
           <Files files={data.files} team={data.team} onJump={reveal} />
         </div>
       </div>

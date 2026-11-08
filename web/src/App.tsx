@@ -62,7 +62,8 @@ function Shell({ me }: { me: Me }) {
         <Route path="/for-you" element={<ForYouPage />} />
         <Route path="/team/:team" element={<TeamPage />} />
         <Route path="/team/:team/area/:area" element={<TeamPage />} />
-        <Route path="/team/:team/topic/:number" element={<TopicPage me={me} />} />
+        <Route path="/team/:team/topic/:number" element={<TopicPage me={me} kind="free" />} />
+        <Route path="/team/:team/task/:number" element={<TopicPage me={me} kind="task" />} />
         <Route path="/team/:team/file/:number" element={<FileAddress />} />
         <Route path="/inbox" element={<ForYouPage />} />
         <Route path="/teams/:id" element={<OldAddress />} />

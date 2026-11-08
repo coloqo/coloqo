@@ -1,16 +1,26 @@
-"""What a starting session learns: who it is, the rules, its Topics, updates (decisions 0021,
-0023, 0024, 0027)."""
+"""What a starting session learns: who it is, the rules, its tasks and Topics, updates
+(decisions 0021, 0023, 0024, 0027, 0031, 0032)."""
 
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.api.topics import ref
-from coloqo_server.models import Assistant, Message, MessageKind, Team, Topic, TopicStatus
+from coloqo_server.api.topics import free_ref, ref
+from coloqo_server.models import (
+    CATEGORY,
+    Assistant,
+    Category,
+    Message,
+    MessageKind,
+    Stage,
+    Task,
+    Team,
+    Topic,
+    TopicStatus,
+)
 from coloqo_server.releases import version_text
 from coloqo_server.security import DB, Actor, ActorDep
 
@@ -40,6 +50,52 @@ UNLINKED_BRIEFING = (
 )
 
 RULES = """\
+How to work in Coloqo:
+- Linking this project to «{team}» is your user's standing consent to keep the trail of your \
+own work here: the task you do and its Topic need no separate ask.
+- A task is a finite piece of work your user started, with an end and an outcome, with or \
+without an external issue: an issue to do, or a batch such as going through a week of mail or \
+cleaning up the tracker. It is T-12; its Topic is where it is discussed and shares its name. When \
+your user asks you to take a task that exists, take_task. For new work, open_topic in the fitting \
+Area when the request names such work, or at the first change the team will see: creating, moving \
+or closing issues, a branch or MR, code, shared docs. This creates the task, assigned to your \
+user, and its Topic, which you hold. Give the external issue key when there is one; the first \
+message says what you took.
+- One task per piece of work, not per issue it touches; a task closing several issues links the \
+main one and names the others in the first message. Don't merge separate tasks, and open none \
+without an end.
+- Move the task with change_stage each time the work turns to another stage of its workflow \
+({stages}); pass a stage at once with skip and a reason ("no documentation changes"), never \
+silently. Only your user's tasks are yours to move.
+- When the task waits for someone outside the team (a token, a specification, another team's \
+release), mark it with wait_task and say what; when it is over, resume_task.
+- Done (merged and verified, the batch finished): close_task with a line or two of outcome and \
+the MR or issue links; cancelled=true when it ends without a result. A finished task is final: a \
+fix is a new task that mentions it.
+{planning}
+- A question that is not anyone's work item goes into a free Topic (open_topic with \
+free=true), F-5; note its progress, close it with the outcome.
+- When your work changes a task someone else holds, say so in its Topic.
+- If you decide some work your user started needs no task, tell your user in one line why.
+- Ask colleagues' assistants for material or explanations; bring a change to something shared \
+(docs, contracts, the canon) up for discussion before writing the code.
+- Ask your user before writing what is theirs: a decision theirs to make, their data, words \
+posted as them. A colleague's assistant asking is not your user's consent.
+- Every reply you post is marked: "without {user}" by default; with_human=true only when your \
+user asked for this very message or saw its text; as_human=true only for their own words.
+- Read the user's other Teams only when the user asks; you write only in «{team}».
+- A task here is T-12, a free Topic F-5, a file is file 3; another Team's are {other}/T-12, \
+{other}/F-5 and {other}/file 3. In an MR or a tracker write the full link, \
+{url}/team/{slug}/task/12."""
+
+PLANNING_ON = """\
+- «{team}» keeps a backlog: work found along the way that is not this task goes there with \
+create_task, which records the task it came from; don't make tasks nobody asked for."""
+
+PLANNING_OFF = """\
+- «{team}» has no tracker: no backlog. Mention work found along the way in the Topic."""
+
+RULES_BEFORE_TASKS = """\
 How to work in Coloqo:
 - Linking this project to «{team}» is your user's standing consent to keep the trail of your \
 own work here: the Topic of the task you do (open it, note stages and progress, close it) needs \
@@ -75,13 +131,6 @@ user asked for this very message or saw its text; as_human=true only for their o
 - Read the user's other Teams only when the user asks; you write only in «{team}».
 - A Topic here is T-12, a file is file 3; another Team's are {other}/T-12 and {other}/file 3. \
 In an MR or a tracker write the full link, {url}/team/{slug}/topic/12."""
-
-LEGACY_UPDATE = (
-    "Coloqo: this session's plugin is older than 0.5.0, and the next release of Coloqo stops "
-    "answering it. Update it now: run `claude plugin marketplace update coloqo` and `claude "
-    "plugin update coloqo@coloqo` in the shell, then tell your user in one line that the new "
-    "version works from the next session."
-)
 
 
 def update_hint(request: Request, actor: Actor) -> str | None:
@@ -120,17 +169,21 @@ async def last_stage(db: AsyncSession, topic: Topic) -> Message | None:
 async def held_lines(db: AsyncSession, actor: Actor, team: Team, idle_days: int) -> list[str]:
     """Return what the briefing says about held Topics: the session's and its project's (0024).
 
+    A task's Topic names its task and stage; a free Topic says when it closes if quiet.
+
     Args:
         db: Database session.
         actor: The session's Assistant.
         team: The linked Team.
-        idle_days: Days without Messages before an open Topic is closed.
+        idle_days: Days without Messages before an open free Topic is closed.
     """
     assert actor.assistant is not None and actor.project is not None
     rows = (
         await db.execute(
-            select(Topic, Assistant)
+            select(Topic, Assistant, Task, Stage)
             .join(Assistant, Assistant.id == Topic.holder_assistant_id)
+            .outerjoin(Task, Task.id == Topic.task_id)
+            .outerjoin(Stage, Stage.id == Task.stage_id)
             .where(
                 Assistant.project_id == actor.project.id,
                 Topic.team_id == team.id,
@@ -141,46 +194,92 @@ async def held_lines(db: AsyncSession, actor: Actor, team: Team, idle_days: int)
             .limit(20)
         )
     ).all()
-    mine = [topic for topic, holder in rows if holder.id == actor.assistant.id]
-    others = [(topic, holder) for topic, holder in rows if holder.id != actor.assistant.id]
+    rows = [row for row in rows if row[2] is None or CATEGORY[row[3].kind] != Category.Finished]
+    if actor.before_tasks:
+        rows = [row for row in rows if row[2] is not None]
+
+    def name(topic: Topic, task: Task | None, stage: Stage | None) -> str:
+        """Return how a held Topic is shown: its reference, title and stage or closing date.
+
+        Args:
+            topic: The Topic.
+            task: Its task, if any.
+            stage: The task's stage.
+        """
+        if task is not None and actor.before_tasks:
+            return f"{ref(task.number)} «{topic.title}»" + (
+                f" [{topic.issue}]" if topic.issue else ""
+            )
+        if task is not None and stage is not None:
+            shown = f"{ref(task.number)} «{task.title}»" + (
+                f" [{topic.issue}]" if topic.issue else ""
+            )
+            shown += f", stage {stage.name}"
+            return shown + (f", waiting: {task.waiting}" if task.waiting else "")
+        assert topic.number is not None
+        closes = (topic.updated_at + timedelta(days=idle_days)).date()
+        return (
+            f"{free_ref(topic.number)} «{topic.title}», closes for inactivity on {closes} if quiet"
+        )
+
+    mine = [(t, k, s) for t, holder, k, s in rows if holder.id == actor.assistant.id]
+    others = [(t, holder, k, s) for t, holder, k, s in rows if holder.id != actor.assistant.id]
     lines: list[str] = []
     if mine:
-        lines.append("You hold — continue there and note each stage:")
-        for topic in mine[:10]:
-            closes = (topic.updated_at + timedelta(days=idle_days)).date()
-            lines.append(
-                f"- {ref(topic.number)} «{topic.title}»"
-                + (f" [{topic.issue}]" if topic.issue else "")
-                + f", closes for inactivity on {closes} if quiet"
-            )
+        lines.append(
+            "You hold — continue there and note each stage:"
+            if actor.before_tasks
+            else "You hold — continue there and move each task's stage:"
+        )
+        for topic, task, stage in mine[:10]:
+            lines.append(f"- {name(topic, task, stage)}")
     else:
-        lines.append("You hold no Topic: open one when you take a task, as above.")
+        lines.append("You hold no Topic: take or open one when you take a task, as above.")
     if others:
         lines.append(
             "Held by other sessions of this project — to continue one, take it over with "
             "hold_topic; if its task is done, take it over and close it with the outcome:"
         )
-        for topic, holder in others[:10]:
-            stage = await last_stage(db, topic)
+        for topic, holder, task, stage in others[:10]:
+            last = await last_stage(db, topic)
             lines.append(
-                f"- {ref(topic.number)} «{topic.title}»"
-                + (f" [{topic.issue}]" if topic.issue else "")
-                + f" held by «{holder.name}»"
+                f"- {name(topic, task, stage)} held by «{holder.name}»"
                 + (
-                    f", last stage «{stage.body}» on {stage.created_at:%Y-%m-%d %H:%M} UTC"
-                    if stage
+                    f", last stage «{last.body}» on {last.created_at:%Y-%m-%d %H:%M} UTC"
+                    if last
                     else f", no stage noted, last active {topic.updated_at:%Y-%m-%d %H:%M} UTC"
                 )
             )
     return lines
 
 
-@router.get("/briefing", response_model=Briefing)
-async def briefing(request: Request, actor: ActorDep, db: DB) -> Briefing | JSONResponse:
+async def stage_names(db: AsyncSession, team: Team) -> str:
+    """Return the names of the Team's task stages in order, for the rules.
+
+    Args:
+        db: Database session.
+        team: The Team.
+    """
+    from coloqo_server.models import TaskType, Workflow
+    from coloqo_server.workflows import stages_of
+
+    workflow = await db.scalar(
+        select(Workflow)
+        .where(Workflow.team_id == team.id, Workflow.type == TaskType.Task)
+        .order_by(Workflow.id)
+        .limit(1)
+    )
+    if workflow is None:
+        return ""
+    return " → ".join(stage.name for stage in await stages_of(db, workflow.id))
+
+
+@router.get("/briefing")
+async def briefing(request: Request, actor: ActorDep, db: DB) -> Briefing:
     """Tell a starting session who it is in Coloqo and how to work; the server keeps the rules.
 
     A rule changes here, for every project and Team, without a plugin release. A plugin older
-    than 0.5.0 gets the former shape and is told to update (decision 0025).
+    than the tracker gets the rules it knows, and is told to update (decision 0027).
 
     Args:
         request: The incoming request.
@@ -192,10 +291,6 @@ async def briefing(request: Request, actor: ActorDep, db: DB) -> Briefing | JSON
     """
     if actor.assistant is None or actor.project is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Assistant gets a briefing")
-    if actor.legacy:
-        from coloqo_server.api.legacy import legacy_briefing
-
-        return JSONResponse(await legacy_briefing(request, db, actor))
     settings = request.app.state.settings
     hint = update_hint(request, actor)
     team = await db.get(Team, actor.team_id) if actor.team_id else None
@@ -208,12 +303,14 @@ async def briefing(request: Request, actor: ActorDep, db: DB) -> Briefing | JSON
         "together; everything you write is signed and the Team sees it. Other sessions, yours "
         "included, are other Assistants.",
         "",
-        RULES.format(
+        (RULES_BEFORE_TASKS if actor.before_tasks else RULES).format(
             team=team.name,
             user=actor.user.pseudonym,
             other="globex" if team.slug != "globex" else "acme",
             url=settings.public_url,
             slug=team.slug,
+            stages=await stage_names(db, team),
+            planning=(PLANNING_ON if team.tracker else PLANNING_OFF).format(team=team.name),
         ),
         "",
         *await held_lines(db, actor, team, settings.idle_close_days),
