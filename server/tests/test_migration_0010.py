@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from coloqo_server.db import MIGRATIONS_DIR, migrate
 from coloqo_server.settings import Settings
 from tests.conftest import Plugin, _connect
+from tests.test_retention import _tend
 
 
 def _down(settings: Settings) -> None:
@@ -73,8 +74,10 @@ def test_every_topic_becomes_a_task_with_its_number(
                 (alice_id, number),
             )
         db.execute("UPDATE teams SET last_topic = 3")
+        db.execute("UPDATE topics SET updated_at = now() - interval '20 days' WHERE number = 1")
 
     migrate(settings.database_url, settings.files_dir)
+    told = _tend(settings)
     tasks = {t["number"]: t for t in alice.get("/api/team/acme/task").json()}
     first = alice.get("/api/team/acme/task/1").json()
     by_old_link = alice.get("/api/team/acme/topic/2").json()
@@ -99,6 +102,8 @@ def test_every_topic_becomes_a_task_with_its_number(
         ("stage", True),
     ]
     assert first["topic"]["messages"][0]["body"] == "Hi"
+    assert told == set(), "a task quiet before the migration gets a week from it"
+    assert first["timeline"][1]["created_at"] > first["timeline"][0]["created_at"]
     assert (by_old_link["ref"], by_old_link["kind"], by_old_link["outcome"]) == (
         "T-2",
         "task",

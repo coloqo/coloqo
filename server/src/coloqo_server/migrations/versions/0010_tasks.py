@@ -8,8 +8,9 @@ Decisions 0030-0033. Workflows with stages, tasks, their links and timeline; the
 whose move it was, by session. Each Team gets the
 built-in task and promise workflows, and its Areas point to the task one. Every existing Topic
 becomes a task with the same number: a closed one done, an open one in analysis, the timeline
-saying the migration set it; the Topic keeps its number in the free series, so its old links lead
-to the task. Topics are no longer deleted by time, so a Team's archive days go.
+saying the migration set it at the moment of the migration; the Topic keeps its number in the
+free series, so its old links lead to the task. Topics are no longer deleted by time, so a
+Team's archive days go.
 """
 
 import sqlalchemy as sa
@@ -291,12 +292,16 @@ def upgrade() -> None:
         "SELECT k.id, 'created', k.created_by, '{\"migrated\": true}'::jsonb, k.created_at "
         "FROM tasks k"
     )
+    # The migration sets an open task's stage now, and says so: that is its activity, so a task
+    # quiet for weeks gets a week before its first quiet notice, for its holder to set the real
+    # stage (the author, 2026-11-08). A finished task keeps its own dates.
     op.execute(
         "INSERT INTO task_events (task_id, kind, data, created_at) "
         "SELECT k.id, 'stage', jsonb_build_object('to', s.name, 'kind', s.kind::text, "
-        "'migrated', true), k.created_at "
+        "'migrated', true), CASE WHEN k.finished_at IS NULL THEN now() ELSE k.created_at END "
         "FROM tasks k JOIN stages s ON s.id = k.stage_id"
     )
+    op.execute("UPDATE tasks SET updated_at = now() WHERE finished_at IS NULL")
     op.execute(
         "INSERT INTO task_events (task_id, kind, data, created_at) "
         "SELECT k.id, 'closed', jsonb_build_object('outcome', k.outcome, 'migrated', true), "

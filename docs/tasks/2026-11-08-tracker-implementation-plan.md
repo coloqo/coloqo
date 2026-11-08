@@ -52,7 +52,10 @@ Nothing changes for a member yet but the deletion of closed Topics, which stops.
   (question 1, the author, 2026-11-08; guessing from the last stage note's text was dropped: a wrong
   guess would enter the timeline as a fact).
 - The timeline is seeded with "created" at the Topic's creation and "closed" at its closing; old
-  stage notes stay as Messages.
+  stage notes stay as Messages. An open task's "stage set by the migration" is dated at the
+  migration, and so is its activity: a Topic quiet for weeks gets a week before its first quiet
+  notice, for its holder to set the real stage (the author, 2026-11-08, after a review note that
+  every such Topic would start daily notices at once).
 - `last_task = last_topic` per Team; both counters continue from there.
 
 **Behaviour:**
@@ -108,7 +111,7 @@ board comes. The switch is not set by the migration: that would name the pilot t
 - **Tools:** `create_task`, `take_task`, `change_stage` (with `skipped`), `wait` / `resumed`,
   `close_task` (outcome), `edit_task` (description, links); `open_topic` opens a free Topic or a
   Topic for a new task; `read_topic` and the renderer take `T-` and `F-`; `note_stage` becomes
-  `change_stage` for tasks and stays a progress line for free Topics.
+  `change_stage` for tasks and stays a stage line for free Topics (decision 0021).
 - **Whose move:** the hooks already write the marks — `UserPromptSubmit` (`trail.prompt_arrived`,
   which tells a human's prompt from one made by an event) and `Stop` (`trail.turn_ended`). The
   hooks stay offline; the watch, which runs as long as the session, turns the marks into intervals
