@@ -138,7 +138,7 @@ export function ConnectPage({ me }: { me: Me }) {
                   i18nKey="connect.login.confirm"
                   components={{
                     device: <Link to="/device" className="text-amber-700 hover:underline dark:text-amber-400" />,
-                    settings: <Link to="/settings" className="text-amber-700 hover:underline dark:text-amber-400" />,
+                    settings: <Link to="/profile/settings" className="text-amber-700 hover:underline dark:text-amber-400" />,
                   }}
                 />
               </p>

@@ -88,6 +88,10 @@ live on the task; its Topic shows them. A free Topic keeps its own title and out
 - **A task with no assignee is assigned by its first move into work** to the human on whose behalf
   the move is made. A task assigned to another human is taken only by an explicit reassignment.
   Later moves do not change the assignee. There are no co-assignees.
+- **A task in work may be handed over** by a human in the web, e.g. when its assignee is ill
+  (the author, 2026-11-09): the web asks first; the former assignee's sessions are told to stop
+  and the new one's to take it with `take_task`; the former holder of its Topic can no longer
+  close it.
 - **Creating a task is an event** with its author and its source: the task within which it was
   created, usually the one whose Topic the session holds. A task with a source was found during
   the work; one without, planned.

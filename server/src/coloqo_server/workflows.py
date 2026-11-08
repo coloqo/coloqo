@@ -121,3 +121,20 @@ def first_of_kind(stages: list[Stage], kind: StageKind) -> Stage | None:
         kind: The kind.
     """
     return next((stage for stage in stages if stage.kind == kind), None)
+
+
+def start_of(stages: list[Stage]) -> Stage:
+    """Return the stage work starts in: the first stage of work, or, in a workflow whose owner
+    removed every stage of work, the first stage to do (decision 0032 requires only the backlog
+    and done).
+
+    Args:
+        stages: A workflow's stages in order.
+
+    Raises:
+        LookupError: The workflow has neither.
+    """
+    try:
+        return first_of(stages, Category.InProgress)
+    except LookupError:
+        return first_of(stages, Category.ToDo)

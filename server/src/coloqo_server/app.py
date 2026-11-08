@@ -15,6 +15,7 @@ from coloqo_server.api import (
     assistants,
     auth,
     avatars,
+    boards,
     briefing,
     files,
     stream,
@@ -44,7 +45,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-for module in (auth, avatars, teams, topics, tasks, files, stream, assistants, briefing):
+for module in (auth, avatars, teams, topics, tasks, boards, files, stream, assistants, briefing):
     api.include_router(module.router)
 
 

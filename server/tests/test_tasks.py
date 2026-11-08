@@ -85,6 +85,7 @@ def test_opening_a_topic_for_work_creates_a_task_in_work(
     assert task["links"] == [{"key": "ACME-42", "url": ""}]
     assert task["started_at"] is not None
     assert [e["kind"] for e in task["timeline"]] == ["created", "stage", "assigned", "linked"]
+    assert task["timeline"][2]["data"] == {"to": "alice"}
     assert task["topic"]["messages"][0]["body"] == "Taking it"
 
 
@@ -513,3 +514,40 @@ def test_the_briefing_names_the_stages_and_the_tracker(
     assert f"T-{number} «Rename field amount» [ACME-42], stage Analysis" in after
     assert "/team/acme/task/12" in after
     assert "note_stage" in old and "change_stage" not in old
+
+
+def test_a_task_in_work_is_handed_over(
+    setup: Setup, new: tuple[Plugin, Plugin], settings: Settings
+) -> None:
+    """A human hands a task in work to another person: the event names both, the former
+    assignee's Assistant can no longer move it, the new one's takes it with its Topic.
+
+    Args:
+        setup: The Team.
+        new: Assistants of the new plugin.
+        settings: Instance settings.
+    """
+    alice, bob = new
+    number = _task(setup, alice)["number"]
+    setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
+
+    handed = setup.alice.post(f"{_path(setup, number)}/assign", json={"assignee": "bob"})
+    by_alice = alice.client.post(f"{_path(setup, number)}/stage", json={"stage": "Design"})
+    closed_by_alice = alice.client.post(f"{_path(setup, number)}/close", json={"outcome": "done"})
+    closed_by_old_plugin = setup.alice_api.client.patch(
+        f"/api/team/{setup.team}/topic/{number}", json={"status": "closed", "outcome": "done"}
+    )
+    taken = bob.client.post(f"{_path(setup, number)}/take", json={}).json()
+    with _connect(settings.database_url) as connection:
+        (event,) = connection.execute(
+            "SELECT data FROM events WHERE kind = 'task' AND data->>'event' = 'assigned' "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+
+    assert handed.json()["assignee"] == "bob"
+    assert (event["assignee"], event["previous"]) == ("bob", "alice")
+    assert by_alice.json()["detail"]["code"] == "not_assignee"
+    assert closed_by_alice.json()["detail"]["code"] == "not_assignee"
+    assert closed_by_old_plugin.status_code == 409
+    assert (taken["assignee"], taken["holder"]) == ("bob", bob.assistant)
+    assert taken["category"] == "in_progress"

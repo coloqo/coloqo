@@ -42,7 +42,7 @@ export function useTeam(team: string) {
   })
 }
 
-export type TopicFilter = { area?: string; status?: 'open' | 'closed' }
+export type TopicFilter = { area?: string; status?: 'open' | 'closed'; kind?: 'task' | 'free' }
 
 export function useTopics(team: string, filter: TopicFilter) {
   return useQuery({
@@ -50,9 +50,49 @@ export function useTopics(team: string, filter: TopicFilter) {
     queryFn: () =>
       call(
         api.GET('/api/team/{team}/topic', {
-          params: { path: { team }, query: { area: filter.area, status: filter.status, limit: 200 } },
+          params: { path: { team }, query: { area: filter.area, status: filter.status, kind: filter.kind, limit: 200 } },
         }),
       ),
+    enabled: team !== '',
+  })
+}
+
+/** A task with its description, timeline and Topic (decision 0031). */
+export function useTask(team: string, number: number) {
+  return useQuery({
+    queryKey: ['task', team, number],
+    queryFn: () => call(api.GET('/api/team/{team}/task/{number}', { params: { path: { team, number } } })),
+    enabled: team !== '' && number > 0,
+  })
+}
+
+export type TaskFilter = { type?: 'task' | 'promise'; category?: 'to_do' | 'in_progress' | 'finished' }
+
+export function useTasks(team: string, filter: TaskFilter = {}) {
+  return useQuery({
+    queryKey: ['tasks', team, filter],
+    queryFn: () =>
+      call(api.GET('/api/team/{team}/task', { params: { path: { team }, query: { ...filter, limit: 500 } } })),
+    enabled: team !== '',
+  })
+}
+
+export type BoardFilter = { area?: string; assignee?: string; promise?: number }
+
+/** The board with its cards; whose move changes with no event, so it is asked again (0033). */
+export function useBoard(team: string, filter: BoardFilter) {
+  return useQuery({
+    queryKey: ['board', team, filter],
+    queryFn: () => call(api.GET('/api/team/{team}/board', { params: { path: { team }, query: filter } })),
+    enabled: team !== '',
+    refetchInterval: PRESENCE_MS,
+  })
+}
+
+export function useWorkflows(team: string) {
+  return useQuery({
+    queryKey: ['workflows', team],
+    queryFn: () => call(api.GET('/api/team/{team}/workflow', { params: { path: { team } } })),
     enabled: team !== '',
   })
 }

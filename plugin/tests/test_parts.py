@@ -485,7 +485,7 @@ def test_stages_and_closing_send_what_the_server_expects(
         (
             "POST",
             "/team/acme/task/3/close",
-            {"outcome": "Fixed in ACME-42, MR !17", "cancelled": False},
+            {"outcome": "Fixed in ACME-42, MR !17", "cancelled": False, "missed": False},
         ),
         ("PATCH", "/team/acme/topic/4", {"status": "closed", "outcome": "ISO dates"}),
     ]
@@ -884,3 +884,45 @@ def test_moves_are_posted_and_kept_when_the_server_is_away() -> None:
     ((method, path, body),) = up.posted
     assert (method, path) == ("POST", "/moves")
     assert body["intervals"][0]["start"].startswith("2023-11-14T22:13:20")
+
+
+def test_a_promise_is_created_and_closed_as_missed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A promise goes with its period; closing it as missed tells the server so (0031, 0032).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = AnsweringApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    created = mcp_server.create_task(
+        "billing", "Reports by December", promise=True, period_end="2026-12-31"
+    )
+    mcp_server.close_task("T-3", "The API slipped", missed=True)
+
+    assert created == "Created the promise T-3 «Fix» in the backlog."
+    assert api.sent[0][2]["type"] == "promise" and api.sent[0][2]["period_end"] == "2026-12-31"
+    assert api.sent[1][2] == {"outcome": "The API slipped", "cancelled": False, "missed": True}
+
+
+def test_a_task_handed_over_is_told_to_both_assignees() -> None:
+    """A task handed to another person tells the former assignee's sessions to stop and the new
+    one's to take it."""
+    data = {
+        "team": "acme",
+        "ref": "T-5",
+        "title": "Import",
+        "event": "assigned",
+        "assignee": "bob",
+        "previous": "alice",
+        "stage": "Code",
+        "author": "carol",
+        "author_assistant": None,
+    }
+    bob = Me(pseudonym="bob", assistant="k-bob", project=None)
+
+    former = describe("task", data, ME)
+    new = describe("task", data, bob)
+
+    assert former is not None and "handed to bob" in former and "Don't move" in former
+    assert new is not None and "in work: take it with take_task" in new

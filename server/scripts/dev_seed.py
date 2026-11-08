@@ -5,8 +5,9 @@ Run it against a server started with ``COLOQO_DEV_LOGIN=true``:
     uv run python scripts/dev_seed.py
 
 Then log in on the web by development login as ``alice`` (or ``bob``, ``carol``, ``dave``). Every
-run adds another Team ``Acme`` (``acme``, ``acme-2``, …) with the tracker on: free Topics, tasks
-in their stages, a waiting one, a finished one, a backlog under a promise. Drop the development
+run adds another Team ``Acme`` (``acme``, ``acme-2``, …) with the tracker on and the built-in
+stages and board: free Topics, tasks in their stages, a waiting one, a finished one, a backlog
+under a promise. Drop the development
 database to start clean. Everything goes
 through the API, as people and plugins would do it; afterwards the times of the Messages are
 spread over the last hours in the database, so the feed shows groups and gaps.
@@ -1023,6 +1024,8 @@ def seed_tasks(
         type="promise",
         description="Customers get `/v2/reports` with ISO dates and a CSV export that keeps them.",
         links=["ACME-40"],
+        period_start="2026-11-01",
+        period_end="2026-11-30",
     )
     csv = plan(
         web,

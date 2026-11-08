@@ -14,6 +14,8 @@ import {
   postMessage,
   readTopic,
   topicPath,
+  type TaskDetail,
+  type TimelineEntry,
   type TopicKind,
   uploadFile,
   type FileInfo,
@@ -21,17 +23,19 @@ import {
   type Message,
   type TopicDetail,
 } from '../api/client'
-import { useTeam } from '../api/queries'
+import { useTask, useTeam } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
 import { AuthorAvatar } from '../components/Avatar'
 import { Bell } from '../components/Bell'
 import { Page } from '../components/Layout'
 import { Markdown } from '../components/Markdown'
 import { Time } from '../components/Time'
+import { Description, TaskPanel, TimelineLine } from '../components/Task'
 import { StatusBadge } from '../components/Topics'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Loading, Notice, Textarea } from '../components/ui'
 import { MessageImages } from '../components/Images'
 import { absoluteTime, errorText, fileSize, issueLink } from '../lib/format'
+import { ownLine } from '../lib/timeline'
 
 /** Whether the page is in front of the person, so that reading can be recorded. */
 function usePageVisible() {
@@ -787,7 +791,65 @@ function Arrow({ up }: { up?: boolean }) {
   )
 }
 
-export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
+/** Timeline entries that fall in a window of the feed: after one moment, up to another. */
+function within(entries: TimelineEntry[], after: string | null, upTo: string | null): TimelineEntry[] {
+  return entries.filter(
+    (entry) => (after === null || entry.created_at > after) && (upTo === null || entry.created_at <= upTo),
+  )
+}
+
+/** A task's page: its Topic with the task beside it, or the task alone before it is taken. */
+export function TaskPage({ me }: { me: Me }) {
+  const { t } = useTranslation()
+  const params = useParams()
+  const slug = params.team ?? ''
+  const number = Number(params.number)
+  const task = useTask(slug, number)
+  const team = useTeam(slug)
+  if (task.isPending) return <Page><Loading /></Page>
+  if (task.error || !task.data) {
+    return (
+      <Page title={t('topic.notFoundTitle')}>
+        <ErrorNote>{errorText(task.error, t)}</ErrorNote>
+      </Page>
+    )
+  }
+  if (task.data.topic) return <TopicPage me={me} kind="task" task={task.data} />
+  const data = task.data
+  return (
+    <Page>
+      <div className="mb-5 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500 dark:text-stone-400">
+          <span className="font-mono">{data.ref}</span>
+          <Link to={areaPath(data.team, data.area)} className="hover:underline">
+            {data.area_name}
+          </Link>
+          <Badge tone="stone">{data.stage}</Badge>
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight break-words">{data.title}</h1>
+        <p className="text-sm text-stone-500 dark:text-stone-400">{t('task.noTopic')}</p>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <Description task={data} />
+          <Card>
+            <CardHeader title={t('task.timeline')} />
+            <ol className="flex flex-col px-3 py-2">
+              {data.timeline.map((entry, index) => (
+                <TimelineLine key={index} entry={entry} />
+              ))}
+            </ol>
+          </Card>
+        </div>
+        <div className="flex min-w-0 flex-col gap-5">
+          <TaskPanel task={data} team={team.data} />
+        </div>
+      </div>
+    </Page>
+  )
+}
+
+export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: TaskDetail }) {
   const { t } = useTranslation()
   const params = useParams()
   const slug = params.team ?? ''
@@ -799,6 +861,7 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
   const visible = usePageVisible()
   const [to, setTo] = useState('')
   const [replying, setReplying] = useState<Message | null>(null)
+  const [view, setView] = useState<'messages' | 'timeline'>('messages')
   // Messages unread when the page opened, and those arriving while it is open, stay marked "new".
   const [newFrom, setNewFrom] = useState<number | null>(null)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -851,7 +914,8 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
 
   // Reading is recorded while the page is in front and the latest Messages are on screen.
   useEffect(() => {
-    if (!data || !visible || !bottomOnScreen || unread === 0 || lastNumber <= marking.current) return
+    // The conversation is read only while it is shown, not the timeline alone.
+    if (!data || view !== 'messages' || !visible || !bottomOnScreen || unread === 0 || lastNumber <= marking.current) return
     marking.current = lastNumber
     void call(markRead(data.kind ?? 'free', data.team, data.number, lastNumber))
       .then((out) => {
@@ -864,7 +928,7 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
       .catch(() => {
         marking.current = 0
       })
-  }, [data, visible, bottomOnScreen, unread, lastNumber, slug, kind, number, queryClient])
+  }, [data, view, visible, bottomOnScreen, unread, lastNumber, slug, kind, number, queryClient])
 
   if (topic.isPending) return <Page><Loading /></Page>
   if (topic.error || !data) {
@@ -876,6 +940,7 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
   }
 
   const byNumber = new Map(messages.map((m) => [m.number, m]))
+  const timeline = (task?.timeline ?? []).filter(ownLine)
   const avatars = new Map((team.data?.members ?? []).map((m) => [m.pseudonym ?? '', m.avatar]))
   // The line "New messages" stands before the first one someone else wrote since the page opened.
   const firstNew =
@@ -952,8 +1017,39 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
       <TopicHeader topic={data} />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
+          {/* A task's description has room for its sections, above the conversation. */}
+          {task && <Description task={task} />}
           <Card>
-            <CardHeader title={t('topic.messages', { count: data.last_number })} />
+            <CardHeader title={view === 'timeline' ? t('task.timeline') : t('topic.messages', { count: data.last_number })}>
+              {task && (
+                <div className="inline-flex rounded-md border border-stone-300 p-0.5 dark:border-stone-700" role="group" aria-label={t('topic.view')}>
+                  {(['messages', 'timeline'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      aria-pressed={view === option}
+                      onClick={() => setView(option)}
+                      className={`rounded px-2.5 py-1 text-sm ${
+                        view === option
+                          ? 'bg-amber-50 font-medium text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-800/50'
+                          : 'text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800'
+                      }`}
+                    >
+                      {option === 'messages' ? t('topic.viewMessages') : t('topic.viewTimeline')}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardHeader>
+            {view === 'timeline' && task ? (
+              // Only the task's own timeline, without the conversation (the author, 2026-11-09).
+              <ol className="flex flex-col rounded-b-lg bg-stone-100 px-3 py-3 sm:px-4 dark:bg-stone-950/70">
+                {task.timeline.map((entry, at) => (
+                  <TimelineLine key={`all-${at}`} entry={entry} />
+                ))}
+              </ol>
+            ) : (
+              <>
             <div ref={setTop} className="scroll-mt-16">
               {hasEarlier && (
                 <div className="flex flex-col items-center gap-2 border-b border-stone-200 bg-stone-100 px-3 py-2 dark:border-stone-800 dark:bg-stone-950/70">
@@ -969,8 +1065,18 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
                 const previous = messages[index - 1]
                 const newDay = previous === undefined || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString()
                 const divider = index === firstNew
+                // The task's own lines stand among the Messages by time (decision 0033); before
+                // the first loaded Message only when nothing earlier is left to load.
+                const lines = within(
+                  timeline,
+                  previous ? previous.created_at : hasEarlier ? message.created_at : null,
+                  message.created_at,
+                )
                 return (
                   <Fragment key={message.number}>
+                    {lines.map((entry, at) => (
+                      <TimelineLine key={`t-${message.number}-${at}`} entry={entry} />
+                    ))}
                     {newDay && <DayDivider value={message.created_at} />}
                     {divider && <NewDivider />}
                     {message.kind === 'stage' || message.kind === 'closed' || message.kind === 'taken' ? (
@@ -992,13 +1098,25 @@ export function TopicPage({ me, kind }: { me: Me; kind: TopicKind }) {
                   </Fragment>
                 )
               })}
+              {messages.length > 0 &&
+                within(timeline, messages[messages.length - 1].created_at, null).map((entry, at) => (
+                  <TimelineLine key={`t-end-${at}`} entry={entry} />
+                ))}
             </ol>
+              </>
+            )}
             <div ref={setBottom} />
           </Card>
           <Compose topic={data} to={to} setTo={setTo} replying={replying} setReplying={setReplying} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
-          {data.kind === 'task' ? <Notice>{t('settle.task')}</Notice> : <Settle topic={data} />}
+          {task ? (
+            <TaskPanel task={task} team={team.data} />
+          ) : data.kind === 'task' ? (
+            <Notice>{t('settle.task')}</Notice>
+          ) : (
+            <Settle topic={data} />
+          )}
           <Files files={data.files} team={data.team} onJump={reveal} />
         </div>
       </div>

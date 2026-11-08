@@ -635,7 +635,9 @@ def list_tasks(
         "Put found work in the Team's backlog as a task, when the Team keeps one: work that is "
         "not the task at hand. It records the task it came from. Don't make tasks nobody asked "
         "for. `assignee` only when your user says whose it is; `parent` a promise or task "
-        "number it belongs to; `links` external issue keys."
+        "number it belongs to; `links` external issue keys. `promise=true`, only at your user's "
+        "word, makes a promise: a commitment for the period `period_start`..`period_end` "
+        "(YYYY-MM-DD) that tasks work towards."
     )
 )
 def create_task(
@@ -645,8 +647,11 @@ def create_task(
     assignee: str | None = None,
     parent: str | None = None,
     links: list[str] | None = None,
+    promise: bool = False,
+    period_start: str | None = None,
+    period_end: str | None = None,
 ) -> str:
-    """Create a task in the backlog.
+    """Create a task, or a promise, in the backlog.
 
     Args:
         area: The Area's slug.
@@ -655,6 +660,9 @@ def create_task(
         assignee: Pseudonym of the human it is for.
         parent: The promise's or task's reference it belongs to.
         links: External issue keys or links.
+        promise: Make a promise rather than a task.
+        period_start: A promise's first day, YYYY-MM-DD.
+        period_end: A promise's last day.
 
     Raises:
         ToolError: The project is linked to no Team, or the server refused (no tracker).
@@ -671,10 +679,14 @@ def create_task(
             "assignee": assignee,
             "parent": parent_number,
             "links": links or [],
+            "type": "promise" if promise else "task",
+            "period_start": period_start,
+            "period_end": period_end,
         },
     )
     trail.mark_done()
-    return f"Created {data['ref']} «{data['title']}» in the backlog."
+    kind = "promise" if promise else "task"
+    return f"Created the {kind} {data['ref']} «{data['title']}» in the backlog."
 
 
 @mcp.tool(
@@ -785,35 +797,43 @@ def resume_task(task: str) -> str:
     description=(
         "Close your user's task when it is done (merged and verified, a batch finished), with "
         "`outcome`: a line or two and the MR or issue links. `cancelled=true` when it ends "
-        "without a result. A finished task is final: a fix is a new task that mentions it."
+        "without a result. A finished task is final: a fix is a new task that mentions it. A "
+        "promise closes only at your user's word: delivered by default, `missed=true` when its "
+        "period ended without the delivery, `cancelled=true` when withdrawn."
     )
 )
-def close_task(task: str, outcome: str, cancelled: bool = False) -> str:
-    """Close a task.
+def close_task(task: str, outcome: str, cancelled: bool = False, missed: bool = False) -> str:
+    """Close a task or a promise.
 
     Args:
         task: The task's reference.
         outcome: How it ended, with links.
-        cancelled: It ends without a result.
+        cancelled: It ends without a result: cancelled, or a promise withdrawn.
+        missed: A promise whose period ended without the delivery.
 
     Raises:
         ToolError: Not a task reference, or the server refused.
     """
-    return _close_task(task, outcome, cancelled)
+    return _close_task(task, outcome, cancelled, missed)
 
 
-def _close_task(task: str, outcome: str, cancelled: bool) -> str:
+def _close_task(task: str, outcome: str, cancelled: bool, missed: bool = False) -> str:
     """Close a task and say how it ended.
 
     Args:
         task: The task's reference.
         outcome: How it ended, with links.
         cancelled: It ends without a result.
+        missed: A promise not delivered in its period.
 
     Raises:
         ToolError: Not a task reference, or the server refused.
     """
-    data = _call("POST", f"{_task(task)}/close", json={"outcome": outcome, "cancelled": cancelled})
+    data = _call(
+        "POST",
+        f"{_task(task)}/close",
+        json={"outcome": outcome, "cancelled": cancelled, "missed": missed},
+    )
     trail.mark_done()
     return f"Closed {data['ref']} «{data['title']}» as {data['stage']}."
 

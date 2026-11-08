@@ -1,10 +1,11 @@
 """The data model (decision 0008)."""
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -792,6 +793,8 @@ class Task(Base):
         started_at: Its first move into work.
         finished_at: When it reached a finished stage.
         idle_noticed_at: When its assignee was last told it had no activity.
+        period_start: A promise's period: its first day (decision 0031).
+        period_end: Its last day.
     """
 
     __tablename__ = "tasks"
@@ -817,6 +820,8 @@ class Task(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     idle_noticed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    period_start: Mapped[date | None] = mapped_column(Date)
+    period_end: Mapped[date | None] = mapped_column(Date)
 
 
 class TaskLink(Base):
@@ -899,3 +904,78 @@ class Move(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ColumnRule(enum.StrEnum):
+    """What puts a task into a column of a board (decision 0032).
+
+    Attributes:
+        Stages: Its stage is one of the column's stages.
+        Waiting: It has an active external wait, whatever its stage.
+    """
+
+    Stages = "stages"
+    Waiting = "waiting"
+
+
+class Board(Base):
+    """A Team's board: ordered columns over its stages (decision 0032).
+
+    The first version shows one board per Team, its main one; more boards are more rows.
+
+    Attributes:
+        id: Identifier.
+        team_id: The Team.
+        name: Shown name.
+        main: The board whose columns are the Team's statuses.
+        created_at: Creation time.
+    """
+
+    __tablename__ = "boards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(60))
+    main: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BoardColumn(Base):
+    """A column of a board: a status, a set of stages or a condition (decision 0032).
+
+    Attributes:
+        id: Identifier.
+        board_id: The board.
+        name: Shown name, the status.
+        position: Order on the board, from 1.
+        rule: Stages, or an active external wait.
+    """
+
+    __tablename__ = "board_columns"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(60))
+    position: Mapped[int] = mapped_column(Integer)
+    rule: Mapped[ColumnRule] = mapped_column(_enum(ColumnRule, "column_rule"))
+
+
+class ColumnStage(Base):
+    """A stage shown in a column; every stage is in exactly one column of a board.
+
+    Attributes:
+        column_id: The column.
+        stage_id: The stage.
+        board_id: The board, denormalised so a stage is unique within it.
+    """
+
+    __tablename__ = "column_stages"
+    __table_args__ = (UniqueConstraint("board_id", "stage_id"),)
+
+    column_id: Mapped[int] = mapped_column(
+        ForeignKey("board_columns.id", ondelete="CASCADE"), primary_key=True
+    )
+    stage_id: Mapped[int] = mapped_column(
+        ForeignKey("stages.id", ondelete="CASCADE"), primary_key=True
+    )
+    board_id: Mapped[int] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"))
