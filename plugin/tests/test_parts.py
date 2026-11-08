@@ -903,3 +903,26 @@ def test_a_promise_is_created_and_closed_as_missed(monkeypatch: pytest.MonkeyPat
     assert created == "Created the promise T-3 «Fix» in the backlog."
     assert api.sent[0][2]["type"] == "promise" and api.sent[0][2]["period_end"] == "2026-12-31"
     assert api.sent[1][2] == {"outcome": "The API slipped", "cancelled": False, "missed": True}
+
+
+def test_a_task_handed_over_is_told_to_both_assignees() -> None:
+    """A task handed to another person tells the former assignee's sessions to stop and the new
+    one's to take it."""
+    data = {
+        "team": "acme",
+        "ref": "T-5",
+        "title": "Import",
+        "event": "assigned",
+        "assignee": "bob",
+        "previous": "alice",
+        "stage": "Code",
+        "author": "carol",
+        "author_assistant": None,
+    }
+    bob = Me(pseudonym="bob", assistant="k-bob", project=None)
+
+    former = describe("task", data, ME)
+    new = describe("task", data, bob)
+
+    assert former is not None and "handed to bob" in former and "Don't move" in former
+    assert new is not None and "in work: take it with take_task" in new

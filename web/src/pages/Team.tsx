@@ -1,33 +1,28 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 
 import {
   ApiError,
   api,
   areaPath,
-  boardPath,
   call,
-  promisesPath,
   teamPath,
   topicPath,
   type Area,
-  type Invite,
   type TeamDetail,
 } from '../api/client'
 import { useTeam, useTopics } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
 import { Page } from '../components/Layout'
 import { PresenceDot, PresenceText } from '../components/Presence'
-import { Time } from '../components/Time'
-import { TrackerSettings } from '../components/TrackerSettings'
+import { TeamPageFrame } from '../components/TeamBar'
 import { RoleBadge, TopicList } from '../components/Topics'
 import {
   Button,
   Card,
   CardHeader,
-  CopyButton,
   Empty,
   ErrorNote,
   Field,
@@ -461,144 +456,6 @@ function Members({ team }: { team: TeamDetail }) {
   )
 }
 
-function InviteCard({ team }: { team: TeamDetail }) {
-  const { t } = useTranslation()
-  const [invite, setInvite] = useState<Invite | null>(null)
-  const create = useMutation({
-    mutationFn: () => call(api.POST('/api/team/{team}/invite', { params: { path: { team: team.slug } } })),
-    onSuccess: setInvite,
-  })
-  return (
-    <Card>
-      <CardHeader title={t('team.invite')} />
-      <div className="flex flex-col gap-3 px-4 py-3">
-        <p className="text-sm text-stone-600 dark:text-stone-400">{t('team.inviteLead')}</p>
-        {invite && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-start gap-2 rounded-md bg-stone-100 p-2 pl-3 dark:bg-stone-800/70">
-              <code className="min-w-0 flex-1 py-1 font-mono text-xs break-all">{invite.url}</code>
-              <CopyButton text={invite.url} />
-            </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              {t('team.inviteNote')} <Time value={invite.expires_at} absolute />.
-            </p>
-          </div>
-        )}
-        <ErrorNote>{create.error && errorText(create.error, t)}</ErrorNote>
-        <div>
-          <Button size="sm" onClick={() => create.mutate()} disabled={create.isPending}>
-            {invite ? t('team.inviteAnother') : t('team.inviteCreate')}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-function TeamSettings({ team }: { team: TeamDetail }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
-  const [name, setName] = useState(team.name)
-  const [slug, setSlug] = useState(team.slug)
-  const [limit, setLimit] = useState(String(team.turn_limit))
-  const [tracker, setTracker] = useState(team.tracker ?? false)
-  const [idle, setIdle] = useState(String(team.task_idle_days ?? 7))
-  const [repeat, setRepeat] = useState(String(team.task_idle_repeat_days ?? 1))
-  const save = useMutation({
-    mutationFn: () =>
-      call(
-        api.PATCH('/api/team/{team}', {
-          params: { path: { team: team.slug } },
-          body: {
-            name: name.trim(),
-            slug: slug.trim(),
-            turn_limit: Number(limit),
-            tracker,
-            task_idle_days: Number(idle),
-            task_idle_repeat_days: Number(repeat),
-          },
-        }),
-      ),
-    onSuccess: (saved) => {
-      void queryClient.invalidateQueries({ queryKey: ['team'] })
-      void queryClient.invalidateQueries({ queryKey: ['teams'] })
-      void queryClient.invalidateQueries({ queryKey: ['topics'] })
-      if (saved.slug !== team.slug) void navigate(teamPath(saved.slug), { replace: true })
-    },
-  })
-  const limitNumber = Number(limit)
-  const days = (value: string) => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 365
-  const valid =
-    name.trim() && slug.trim() && Number.isInteger(limitNumber) && limitNumber >= 1 && limitNumber <= 100 && days(idle) && days(repeat)
-  const changed =
-    name.trim() !== team.name ||
-    slug.trim() !== team.slug ||
-    limitNumber !== team.turn_limit ||
-    tracker !== (team.tracker ?? false) ||
-    Number(idle) !== (team.task_idle_days ?? 7) ||
-    Number(repeat) !== (team.task_idle_repeat_days ?? 1)
-  return (
-    <Card>
-      <CardHeader title={t('team.settings')} />
-      <form
-        className="flex flex-col gap-3 px-4 py-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (valid) save.mutate()
-        }}
-      >
-        <Field label={t('team.name')}>
-          <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required />
-        </Field>
-        <Field label={t('team.slug')} hint={t('team.slugHint')}>
-          <Input
-            value={slug}
-            onChange={(event) => setSlug(event.target.value.toLowerCase())}
-            maxLength={40}
-            pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
-            className="font-mono"
-            required
-          />
-        </Field>
-        <Field label={t('team.turnLimit')} hint={t('team.turnLimitHint')}>
-          <Input
-            type="number"
-            min={1}
-            max={100}
-            value={limit}
-            onChange={(event) => setLimit(event.target.value)}
-            className="w-28"
-            required
-          />
-        </Field>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" checked={tracker} onChange={(event) => setTracker(event.target.checked)} className="mt-0.5" />
-          <span>
-            <span className="font-medium">{t('team.tracker')}</span>
-            <span className="block text-stone-500 dark:text-stone-400">{t('team.trackerHint')}</span>
-          </span>
-        </label>
-        <Field label={t('team.taskIdleDays')} hint={t('team.taskIdleDaysHint')}>
-          <Input type="number" min={1} max={365} value={idle} onChange={(event) => setIdle(event.target.value)} className="w-28" required />
-        </Field>
-        <Field label={t('team.taskIdleRepeatDays')} hint={t('team.taskIdleRepeatDaysHint')}>
-          <Input type="number" min={1} max={365} value={repeat} onChange={(event) => setRepeat(event.target.value)} className="w-28" required />
-        </Field>
-        <ErrorNote>
-          {save.error && (save.error instanceof ApiError && save.error.status === 409 ? t('team.slugTaken') : errorText(save.error, t))}
-        </ErrorNote>
-        {save.isSuccess && !changed && <p className="text-sm text-emerald-700 dark:text-emerald-400">{t('common.saved')}</p>}
-        <div>
-          <Button type="submit" size="sm" variant="primary" disabled={save.isPending || !valid || !changed}>
-            {t('common.save')}
-          </Button>
-        </div>
-      </form>
-    </Card>
-  )
-}
-
 export function TeamPage() {
   const { t } = useTranslation()
   const { team: slug = '', area } = useParams()
@@ -623,24 +480,7 @@ export function TeamPage() {
   }
   const data = team.data
   return (
-    <Page
-      title={
-        <span className="flex flex-wrap items-center gap-3">
-          {data.name}
-          <RoleBadge role={data.role} />
-        </span>
-      }
-    >
-      {data.tracker && (
-        <nav className="-mt-2 mb-5 flex flex-wrap gap-x-4 text-sm">
-          <Link to={boardPath(data.slug)} className="font-medium text-amber-700 hover:underline dark:text-amber-400">
-            {t('board.title')}
-          </Link>
-          <Link to={promisesPath(data.slug)} className="font-medium text-amber-700 hover:underline dark:text-amber-400">
-            {t('promises.title')}
-          </Link>
-        </nav>
-      )}
+    <TeamPageFrame team={data} current="topics" title={t('team.topicsPage')}>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <Topics team={data} kind="task" />
@@ -649,18 +489,8 @@ export function TeamPage() {
         <div className="flex min-w-0 flex-col gap-5">
           <Areas team={data} />
           <Members team={data} />
-          {data.role === 'owner' && (
-            <>
-              <InviteCard team={data} />
-              <TeamSettings
-                key={`${data.name}-${data.slug}-${data.turn_limit}-${data.tracker}-${data.task_idle_days}-${data.task_idle_repeat_days}`}
-                team={data}
-              />
-              {data.tracker && <TrackerSettings team={data} />}
-            </>
-          )}
         </div>
       </div>
-    </Page>
+    </TeamPageFrame>
   )
 }

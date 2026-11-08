@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -93,7 +93,20 @@ export function TaskPanel({ task, team }: { task: TaskDetail; team?: TeamDetail 
           team?.tracker && !finished ? (
             <Select
               value={task.assignee ?? ''}
-              onChange={(event) => assign.mutate(event.target.value)}
+              onChange={(event) => {
+                const to = event.target.value
+                // Handing over a task in work: its assignee's Assistant stops moving it (0031).
+                if (
+                  task.category === 'in_progress' &&
+                  task.assignee &&
+                  to !== task.assignee &&
+                  !window.confirm(t('task.handOver', { ref: task.ref, from: task.assignee, to: to || t('task.unassigned') }))
+                ) {
+                  event.target.value = task.assignee
+                  return
+                }
+                assign.mutate(to)
+              }}
               disabled={assign.isPending}
               aria-label={t('task.assignee')}
               className="py-1"
@@ -170,6 +183,54 @@ export function Progress({ done, total }: { done: number; total: number }) {
   )
 }
 
+/** How many lines a long text shows before "Show it all": it keeps what follows within reach. */
+const FOLDED_LINES = 4
+
+/** A long text shown in part, fading out, with a button to show it all and to fold it again. */
+function Folded({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
+  const box = useRef<HTMLDivElement>(null)
+  const [long, setLong] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [height, setHeight] = useState(0)
+  const [fade, setFade] = useState(0)
+  useLayoutEffect(() => {
+    if (!box.current) return
+    // Four lines of the text's own line height in full, then two more fading out, so it shows
+    // that the text goes on; a text barely longer is shown whole.
+    const line = parseFloat(getComputedStyle(box.current).lineHeight) || 24
+    const folded = Math.round(line * (FOLDED_LINES + 2))
+    setHeight(folded)
+    setFade(Math.round(line * 2))
+    setLong(box.current.scrollHeight > folded + line)
+  }, [children])
+  return (
+    <div>
+      <div
+        ref={box}
+        className="relative overflow-hidden"
+        // The fade is a mask, so it suits the card's background in both themes.
+        style={
+          long && !open
+            ? {
+                maxHeight: height,
+                maskImage: `linear-gradient(to bottom, black calc(100% - ${fade}px), transparent)`,
+                WebkitMaskImage: `linear-gradient(to bottom, black calc(100% - ${fade}px), transparent)`,
+              }
+            : undefined
+        }
+      >
+        {children}
+      </div>
+      {long && (
+        <Button size="sm" variant="ghost" onClick={() => setOpen(!open)} className="mt-1">
+          {open ? t('task.fold') : t('task.unfold')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 /** The task's description, editable, with every former text kept in its history (0033). */
 export function Description({ task }: { task: TaskDetail }) {
   const { t } = useTranslation()
@@ -216,7 +277,7 @@ export function Description({ task }: { task: TaskDetail }) {
               save.mutate()
             }}
           >
-            <Textarea value={text} onChange={(event) => setText(event.target.value)} rows={8} maxLength={50000} autoFocus />
+            <Textarea value={text} onChange={(event) => setText(event.target.value)} rows={18} maxLength={50000} autoFocus />
             <ErrorNote>{save.error ? String(save.error) : null}</ErrorNote>
             <div className="flex gap-2">
               <Button type="submit" size="sm" variant="primary" disabled={save.isPending}>
@@ -228,7 +289,9 @@ export function Description({ task }: { task: TaskDetail }) {
             </div>
           </form>
         ) : task.description ? (
-          <Markdown text={task.description} />
+          <Folded>
+            <Markdown text={task.description} />
+          </Folded>
         ) : (
           <p className="text-sm text-stone-500 dark:text-stone-400">{t('task.noDescription')}</p>
         )}

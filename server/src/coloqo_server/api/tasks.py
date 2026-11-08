@@ -582,7 +582,13 @@ def need_assignees_assistant(actor: Actor, task: Task, label: str, topic: Topic 
             status.HTTP_403_FORBIDDEN,
             f"Only the assignee's Assistant moves {label}: ask yours (decision 0032)",
         )
-    holder = topic is not None and topic.holder_assistant_id == actor.assistant.id
+    # The holder of its Topic closes it too, as plugins older than the tracker do, but only while
+    # the task has no other assignee: a task handed over is no longer the former holder's.
+    holder = (
+        topic is not None
+        and topic.holder_assistant_id == actor.assistant.id
+        and task.assignee_id is None
+    )
     if task.assignee_id != actor.user.id and not holder:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -1178,9 +1184,11 @@ async def take_task(
             },
         )
     if task.assignee_id != actor.user.id:
+        former = await pseudonyms(db, {task.assignee_id})
         record(db, task, "assigned", actor, {"from": task.assignee_id, "to": actor.user.id})
+        previous = former.get(task.assignee_id or 0)
         task.assignee_id = actor.user.id
-        recipients |= await task_event(db, actor, task, "assigned")
+        recipients |= await task_event(db, actor, task, "assigned", previous=previous)
     if CATEGORY[current.kind] == Category.ToDo:
         stage = start_of(await stages_of(db, current.workflow_id))
         if stage.id != current.id:
@@ -1462,6 +1470,9 @@ async def assign_task(
 ) -> TaskOut:
     """Assign a task to a human of the Team, or unassign it: planning (decision 0031).
 
+    A task in work may be handed over too, e.g. when its assignee is ill: the event names the
+    former assignee, whose sessions are told to stop, and the new one's to take it.
+
     Args:
         request: The incoming request.
         team: The Team's slug.
@@ -1486,9 +1497,12 @@ async def assign_task(
     new_id = user.id if user else None
     recipients: set[int] = set()
     if new_id != task.assignee_id:
+        former = await pseudonyms(db, {task.assignee_id})
         record(db, task, "assigned", actor, {"from": task.assignee_id, "to": new_id})
+        previous = former.get(task.assignee_id or 0)
         task.assignee_id = new_id
-        recipients = await task_event(db, actor, task, "assigned")
+        # A task in work handed over: the new assignee's sessions take it, the former's stop.
+        recipients = await task_event(db, actor, task, "assigned", previous=previous)
     await db.commit()
     request.app.state.bus.wake(recipients)
     (out,) = await task_outs(db, [task])

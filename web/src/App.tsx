@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Route, Routes, useParams } from 'react-router'
+import { Link, Navigate, Route, Routes, useParams } from 'react-router'
 
 import type { Me } from './api/client'
 import { useEventStream } from './api/events'
@@ -16,7 +16,8 @@ import { JoinPage } from './pages/Join'
 import { LinkPage, OldLinkPage } from './pages/Link'
 import { SettingsPage } from './pages/Settings'
 import { TeamPage } from './pages/Team'
-import { BoardPage } from './pages/Board'
+import { TeamSettingsPage } from './pages/TeamSettings'
+import { BoardPage, BoardSettingsPage } from './pages/Board'
 import { PromisesPage } from './pages/Promises'
 import { TaskPage, TopicPage } from './pages/Topic'
 import { ChoosePseudonym, Welcome } from './pages/Welcome'
@@ -67,6 +68,8 @@ function Shell({ me }: { me: Me }) {
         <Route path="/team/:team/topic/:number" element={<TopicPage me={me} kind="free" />} />
         <Route path="/team/:team/task/:number" element={<TaskPage me={me} />} />
         <Route path="/team/:team/board" element={<BoardPage />} />
+        <Route path="/team/:team/board/settings" element={<BoardSettingsPage />} />
+        <Route path="/team/:team/settings" element={<TeamSettingsPage />} />
         <Route path="/team/:team/promises" element={<PromisesPage />} />
         <Route path="/team/:team/file/:number" element={<FileAddress />} />
         <Route path="/inbox" element={<ForYouPage />} />
@@ -74,7 +77,8 @@ function Shell({ me }: { me: Me }) {
         <Route path="/topics/:id" element={<OldAddress />} />
         <Route path="/device" element={<DevicePage />} />
         <Route path="/join/:token" element={<JoinPage />} />
-        <Route path="/settings" element={<SettingsPage me={me} />} />
+        <Route path="/profile/settings" element={<SettingsPage me={me} />} />
+        <Route path="/settings" element={<Navigate to="/profile/settings" replace />} />
         <Route path="/connect" element={<ConnectPage me={me} />} />
         <Route path="/link/:token" element={<LinkPage />} />
         <Route path="/assistants/:id/link" element={<OldLinkPage />} />

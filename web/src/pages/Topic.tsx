@@ -861,6 +861,7 @@ export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: 
   const visible = usePageVisible()
   const [to, setTo] = useState('')
   const [replying, setReplying] = useState<Message | null>(null)
+  const [view, setView] = useState<'messages' | 'timeline'>('messages')
   // Messages unread when the page opened, and those arriving while it is open, stay marked "new".
   const [newFrom, setNewFrom] = useState<number | null>(null)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -913,7 +914,8 @@ export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: 
 
   // Reading is recorded while the page is in front and the latest Messages are on screen.
   useEffect(() => {
-    if (!data || !visible || !bottomOnScreen || unread === 0 || lastNumber <= marking.current) return
+    // The conversation is read only while it is shown, not the timeline alone.
+    if (!data || view !== 'messages' || !visible || !bottomOnScreen || unread === 0 || lastNumber <= marking.current) return
     marking.current = lastNumber
     void call(markRead(data.kind ?? 'free', data.team, data.number, lastNumber))
       .then((out) => {
@@ -926,7 +928,7 @@ export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: 
       .catch(() => {
         marking.current = 0
       })
-  }, [data, visible, bottomOnScreen, unread, lastNumber, slug, kind, number, queryClient])
+  }, [data, view, visible, bottomOnScreen, unread, lastNumber, slug, kind, number, queryClient])
 
   if (topic.isPending) return <Page><Loading /></Page>
   if (topic.error || !data) {
@@ -1015,8 +1017,39 @@ export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: 
       <TopicHeader topic={data} />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
+          {/* A task's description has room for its sections, above the conversation. */}
+          {task && <Description task={task} />}
           <Card>
-            <CardHeader title={t('topic.messages', { count: data.last_number })} />
+            <CardHeader title={view === 'timeline' ? t('task.timeline') : t('topic.messages', { count: data.last_number })}>
+              {task && (
+                <div className="inline-flex rounded-md border border-stone-300 p-0.5 dark:border-stone-700" role="group" aria-label={t('topic.view')}>
+                  {(['messages', 'timeline'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      aria-pressed={view === option}
+                      onClick={() => setView(option)}
+                      className={`rounded px-2.5 py-1 text-sm ${
+                        view === option
+                          ? 'bg-amber-50 font-medium text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-800/50'
+                          : 'text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800'
+                      }`}
+                    >
+                      {option === 'messages' ? t('topic.viewMessages') : t('topic.viewTimeline')}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardHeader>
+            {view === 'timeline' && task ? (
+              // Only the task's own timeline, without the conversation (the author, 2026-11-09).
+              <ol className="flex flex-col rounded-b-lg bg-stone-100 px-3 py-3 sm:px-4 dark:bg-stone-950/70">
+                {task.timeline.map((entry, at) => (
+                  <TimelineLine key={`all-${at}`} entry={entry} />
+                ))}
+              </ol>
+            ) : (
+              <>
             <div ref={setTop} className="scroll-mt-16">
               {hasEarlier && (
                 <div className="flex flex-col items-center gap-2 border-b border-stone-200 bg-stone-100 px-3 py-2 dark:border-stone-800 dark:bg-stone-950/70">
@@ -1070,16 +1103,15 @@ export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: 
                   <TimelineLine key={`t-end-${at}`} entry={entry} />
                 ))}
             </ol>
+              </>
+            )}
             <div ref={setBottom} />
           </Card>
           <Compose topic={data} to={to} setTo={setTo} replying={replying} setReplying={setReplying} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           {task ? (
-            <>
-              <TaskPanel task={task} team={team.data} />
-              <Description task={task} />
-            </>
+            <TaskPanel task={task} team={team.data} />
           ) : data.kind === 'task' ? (
             <Notice>{t('settle.task')}</Notice>
           ) : (

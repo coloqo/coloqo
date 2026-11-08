@@ -25,7 +25,8 @@
     "logout": "Log out",
     "you": "Logged in as",
     "connectShort": "Connect",
-    "forYou": "For you"
+    "forYou": "For you",
+    "profile": "Profile settings"
   },
   "common": {
     "loading": "Loading…",
@@ -116,7 +117,13 @@
     "noTasks": "No tasks.",
     "noFreeTopics": "No free Topics.",
     "isPromise": "A promise: a commitment for a period that tasks work towards",
-    "createTask": "Put in the backlog"
+    "createTask": "Put in the backlog",
+    "settingsOf": "Settings · {{name}}",
+    "back": "← Back to the Team",
+    "settingsReadOnly": "The Team's owner changes these settings; you see them as they are.",
+    "trackerOff": "The tracker is off: task stages and the board appear once the owner turns it on.",
+    "topicsPage": "Topics",
+    "pages": "The Team's pages"
   },
   "area": {
     "name": "Name",
@@ -160,7 +167,10 @@
     "toTop": "To the top of what is loaded",
     "assignee": "Assignee",
     "noAssignee": "unassigned",
-    "waiting": "Waiting for"
+    "waiting": "Waiting for",
+    "view": "What to show",
+    "viewMessages": "Conversation",
+    "viewTimeline": "Timeline"
   },
   "message": {
     "reply": "Reply",
@@ -255,7 +265,7 @@
     "unknown": "There is no such invitation. Check the link."
   },
   "settings": {
-    "title": "Settings",
+    "title": "Profile settings",
     "pseudonym": "Name",
     "pseudonymLead": "Teams see you under this name. New Assistants get names that start with it."
   },
@@ -368,7 +378,10 @@
     "noDescription": "No description yet.",
     "history": "Description history ({{count}})",
     "noTopic": "Not taken yet: its Topic opens when the assignee's Assistant takes it.",
-    "timeline": "Timeline"
+    "timeline": "Timeline",
+    "handOver": "{{ref}} is in work with {{from}}. Their Assistant will no longer move it. Hand it to {{to}}?",
+    "unfold": "Show it all",
+    "fold": "Fold"
   },
   "timeline": {
     "created": "task created",
@@ -394,13 +407,17 @@
     "anyPromise": "Any promise",
     "empty": "Empty.",
     "noneWaiting": "Nothing waits.",
-    "hint": "Drag cards within a column to order them: higher matters more. The stage is moved by the assignee's Assistant.",
+    "hint": "Drag cards within a column to order them: higher matters more. The assignee's Assistant moves the stage.",
     "move": {
       "assistant": "{{who}}'s move (Assistant)",
       "human": "{{who}}'s move",
       "person": "waiting for {{who}} to answer",
       "external": "waiting for: {{who}}"
-    }
+    },
+    "onlyOf": "Show only {{who}}'s tasks",
+    "onlyUnassigned": "Show only the unassigned",
+    "noStageMove": "The assignee's Assistant moves the stage",
+    "settings": "Board settings"
   },
   "promises": {
     "title": "Promises",
@@ -445,6 +462,13 @@
       "delivered": "delivered",
       "not_delivered": "not delivered",
       "withdrawn": "withdrawn"
-    }
+    },
+    "columnN": "Column {{n}}",
+    "linearLead": "Stages follow one another; a column takes a run of them. Pull a column's edge in and a new column appears in the freed place; pull it out and the column takes the neighbour's stages. A column pulled to a line is empty: move it to any border, make it the waiting column, or remove it by pulling it up or down.",
+    "leftEdge": "Left edge of {{name}}",
+    "rightEdge": "Right edge of {{name}}",
+    "moveEmpty": "Move the empty column {{name}}",
+    "waitingOnlyEmpty": "Only an empty column can be the waiting one",
+    "notLinear": "This board's columns do not follow the stages in one run, so they are shown as a list."
   }
 }

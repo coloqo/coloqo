@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useNavigate } from 'react-router'
 
 import { api, call, type Me } from '../api/client'
 import { useInbox } from '../api/queries'
+import { PersonAvatar } from './Avatar'
 import { Bell } from './Bell'
 import { Button } from './ui'
 
@@ -24,6 +25,53 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
       ? 'bg-stone-200 font-medium text-stone-900 dark:bg-stone-800 dark:text-stone-100'
       : 'text-stone-600 hover:bg-stone-200 dark:text-stone-400 dark:hover:bg-stone-800'
   }`
+
+/** The person's avatar and name; hovering or clicking opens their profile settings and logout. */
+function UserMenu({ me, onLogout, busy }: { me: Me; onLogout: () => void; busy: boolean }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !box.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [open])
+  const item = 'block w-full rounded px-3 py-1.5 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800'
+  return (
+    <div ref={box} className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-stone-200 dark:hover:bg-stone-800"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        title={t('nav.you')}
+      >
+        <PersonAvatar name={me.pseudonym ?? '?'} size={28} src={me.avatar} />
+        <span className="hidden max-w-40 truncate text-sm text-stone-700 sm:inline dark:text-stone-300">{me.pseudonym}</span>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-40 pt-1">
+          <div className="w-52 rounded-md border border-stone-200 bg-white p-1 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+            <Link to="/profile/settings" role="menuitem" className={item} onClick={() => setOpen(false)}>
+              {t('nav.profile')}
+            </Link>
+            <button type="button" role="menuitem" className={item} onClick={onLogout} disabled={busy}>
+              {t('nav.logout')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function Header({ me }: { me: Me }) {
   const { t } = useTranslation()
@@ -69,18 +117,10 @@ export function Header({ me }: { me: Me }) {
             <span className="sm:hidden">{t('nav.connectShort')}</span>
             <span className="hidden sm:inline">{t('nav.connect')}</span>
           </NavLink>
-          <NavLink to="/settings" className={navClass}>
-            {t('nav.settings')}
-          </NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-1">
-          <span className="hidden px-2 text-sm text-stone-600 sm:inline dark:text-stone-400" title={t('nav.you')}>
-            {me.pseudonym}
-          </span>
           <LanguageSwitch />
-          <Button variant="ghost" size="sm" onClick={() => logout.mutate()} disabled={logout.isPending}>
-            {t('nav.logout')}
-          </Button>
+          <UserMenu me={me} onLogout={() => logout.mutate()} busy={logout.isPending} />
         </div>
       </div>
     </header>

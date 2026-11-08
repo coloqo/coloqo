@@ -159,12 +159,21 @@ def describe(kind: str, data: dict[str, Any], me: Me) -> str | None:
         outcome = f": {data['outcome']}" if data.get("outcome") else ""
         return f"Coloqo: {topic} was {data.get('status')} by {data.get('author')}{outcome}."
     if kind == "task" and data.get("event") == "assigned":
-        if data.get("assignee") != me.pseudonym or data.get("author_assistant") == me.assistant:
+        if data.get("author_assistant") == me.assistant:
             return None
+        if data.get("previous") == me.pseudonym and data.get("assignee") != me.pseudonym:
+            # Handed over, e.g. while its assignee was away: this session stops moving it.
+            return (
+                f"Coloqo: {topic} was handed to {data.get('assignee') or 'nobody'} by "
+                f"{data.get('author')}; it is no longer your user's. Don't move or close it; tell "
+                "your user in one line."
+            )
+        if data.get("assignee") != me.pseudonym:
+            return None
+        work = " It is in work: take it with take_task" if data.get("previous") else " Take it"
         return (
             f"Coloqo: {topic} was assigned to your user by {data.get('author')}, stage "
-            f"{data.get('stage')}. Mention it to your user; take it with take_task only when "
-            "they say so."
+            f"{data.get('stage')}.{work} only when your user says so; mention it to them."
         )
     if kind == "task_idle":
         if data.get("assignee") != me.pseudonym:

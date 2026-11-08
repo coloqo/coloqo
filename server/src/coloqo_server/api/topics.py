@@ -1165,7 +1165,8 @@ async def settle(
             )
         task = await db.scalar(select(Task).where(Task.id == topic.task_id).with_for_update())
         assert task is not None
-        if actor.assistant.id != topic.holder_assistant_id and actor.user.id != task.assignee_id:
+        holds = actor.assistant.id == topic.holder_assistant_id and task.assignee_id is None
+        if not holds and actor.user.id != task.assignee_id:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 {

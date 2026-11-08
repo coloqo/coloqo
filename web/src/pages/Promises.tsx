@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 
-import { boardPath, teamPath, topicPath, type Task } from '../api/client'
+import { boardPath, topicPath, type Task } from '../api/client'
 import { useTasks, useTeam } from '../api/queries'
 import { Page } from '../components/Layout'
+import { TeamPageFrame } from '../components/TeamBar'
 import { Progress } from '../components/Task'
 import { Badge, Card, CardHeader, Empty, ErrorNote, Loading } from '../components/ui'
 import { errorText } from '../lib/format'
@@ -86,22 +87,16 @@ export function PromisesPage() {
     if (task.parent) tree.set(task.parent, [...(tree.get(task.parent) ?? []), task])
   }
   const roots = all.filter((task) => task.type === 'promise' && !(task.parent && byNumber.get(task.parent)?.type === 'promise'))
+  if (team.isPending) return <Page><Loading /></Page>
+  if (team.error || !team.data) {
+    return (
+      <Page title={t('promises.title')}>
+        <ErrorNote>{errorText(team.error, t)}</ErrorNote>
+      </Page>
+    )
+  }
   return (
-    <Page
-      title={t('promises.title')}
-      aside={
-        team.data && (
-          <span className="flex flex-wrap gap-x-3 text-sm">
-            <Link to={teamPath(slug)} className="text-amber-700 hover:underline dark:text-amber-400">
-              {team.data.name}
-            </Link>
-            <Link to={boardPath(slug)} className="text-amber-700 hover:underline dark:text-amber-400">
-              {t('board.title')}
-            </Link>
-          </span>
-        )
-      }
-    >
+    <TeamPageFrame team={team.data} current="promises" title={t('promises.title')}>
       <Card>
         <CardHeader title={t('promises.tree')} />
         {tasks.isPending && <Loading />}
@@ -113,6 +108,6 @@ export function PromisesPage() {
           ))}
         </ul>
       </Card>
-    </Page>
+    </TeamPageFrame>
   )
 }
