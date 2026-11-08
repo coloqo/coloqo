@@ -152,7 +152,7 @@ class TimelineOut(BaseModel):
 
     Attributes:
         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
-            ``described``, ``linked``, ``closed``, ``move``, ...
+            ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``closed``.
         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
         assistant: Name of the Assistant that did it, if any.
         data: What the kind carries.
@@ -485,14 +485,29 @@ async def timeline(db: AsyncSession, task: Task) -> list[TimelineOut]:
             .order_by(TaskEvent.created_at, TaskEvent.id)
         )
     )
-    users = await pseudonyms(db, {e.author_user_id for e in events})
+    named = {e.data.get(key) for e in events if e.kind == "assigned" for key in ("from", "to")}
+    users = await pseudonyms(db, {e.author_user_id for e in events} | named)
     assistants = await assistants_by_id(db, {e.author_assistant_id for e in events})
+
+    def shown(event: TaskEvent) -> dict:
+        """Return an entry's data as readers see it: people by pseudonym, never by id (0025).
+
+        Args:
+            event: The entry.
+        """
+        if event.kind != "assigned":
+            return event.data
+        return {
+            key: users.get(value) if key in ("from", "to") and value else value
+            for key, value in event.data.items()
+        }
+
     return [
         TimelineOut(
             kind=e.kind,
             author=users.get(e.author_user_id) if e.author_user_id else None,
             assistant=a.name if (a := assistants.get(e.author_assistant_id or 0)) else None,
-            data=e.data,
+            data=shown(e),
             created_at=e.created_at,
         )
         for e in events

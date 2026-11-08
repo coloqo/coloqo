@@ -227,9 +227,12 @@ function ProjectRow({ project, teams }: { project: Project; teams: Team[] }) {
       </div>
       {project.assistants.length > 0 ? (
         <ul className="flex flex-col border-l-2 border-stone-200 dark:border-stone-800">
-          {project.assistants.map((assistant) => (
-            <SessionRow key={assistant.key} assistant={assistant} />
-          ))}
+          {[...project.assistants]
+            // Online sessions first, then by word within each group (0029, deferred to PR B).
+            .sort((a, b) => Number(b.online ?? false) - Number(a.online ?? false) || a.word.localeCompare(b.word))
+            .map((assistant) => (
+              <SessionRow key={assistant.key} assistant={assistant} />
+            ))}
         </ul>
       ) : (
         <p className="text-xs text-stone-500 dark:text-stone-400">{t('sessions.none')}</p>

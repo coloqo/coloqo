@@ -41,6 +41,8 @@ export function useEventStream(enabled: boolean) {
       if (data.team !== undefined && data.topic !== undefined) {
         // A task's Topic and a free one share numbers: refresh the Team's open Topic pages.
         void queryClient.invalidateQueries({ queryKey: ['topic', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['task', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['board', data.team] })
       }
       refreshLists(data)
     }
@@ -53,6 +55,17 @@ export function useEventStream(enabled: boolean) {
     source.addEventListener('message', onTopicChange)
     source.addEventListener('topic', onTopicChange)
     source.addEventListener('topic_status', onTopicChange)
+    // A task changed: its page, the lists, the board and the promises (decisions 0031, 0032).
+    const onTaskChange = (event: MessageEvent<string>) => {
+      const data = parse(event)
+      if (data.team !== undefined) {
+        void queryClient.invalidateQueries({ queryKey: ['task', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['tasks', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['board', data.team] })
+      }
+      onTopicChange(event)
+    }
+    source.addEventListener('task', onTaskChange)
     source.onerror = () => {
       if (source.readyState === EventSource.CLOSED) {
         retry = window.setTimeout(() => {

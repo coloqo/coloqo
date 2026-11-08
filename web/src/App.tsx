@@ -16,7 +16,9 @@ import { JoinPage } from './pages/Join'
 import { LinkPage, OldLinkPage } from './pages/Link'
 import { SettingsPage } from './pages/Settings'
 import { TeamPage } from './pages/Team'
-import { TopicPage } from './pages/Topic'
+import { BoardPage } from './pages/Board'
+import { PromisesPage } from './pages/Promises'
+import { TaskPage, TopicPage } from './pages/Topic'
 import { ChoosePseudonym, Welcome } from './pages/Welcome'
 
 function NotFound() {
@@ -63,7 +65,9 @@ function Shell({ me }: { me: Me }) {
         <Route path="/team/:team" element={<TeamPage />} />
         <Route path="/team/:team/area/:area" element={<TeamPage />} />
         <Route path="/team/:team/topic/:number" element={<TopicPage me={me} kind="free" />} />
-        <Route path="/team/:team/task/:number" element={<TopicPage me={me} kind="task" />} />
+        <Route path="/team/:team/task/:number" element={<TaskPage me={me} />} />
+        <Route path="/team/:team/board" element={<BoardPage />} />
+        <Route path="/team/:team/promises" element={<PromisesPage />} />
         <Route path="/team/:team/file/:number" element={<FileAddress />} />
         <Route path="/inbox" element={<ForYouPage />} />
         <Route path="/teams/:id" element={<OldAddress />} />

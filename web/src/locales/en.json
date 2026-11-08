@@ -109,7 +109,14 @@
     "taskIdleDays": "Days a task may stay quiet",
     "taskIdleDaysHint": "After this many days without activity its assignee gets a notice.",
     "taskIdleRepeatDays": "Repeat the notice every, days",
-    "taskIdleRepeatDaysHint": "While the task stays quiet, the notice comes this often."
+    "taskIdleRepeatDaysHint": "While the task stays quiet, the notice comes this often.",
+    "tasks": "Tasks",
+    "freeTopics": "Free Topics",
+    "newTask": "New task",
+    "noTasks": "No tasks.",
+    "noFreeTopics": "No free Topics.",
+    "isPromise": "A promise: a commitment for a period that tasks work towards",
+    "createTask": "Put in the backlog"
   },
   "area": {
     "name": "Name",
@@ -336,12 +343,108 @@
   },
   "sessions": {
     "id": "Session {{id}} — claude --resume {{id}}",
-    "none": "No live sessions now.",
+    "none": "No sessions.",
     "rename": "Rename",
     "word": "The word in the session's name"
   },
   "presence": {
     "online": "online",
     "offline": "offline"
+  },
+  "task": {
+    "task": "Task",
+    "promise": "Promise",
+    "stage": "Stage",
+    "assignee": "Assignee",
+    "unassigned": "unassigned",
+    "waiting": "Waiting for",
+    "links": "Links",
+    "parent": "Part of",
+    "source": "Found within",
+    "period": "Period",
+    "progress": "Progress",
+    "outcome": "Outcome",
+    "description": "Description",
+    "noDescription": "No description yet.",
+    "history": "Description history ({{count}})",
+    "noTopic": "Not taken yet: its Topic opens when the assignee's Assistant takes it.",
+    "timeline": "Timeline"
+  },
+  "timeline": {
+    "created": "task created",
+    "createdFrom": "task created, found within {{source}}",
+    "assigned": "assignee: {{to}}",
+    "unassigned": "assignee removed",
+    "described": "description changed",
+    "linked": "link: {{key}}",
+    "retitled": "title: «{{to}}»",
+    "area": "Area: {{to}}",
+    "period": "period changed",
+    "migrated": "stage «{{to}}» set by the migration",
+    "workflow": "stage moved by a workflow edit: {{from}} → {{to}}",
+    "stage": "stage: {{to}}",
+    "skipped": "skipped {{stage}}: {{reason}}",
+    "waiting": "waiting for: {{what}}",
+    "resumed": "the wait is over",
+    "closed": "closed: {{to}}"
+  },
+  "board": {
+    "title": "Board",
+    "anyone": "Anyone",
+    "anyPromise": "Any promise",
+    "empty": "Empty.",
+    "noneWaiting": "Nothing waits.",
+    "hint": "Drag cards within a column to order them: higher matters more. The stage is moved by the assignee's Assistant.",
+    "move": {
+      "assistant": "{{who}}'s move (Assistant)",
+      "human": "{{who}}'s move",
+      "person": "waiting for {{who}} to answer",
+      "external": "waiting for: {{who}}"
+    }
+  },
+  "promises": {
+    "title": "Promises",
+    "tree": "Goals, promises and their tasks",
+    "goal": "Goal",
+    "none": "No promises yet.",
+    "onBoard": "on the board"
+  },
+  "tracker": {
+    "workflow": "Task stages",
+    "columns": "Board columns",
+    "workflowLead": "Rename stages freely; a stage's kind stays, the figures read it. The backlog and done are required.",
+    "stageName": "Stage name",
+    "up": "Up",
+    "down": "Down",
+    "remove": "Remove",
+    "newKind": "Kind of the new stage",
+    "addStage": "Add a stage",
+    "movesLead": "Where to move the tasks of removed stages:",
+    "noMove": "— no tasks —",
+    "columnsLead": "A column is a status: a set of stages, or every task waiting for someone outside the Team. Every stage stands in exactly one column.",
+    "columnName": "Column name",
+    "columnRule": "What it shows",
+    "byStages": "stages",
+    "byWaiting": "waiting",
+    "waitingHint": "Tasks marked as waiting, at any stage.",
+    "newColumn": "New column",
+    "addColumn": "Add a column",
+    "kind": {
+      "backlog": "backlog",
+      "analysis": "analysis",
+      "design": "design",
+      "documentation": "documentation",
+      "agreement": "agreement",
+      "code": "code",
+      "review": "review",
+      "delivery": "delivery",
+      "done": "done",
+      "cancelled": "cancelled",
+      "draft": "draft",
+      "given": "given",
+      "delivered": "delivered",
+      "not_delivered": "not delivered",
+      "withdrawn": "withdrawn"
+    }
   }
 }

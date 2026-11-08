@@ -85,6 +85,7 @@ def test_opening_a_topic_for_work_creates_a_task_in_work(
     assert task["links"] == [{"key": "ACME-42", "url": ""}]
     assert task["started_at"] is not None
     assert [e["kind"] for e in task["timeline"]] == ["created", "stage", "assigned", "linked"]
+    assert task["timeline"][2]["data"] == {"to": "alice"}
     assert task["topic"]["messages"][0]["body"] == "Taking it"
 
 

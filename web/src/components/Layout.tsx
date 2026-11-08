@@ -87,9 +87,20 @@ export function Header({ me }: { me: Me }) {
   )
 }
 
-export function Page({ title, aside, children }: { title?: ReactNode; aside?: ReactNode; children: ReactNode }) {
+export function Page({
+  title,
+  aside,
+  wide,
+  children,
+}: {
+  title?: ReactNode
+  aside?: ReactNode
+  /** Use the screen's width, for the board's columns. */
+  wide?: boolean
+  children: ReactNode
+}) {
   return (
-    <main className="mx-auto max-w-6xl px-4 pt-6 pb-24 sm:px-6">
+    <main className={`mx-auto px-4 pt-6 pb-24 sm:px-6 ${wide ? 'max-w-screen-2xl' : 'max-w-6xl'}`}>
       {(title || aside) && (
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           {title && <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>}

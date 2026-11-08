@@ -1023,7 +1023,24 @@ def seed_tasks(
         type="promise",
         description="Customers get `/v2/reports` with ISO dates and a CSV export that keeps them.",
         links=["ACME-40"],
+        period_start="2026-11-01",
+        period_end="2026-11-30",
     )
+    alice.put(
+        f"/api/team/{team}/board",
+        json={
+            "columns": [
+                {"name": "To do", "stages": ["Backlog"]},
+                {
+                    "name": "In progress",
+                    "stages": ["Analysis", "Design", "Documentation", "Agreement", "Code"],
+                },
+                {"name": "Waiting", "rule": "waiting"},
+                {"name": "Review", "stages": ["Review", "Delivery"]},
+                {"name": "Done", "stages": ["Done", "Cancelled"]},
+            ]
+        },
+    ).raise_for_status()
     csv = plan(
         web,
         "CSV export keeps ISO dates",

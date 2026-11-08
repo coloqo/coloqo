@@ -277,6 +277,16 @@ def task_line(task: dict[str, Any], home: str | None = None) -> str:
         f"assigned to {task['assignee']}" if task.get("assignee") else "unassigned",
         f"waiting: {task['waiting']}" if task.get("waiting") else None,
         f"in T-{task['parent']}" if task.get("parent") else None,
+        (
+            f"{task['period_start'] or '…'}..{task['period_end'] or '…'}"
+            if task.get("period_start") or task.get("period_end")
+            else None
+        ),
+        (
+            f"{task['progress']['done']}/{task['progress']['total']} done"
+            if task.get("progress")
+            else None
+        ),
     ]
     return " · ".join(part for part in parts if part)
 

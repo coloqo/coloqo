@@ -1,13 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import {
   ApiError,
   api,
   areaPath,
+  boardPath,
   call,
+  promisesPath,
   teamPath,
   topicPath,
   type Area,
@@ -19,6 +21,7 @@ import { AddresseeSelect } from '../components/AddresseeSelect'
 import { Page } from '../components/Layout'
 import { PresenceDot, PresenceText } from '../components/Presence'
 import { Time } from '../components/Time'
+import { TrackerSettings } from '../components/TrackerSettings'
 import { RoleBadge, TopicList } from '../components/Topics'
 import {
   Button,
@@ -59,6 +62,7 @@ function useTeamFilter(team: string) {
 }
 
 function NewTopic({ team, defaultArea, onClose }: { team: TeamDetail; defaultArea?: string; onClose: () => void }) {
+  // A person in the web opens a free Topic: a task is opened by an Assistant taking work (0031).
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -72,7 +76,7 @@ function NewTopic({ team, defaultArea, onClose }: { team: TeamDetail; defaultAre
       call(
         api.POST('/api/team/{team}/topic', {
           params: { path: { team: team.slug } },
-          body: { area, title: title.trim(), body, issue: issue.trim(), to: to || null },
+          body: { area, title: title.trim(), body, issue: issue.trim(), to: to || null, free: true },
         }),
       ),
     onSuccess: (topic) => {
@@ -129,25 +133,118 @@ function NewTopic({ team, defaultArea, onClose }: { team: TeamDetail; defaultAre
   )
 }
 
-function Topics({ team }: { team: TeamDetail }) {
+/** Planning in the web: a task in the backlog, maybe assigned (decision 0032). */
+function NewTask({ team, defaultArea, onClose }: { team: TeamDetail; defaultArea?: string; onClose: () => void }) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [area, setArea] = useState(defaultArea ?? team.areas[0]?.slug ?? '')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [promise, setPromise] = useState(false)
+  const create = useMutation({
+    mutationFn: () =>
+      call(
+        api.POST('/api/team/{team}/task', {
+          params: { path: { team: team.slug } },
+          body: {
+            area,
+            title: title.trim(),
+            description,
+            assignee: assignee || null,
+            type: promise ? 'promise' : 'task',
+          },
+        }),
+      ),
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks', team.slug] })
+      void queryClient.invalidateQueries({ queryKey: ['board', team.slug] })
+      void navigate(topicPath(task.team, task.number, 'task'))
+    },
+  })
+  return (
+    <Card className="mb-5">
+      <CardHeader title={t('team.newTask')}>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t('common.cancel')}
+        </Button>
+      </CardHeader>
+      <form
+        className="flex flex-col gap-4 p-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (area && title.trim()) create.mutate()
+        }}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t('topic.area')}>
+            <Select value={area} onChange={(event) => setArea(event.target.value)} required>
+              {team.areas.map((option) => (
+                <option key={option.slug} value={option.slug}>
+                  {option.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t('task.assignee')}>
+            <Select value={assignee} onChange={(event) => setAssignee(event.target.value)}>
+              <option value="">{t('task.unassigned')}</option>
+              {team.members
+                .filter((member) => member.pseudonym)
+                .map((member) => (
+                  <option key={member.pseudonym} value={member.pseudonym ?? ''}>
+                    {member.pseudonym}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label={t('topic.title')}>
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
+        </Field>
+        <Field label={t('task.description')} hint={t('compose.markdownHint')}>
+          <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={50000} />
+        </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={promise} onChange={(event) => setPromise(event.target.checked)} />
+          {t('team.isPromise')}
+        </label>
+        <ErrorNote>{create.error && errorText(create.error, t)}</ErrorNote>
+        <div>
+          <Button type="submit" variant="primary" disabled={create.isPending || !title.trim()}>
+            {t('team.createTask')}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  )
+}
+
+function Topics({ team, kind }: { team: TeamDetail; kind: 'task' | 'free' }) {
   const { t } = useTranslation()
   const filter = useTeamFilter(team.slug)
   const [creating, setCreating] = useState(false)
   const topics = useTopics(team.slug, {
     area: filter.area,
     status: filter.status === 'all' ? undefined : filter.status,
+    kind,
   })
+  const canCreate = kind === 'free' || team.tracker
   const statuses: StatusFilter[] = ['open', 'closed', 'all']
   return (
     <>
-      {creating && (
-        <NewTopic team={team} defaultArea={filter.area} onClose={() => setCreating(false)} />
-      )}
-      <Card>
-        <CardHeader title={t('team.topics')}>
-          {!creating && team.areas.length > 0 && (
-            <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
-              {t('team.newTopic')}
+      {creating &&
+        (kind === 'free' ? (
+          <NewTopic team={team} defaultArea={filter.area} onClose={() => setCreating(false)} />
+        ) : (
+          <NewTask team={team} defaultArea={filter.area} onClose={() => setCreating(false)} />
+        ))}
+      <Card className={kind === 'free' ? 'mt-5' : undefined}>
+        <CardHeader title={kind === 'task' ? t('team.tasks') : t('team.freeTopics')}>
+          {!creating && canCreate && team.areas.length > 0 && (
+            <Button size="sm" variant={kind === 'task' ? 'primary' : 'secondary'} onClick={() => setCreating(true)}>
+              {kind === 'task' ? t('team.newTask') : t('team.newTopic')}
             </Button>
           )}
         </CardHeader>
@@ -189,7 +286,9 @@ function Topics({ team }: { team: TeamDetail }) {
         )}
         {topics.isPending && <Loading />}
         <ErrorNote>{topics.error && errorText(topics.error, t)}</ErrorNote>
-        {team.areas.length > 0 && topics.data?.length === 0 && <Empty>{t('team.noTopics')}</Empty>}
+        {team.areas.length > 0 && topics.data?.length === 0 && (
+          <Empty>{kind === 'task' ? t('team.noTasks') : t('team.noFreeTopics')}</Empty>
+        )}
         {topics.data && topics.data.length > 0 && <TopicList topics={topics.data} />}
       </Card>
     </>
@@ -532,9 +631,20 @@ export function TeamPage() {
         </span>
       }
     >
+      {data.tracker && (
+        <nav className="-mt-2 mb-5 flex flex-wrap gap-x-4 text-sm">
+          <Link to={boardPath(data.slug)} className="font-medium text-amber-700 hover:underline dark:text-amber-400">
+            {t('board.title')}
+          </Link>
+          <Link to={promisesPath(data.slug)} className="font-medium text-amber-700 hover:underline dark:text-amber-400">
+            {t('promises.title')}
+          </Link>
+        </nav>
+      )}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0">
-          <Topics team={data} />
+          <Topics team={data} kind="task" />
+          <Topics team={data} kind="free" />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <Areas team={data} />
@@ -546,6 +656,7 @@ export function TeamPage() {
                 key={`${data.name}-${data.slug}-${data.turn_limit}-${data.tracker}-${data.task_idle_days}-${data.task_idle_repeat_days}`}
                 team={data}
               />
+              {data.tracker && <TrackerSettings team={data} />}
             </>
           )}
         </div>

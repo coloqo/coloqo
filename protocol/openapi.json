@@ -2721,7 +2721,7 @@
         "type": "object"
       },
       "TimelineOut": {
-        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``closed``, ``move``, ...\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
+        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
         "properties": {
           "assistant": {
             "anyOf": [

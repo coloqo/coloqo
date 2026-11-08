@@ -20,6 +20,12 @@ export type LinkPage = Schemas['LinkPage']
 export type DeviceLogin = Schemas['DeviceLoginOut']
 export type InvitePreview = Schemas['InvitePreview']
 export type Invite = Schemas['InviteOut']
+export type Task = Schemas['TaskOut']
+export type TaskDetail = Schemas['TaskDetail']
+export type TimelineEntry = Schemas['TimelineOut']
+export type BoardData = Schemas['BoardOut']
+export type Card = Schemas['Card']
+export type Workflow = Schemas['WorkflowOut']
 
 /** An API answer that is not a success, with the server's `detail`. */
 export class ApiError extends Error {
@@ -159,6 +165,12 @@ export const markRead = (kind: TopicKind, team: string, number: number, upTo: nu
   kind === 'task'
     ? api.POST('/api/team/{team}/task/{number}/read', { params: { path: { team, number } }, body: { number: upTo } })
     : api.POST('/api/team/{team}/topic/{number}/read', { params: { path: { team, number } }, body: { number: upTo } })
+
+/** The address of a Team's board (decision 0032). */
+export const boardPath = (team: string) => `${teamPath(team)}/board`
+
+/** The address of a Team's promises and goals (decision 0031). */
+export const promisesPath = (team: string) => `${teamPath(team)}/promises`
 
 /** Where a logged-out person goes to log in with a provider and come back. */
 export function loginUrl(provider: string, next: string): string {

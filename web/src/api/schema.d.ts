@@ -3411,7 +3411,7 @@ export interface components {
          *
          *     Attributes:
          *         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
-         *             ``described``, ``linked``, ``closed``, ``move``, ...
+         *             ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``closed``.
          *         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
          *         assistant: Name of the Assistant that did it, if any.
          *         data: What the kind carries.
