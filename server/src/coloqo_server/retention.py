@@ -5,8 +5,9 @@ Topics are no longer deleted by time (decision 0030).
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from coloqo_server.api.teams import online
 from coloqo_server.api.topics import assistants_by_id, ref, topic_head
@@ -149,13 +150,48 @@ async def close_idle(db: AsyncSession, settings: Settings, moment: datetime) -> 
     return recipients
 
 
-async def notice_quiet_tasks(db: AsyncSession, moment: datetime) -> set[int]:
-    """Tell the assignee of a task in work that has gone quiet, and again while it stays so.
+async def last_activity(db: AsyncSession, ids: list[int]) -> dict[int, datetime]:
+    """Return when each task's subtree was last active: the task, its descendants, their Topics.
 
-    Quiet means no timeline entry and no Message in its Topic for the Team's
-    ``task_idle_days``; the notice repeats every ``task_idle_repeat_days``. A task with an
-    active external wait is not quiet: it waits (decision 0032). The event goes to the Team, as
-    every event; the plugin shows it to the assignee's sessions.
+    Work on a subtask moves its task and the promise above it (the author, 2026-11-08): a task
+    or a promise is quiet only when its whole subtree is.
+
+    Args:
+        db: Database session.
+        ids: The tasks.
+    """
+    if not ids:
+        return {}
+    tree = (
+        select(Task.id.label("root"), Task.id.label("node"))
+        .where(Task.id.in_(ids))
+        .cte("tree", recursive=True)
+    )
+    child = aliased(Task)
+    tree = tree.union_all(select(tree.c.root, child.id).where(child.parent_id == tree.c.node))
+    node = aliased(Task)
+    rows = await db.execute(
+        select(
+            tree.c.root,
+            func.max(
+                func.greatest(node.updated_at, func.coalesce(Topic.updated_at, node.updated_at))
+            ),
+        )
+        .join(node, node.id == tree.c.node)
+        .outerjoin(Topic, Topic.task_id == node.id)
+        .group_by(tree.c.root)
+    )
+    return dict(rows.all())
+
+
+async def notice_quiet_tasks(db: AsyncSession, moment: datetime) -> set[int]:
+    """Tell the human answering for a task in work that has gone quiet, and again while it does.
+
+    Quiet means no timeline entry and no Message in its Topic, nor in any of its descendants
+    and theirs, for the Team's ``task_idle_days``; the notice repeats every
+    ``task_idle_repeat_days``. A task with an active external wait is not quiet: it waits
+    (decision 0032). A given promise is a task in work too, quiet only when its tasks are. The
+    event goes to the Team, as every event; the plugin shows it to the assignee's sessions.
 
     Args:
         db: Database session.
@@ -164,29 +200,31 @@ async def notice_quiet_tasks(db: AsyncSession, moment: datetime) -> set[int]:
     Returns:
         The Users who got events, to wake after the commit.
     """
+    working = [kind for kind, category in CATEGORY.items() if category == Category.InProgress]
     rows = (
         await db.execute(
             select(Task, Stage, Team)
             .join(Stage, Stage.id == Task.stage_id)
             .join(Team, Team.id == Task.team_id)
             .where(
+                Task.finished_at.is_(None),
+                Stage.kind.in_(working),
                 Task.assignee_id.is_not(None),
                 Task.waiting.is_(None),
                 Task.updated_at < moment - Team.task_idle_days * timedelta(days=1),
                 or_(
                     Task.idle_noticed_at.is_(None),
-                    and_(
-                        Task.idle_noticed_at
-                        < moment - Team.task_idle_repeat_days * timedelta(days=1)
-                    ),
+                    Task.idle_noticed_at < moment - Team.task_idle_repeat_days * timedelta(days=1),
                 ),
             )
             .with_for_update(of=Task, skip_locked=True)
         )
     ).all()
+    active = await last_activity(db, [task.id for task, _, _ in rows])
     recipients: set[int] = set()
     for task, stage, team in rows:
-        if CATEGORY[stage.kind] != Category.InProgress:
+        last = active.get(task.id, task.updated_at)
+        if last >= moment - timedelta(days=team.task_idle_days):
             continue
         task.idle_noticed_at = moment
         assignee = await db.get(User, task.assignee_id)
@@ -203,8 +241,8 @@ async def notice_quiet_tasks(db: AsyncSession, moment: datetime) -> set[int]:
                 "area": area.name if area else "",
                 "stage": stage.name,
                 "assignee": assignee.pseudonym if assignee else None,
-                "quiet_since": task.updated_at.isoformat(),
-                "days": (moment - task.updated_at).days,
+                "quiet_since": last.isoformat(),
+                "days": (moment - last).days,
             },
         )
     return recipients

@@ -90,7 +90,10 @@ The Assistant moves the stage; the status follows.
 - **Tasks are not closed for inactivity**: that would write a false outcome. A task in work with no
   activity (no timeline event, no Message in its Topic) gets a notice to its assignee's sessions
   after 7 days, then every day until something happens; a task with an active wait gets none. The
-  threshold and the repetition are Team settings (added 2026-11-08 with the implementation plan). Free Topics keep decision 0021's rule.
+  threshold and the repetition are Team settings (added 2026-11-08 with the implementation plan).
+  Activity counts over the whole subtree (the author, 2026-11-08, in the review of PR A): work on
+  a subtask moves its task and the promise above it, so a task or a given promise is quiet only
+  when it, its descendants and all their Topics are. Free Topics keep decision 0021's rule.
 
 ### Boards
 

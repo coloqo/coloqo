@@ -263,3 +263,95 @@ def test_the_team_sets_the_quiet_days(setup: Setup, settings: Settings) -> None:
     assert (changed.json()["task_idle_days"], changed.json()["task_idle_repeat_days"]) == (14, 3)
     assert before == still == []
     assert len(_events(settings, "task_idle")) == 1
+
+
+def test_a_message_in_the_topic_is_activity(setup: Setup, settings: Settings) -> None:
+    """A task whose Topic was written in lately is not quiet, though its stage stood still.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    number = _open(setup)["number"]
+    _age_task(settings, number, 8)
+    with _connect(settings.database_url) as connection:
+        connection.execute(
+            "UPDATE topics SET updated_at = now() - interval '1 day' FROM tasks "
+            "WHERE tasks.id = topics.task_id AND tasks.number = %s",
+            (number,),
+        )
+
+    _tend(settings)
+
+    assert _events(settings, "task_idle") == []
+
+
+def test_only_a_task_in_work_is_noticed(setup: Setup, settings: Settings) -> None:
+    """A finished task and a planned one in the backlog stay quiet without a notice.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    finished = _open(setup)["number"]
+    setup.alice_api.client.post(
+        f"/api/team/{setup.team}/task/{finished}/close", json={"outcome": "done"}
+    )
+    setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
+    planned = setup.alice.post(
+        f"/api/team/{setup.team}/task",
+        json={"area": setup.area, "title": "Later", "assignee": "bob"},
+    ).json()["number"]
+    _age_task(settings, finished, 30)
+    _age_task(settings, planned, 30)
+
+    _tend(settings)
+
+    assert _events(settings, "task_idle") == []
+
+
+def test_work_below_keeps_the_task_and_the_promise_going(setup: Setup, settings: Settings) -> None:
+    """A subtask that moved keeps its task and the promise above it from being quiet; once the
+    whole subtree is quiet, each of them is noticed.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
+
+    def create(title: str, parent: int | None = None, type_: str = "task") -> int:
+        """Create a task assigned to Alice in the web.
+
+        Args:
+            title: Its title.
+            parent: Its parent's number.
+            type_: ``task`` or ``promise``.
+        """
+        return setup.alice.post(
+            f"/api/team/{setup.team}/task",
+            json={
+                "area": setup.area,
+                "title": title,
+                "type": type_,
+                "parent": parent,
+                "assignee": "alice",
+            },
+        ).json()["number"]
+
+    promise = create("Reports by December", type_="promise")
+    task = create("API", promise)
+    subtask = create("Schema", task)
+    for number in (promise, task, subtask):
+        setup.alice_api.client.post(f"/api/team/{setup.team}/task/{number}/take", json={})
+    _age_task(settings, promise, 20)
+    _age_task(settings, task, 20)
+    _age_task(settings, subtask, 1)
+
+    _tend(settings)
+    while_working = _events(settings, "task_idle")
+    _age_task(settings, subtask, 20)
+    _tend(settings)
+
+    assert while_working == []
+    assert sorted(e["task"] for e in _events(settings, "task_idle")) == [promise, task, subtask]

@@ -43,7 +43,8 @@ class Settings(BaseSettings):
         preview_max_bytes: Largest image the web shows inline; a larger one is listed as an
             ordinary file, since there are no thumbnails yet (decision 0018).
         event_retention_days: How long the event log is kept (decision 0008).
-        idle_close_days: An open Topic without Messages this long is closed.
+        idle_close_days: An open free Topic without Messages this long is closed; a task's
+            Topic never is (decision 0032).
         idle_warn_days: How long before that its people are told.
         github_avatar_url: Where the server takes a person's GitHub avatar by their GitHub id
             (decision 0019).

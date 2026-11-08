@@ -68,7 +68,10 @@ Nothing changes for a member yet but the deletion of closed Topics, which stops.
   or close it only by the answer, never just to quiet the notice (the author, 2026-11-08, after a
   review note: "change its stage, mark a wait or close it" pushes an obedient Assistant to false
   marks that enter the timeline as facts). Daily, because Assistants get it and cannot just
-  ignore it. A task with an active wait gets none. Both the threshold and the repetition are Team
+  ignore it. A task with an active wait gets none. Activity counts over the subtree: a task or a
+  given promise is quiet only when its descendants and their Topics are too (the author, round 1
+  of PR A's review: "if I move a subtask of a task tied to a promise, I move the task and the
+  promise too; the work goes on"). Both the threshold and the repetition are Team
   settings (`teams.task_idle_days`, `teams.task_idle_repeat_days`), shown next to the tracker
   switch; 7 and 1 by default.
 - **API** for the plugin and the web: tasks — list, read (the task, its Topic's feed and its

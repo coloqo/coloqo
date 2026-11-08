@@ -787,7 +787,8 @@ class Task(Base):
         source_id: The task within which it was created, if any.
         created_by: The User on whose behalf it was created.
         created_at: Creation time.
-        updated_at: Time of its newest event or Message.
+        updated_at: Time of its newest timeline entry; its Topic's ``updated_at`` holds that of
+            its newest Message.
         started_at: Its first move into work.
         finished_at: When it reached a finished stage.
         idle_noticed_at: When its assignee was last told it had no activity.

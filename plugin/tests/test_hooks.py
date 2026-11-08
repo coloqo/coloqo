@@ -662,3 +662,19 @@ def test_the_hooks_log_moves_and_the_watch_reads_only_what_is_new(trail_dir: Pat
     assert nothing == []
     assert [move for move, _, _ in first] == ["human", "assistant"]
     assert again == []
+
+
+def test_the_watch_reads_a_log_written_anew(trail_dir: Path) -> None:
+    """A log removed by the cleanup and written again is read from its start, not lost.
+
+    Args:
+        trail_dir: Where the trail marks are kept.
+    """
+    for mark in "pspsps":
+        trail.log_move("s8", mark)
+    log = trail.MoveLog("s8")
+    log.path.unlink()
+    trail.log_move("s8", "p")
+    trail.log_move("s8", "s")
+
+    assert [move for move, _, _ in log.take()] == ["human", "assistant"]

@@ -212,6 +212,9 @@ class MoveLog:
         """Return the marks written since the last read, and move past them."""
         try:
             with self.path.open("rb") as log:
+                if log.seek(0, 2) < self.offset:
+                    # The log was removed and written anew: read it from its start.
+                    self.offset = 0
                 log.seek(self.offset)
                 data = log.read()
         except OSError:

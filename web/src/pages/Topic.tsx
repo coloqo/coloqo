@@ -45,8 +45,9 @@ function usePageVisible() {
 }
 
 /** A draft kept per Topic for this browser tab, so that a reload does not lose it. */
-function useDraft(team: string, number: number) {
-  const key = `coloqo.draft.${team}.${number}`
+function useDraft(team: string, kind: TopicKind, number: number) {
+  // A task and a free Topic may share a number: the draft is kept per kind (decision 0031).
+  const key = `coloqo.draft.${team}.${kind}.${number}`
   const [draft, setDraftState] = useState(() => {
     try {
       return sessionStorage.getItem(key) ?? ''
@@ -375,7 +376,7 @@ function Compose({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const team = useTeam(topic.team)
-  const [body, setBody] = useDraft(topic.team, topic.number)
+  const [body, setBody] = useDraft(topic.team, topic.kind ?? 'free', topic.number)
   const [attached, setAttached] = useState<FileInfo[]>([])
   const [uploading, setUploading] = useState(0)
   const [uploadError, setUploadError] = useState<unknown>(null)

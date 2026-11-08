@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from coloqo_server.api.stream import read_cursor, write_cursor
+from coloqo_server.api.stream import read_cursor, shaped, write_cursor
 from coloqo_server.settings import Settings
 from tests.conftest import Two, _connect
 from tests.test_links import _topic
@@ -173,3 +173,14 @@ def test_a_team_joined_while_listening_is_heard_from_the_join(
 
     assert (frame_id, kind) == ("acme:3", "topic")
     assert '"title": "After"' in data
+
+
+def test_an_old_plugin_gets_no_event_of_a_free_topic() -> None:
+    """A plugin older than the tracker would read a free number as a task's: it gets nothing
+    of a free Topic, and the former shape left in old events is dropped (decision 0031)."""
+    free = {"team": "acme", "topic_kind": "free", "topic": 5, "legacy": {"topic_id": 9}}
+    task = {"team": "acme", "topic_kind": "task", "topic": 5}
+
+    assert shaped(free, before_tasks=True) == {}
+    assert shaped(free, before_tasks=False) == {"team": "acme", "topic_kind": "free", "topic": 5}
+    assert shaped(task, before_tasks=True) == task
