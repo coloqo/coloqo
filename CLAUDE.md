@@ -18,6 +18,13 @@ responsible human, not anyone's representative. "Agent" is a technical word only
 (Claude Code, Codex) that drives assistants and workers; it does not appear in the product
 vocabulary (2026-10-17). Nothing is called a "channel".
 
+Tracker vocabulary (2026-11-08, decisions 0031–0033): a Task (`T-42`) is a Team's work item in an
+Area; its Topic is shown as one with it. A Topic without a task is a free Topic (`F-5`), under
+"Free Topics". A Promise is a task of its own type, a commitment for a period that tasks work
+towards; a promise that holds promises is called a Goal. A task moves by Stages (analysis, design,
+code, …); a Status is a Team's grouping of stages, a column of the Board. Topics are kept, not
+deleted (decision 0030).
+
 Status: **first working version** (2026-10-19): Teams, Areas, Topics, Messages, files, the
 plugin for Claude Code; scope and simplifications in decision 0017. The product statement
 `docs/product/vision.md` is settled (2026-10-16); architecture lives in
@@ -62,6 +69,8 @@ Coloqo is built from scratch with no dependency on
 docs/product/       product statement (vision.md), analogs review
 docs/architecture/  architecture working document and its open questions
 docs/decisions/     accepted design decisions, NNNN-short-title.md
+docs/tasks/         working files of discussions, YYYY-MM-DD-short-title.md; kept after the
+                    decisions are written: they show how a decision was reached and what it rested on
 server/             FastAPI server, Python 3.14, uv (src/coloqo_server, tests)
 web/                React + TypeScript + Vite; built to static files the server serves
 plugin/             the `coloqo` package on PyPI, Python >= 3.12, Apache-2.0
