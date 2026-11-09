@@ -803,3 +803,94 @@ def test_moving_is_planning(setup: Setup, new: tuple[Plugin, Plugin]) -> None:
 
     assert refused.json()["detail"]["code"] == "no_tracker"
     assert (retitled.status_code, retitled.json()["parent"]) == (200, None)
+
+
+def test_tasks_work_for_one_delivery(setup: Setup, new: tuple[Plugin, Plugin]) -> None:
+    """A delivery is stated in one task; another works for it by a link, kept in the timeline;
+    the stating task lists who works for it (decision 0036).
+
+    Args:
+        setup: The Team.
+        new: Assistants of the new plugin.
+    """
+    _, bob = new
+    _tracker(setup)
+    promise = _create(setup, "Invoices", "promise")
+    central = setup.alice.post(
+        f"/api/team/{setup.team}/task",
+        json={
+            "area": setup.area,
+            "title": "Invoice API",
+            "parent": promise["number"],
+            "delivery": "An accountant downloads a month of invoices in one click",
+        },
+    ).json()
+    helper = _create(setup, "PDF renderer", parent=promise["number"])
+
+    linked = bob.client.patch(_path(setup, helper["number"]), json={"works_for": central["number"]})
+    shown = setup.alice.get(_path(setup, central["number"])).json()
+    kinds = [e["kind"] for e in setup.alice.get(_path(setup, helper["number"])).json()["timeline"]]
+    unlinked = setup.alice.patch(_path(setup, helper["number"]), json={"works_for": None}).json()
+
+    assert central["delivery"] == "An accountant downloads a month of invoices in one click"
+    assert linked.status_code == 200, linked.text
+    assert linked.json()["works_for"] == central["number"]
+    assert shown["working_for_it"] == [helper["number"]]
+    assert "delivery" in [e["kind"] for e in shown["timeline"]]
+    assert "works_for" in kinds
+    assert unlinked["works_for"] is None
+
+
+def test_the_delivery_rules(setup: Setup, new: tuple[Plugin, Plugin]) -> None:
+    """No chains, no orphaned links, none on promises or subtasks, links only with the tracker
+    (decisions 0032, 0036).
+
+    Args:
+        setup: The Team.
+        new: Assistants of the new plugin.
+    """
+    alice, _ = new
+    loose = _task(setup, alice, "Loose")["number"]
+    plain = _task(setup, alice, "Plain")["number"]
+    no_tracker = alice.client.patch(_path(setup, loose), json={"works_for": plain})
+    text_only = alice.client.patch(_path(setup, plain), json={"delivery": "A clerk sees totals"})
+    _tracker(setup)
+    promise = _create(setup, "Invoices", "promise")
+    central = _create(setup, "Invoice API", parent=promise["number"])
+    setup.alice.patch(_path(setup, central["number"]), json={"delivery": "Invoices in one click"})
+    helper = _create(setup, "PDF renderer")
+    sub = _create(setup, "Schema", parent=central["number"])
+
+    def refused(number: int, body: dict) -> str:
+        """Return the refusal of an edit.
+
+        Args:
+            number: The task.
+            body: The edit.
+        """
+        response = setup.alice.patch(_path(setup, number), json=body)
+        assert response.status_code == 422, response.text
+        return response.json()["detail"]
+
+    setup.alice.patch(_path(setup, helper["number"]), json={"works_for": central["number"]})
+    both = refused(helper["number"], {"delivery": "Its own"})
+    orphan = refused(central["number"], {"delivery": ""})
+    chain = refused(central["number"], {"works_for": plain})
+    on_promise = refused(promise["number"], {"delivery": "A promise's"})
+    on_subtask = refused(sub["number"], {"works_for": central["number"]})
+    to_nothing = refused(loose, {"works_for": helper["number"]})
+    solo = _create(setup, "CSV export")
+    setup.alice.patch(_path(setup, solo["number"]), json={"delivery": "A clerk exports to CSV"})
+    stating_becomes_subtask = refused(solo["number"], {"parent": helper["number"]})
+
+    assert no_tracker.json()["detail"]["code"] == "no_tracker"
+    assert (text_only.status_code, text_only.json()["delivery"]) == (200, "A clerk sees totals")
+    assert "not both" in both
+    assert f"T-{helper['number']} work for the delivery of T-{central['number']}" in orphan
+    assert "not both" in chain
+    assert "deliveries belong to tasks" in on_promise
+    assert "is a subtask" in on_subtask
+    assert f"T-{helper['number']} states no delivery" in to_nothing
+    assert "is a subtask" in stating_becomes_subtask
+    assert setup.alice.get(_path(setup, sub["number"])).json()["subtask"] is True
+    assert setup.alice.get(_path(setup, central["number"])).json()["subtask"] is False

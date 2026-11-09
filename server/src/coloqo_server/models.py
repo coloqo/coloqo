@@ -798,6 +798,9 @@ class Task(Base):
         idle_noticed_at: When its assignee was last told it had no activity.
         period_start: A promise's period: its first day (decision 0031).
         period_end: Its last day.
+        delivery: The task's meaning in the business's language; empty when it states none
+            (decision 0036).
+        works_for_id: The task whose delivery this one works for, if any (decision 0036).
     """
 
     __tablename__ = "tasks"
@@ -825,6 +828,10 @@ class Task(Base):
     idle_noticed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     period_start: Mapped[date | None] = mapped_column(Date)
     period_end: Mapped[date | None] = mapped_column(Date)
+    delivery: Mapped[str] = mapped_column(Text, default="", server_default="")
+    works_for_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), index=True
+    )
 
 
 class TaskLink(Base):

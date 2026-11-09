@@ -437,6 +437,11 @@
             ],
             "title": "Created By"
           },
+          "delivery": {
+            "default": "",
+            "title": "Delivery",
+            "type": "string"
+          },
           "finished_at": {
             "anyOf": [
               {
@@ -623,6 +628,11 @@
             ],
             "title": "Started At"
           },
+          "subtask": {
+            "default": false,
+            "title": "Subtask",
+            "type": "boolean"
+          },
           "team": {
             "title": "Team",
             "type": "string"
@@ -649,6 +659,24 @@
               }
             ],
             "title": "Waiting"
+          },
+          "working_for_it": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Working For It",
+            "type": "array"
+          },
+          "works_for": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works For"
           }
         },
         "required": [
@@ -1858,6 +1886,11 @@
             ],
             "title": "Created By"
           },
+          "delivery": {
+            "default": "",
+            "title": "Delivery",
+            "type": "string"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -1998,6 +2031,11 @@
             ],
             "title": "Started At"
           },
+          "subtask": {
+            "default": false,
+            "title": "Subtask",
+            "type": "boolean"
+          },
           "team": {
             "title": "Team",
             "type": "string"
@@ -2041,6 +2079,24 @@
               }
             ],
             "title": "Waiting"
+          },
+          "working_for_it": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Working For It",
+            "type": "array"
+          },
+          "works_for": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works For"
           }
         },
         "required": [
@@ -2077,7 +2133,7 @@
         "type": "object"
       },
       "TaskIn": {
-        "description": "A new task in the backlog: planning, so the tracker must be on (decision 0032).\n\nAttributes:\n    area: The Area's slug.\n    title: One line.\n    description: Markdown.\n    type: ``task`` or ``promise``.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it is created; by default the task whose\n        Topic the calling Assistant holds, if exactly one.\n    assignee: Pseudonym of the human to assign it to.\n    links: Keys or addresses of external issues.\n    period_start: A promise's first day.\n    period_end: A promise's last day.",
+        "description": "A new task in the backlog: planning, so the tracker must be on (decision 0032).\n\nAttributes:\n    area: The Area's slug.\n    title: One line.\n    description: Markdown.\n    type: ``task`` or ``promise``.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it is created; by default the task whose\n        Topic the calling Assistant holds, if exactly one.\n    assignee: Pseudonym of the human to assign it to.\n    links: Keys or addresses of external issues.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    delivery: The task's meaning in the business's language (decision 0036).\n    works_for: The number of the task whose delivery it works for.",
         "properties": {
           "area": {
             "maxLength": 40,
@@ -2095,6 +2151,12 @@
               }
             ],
             "title": "Assignee"
+          },
+          "delivery": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Delivery",
+            "type": "string"
           },
           "description": {
             "default": "",
@@ -2165,6 +2227,17 @@
           "type": {
             "$ref": "#/components/schemas/TaskType",
             "default": "task"
+          },
+          "works_for": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works For"
           }
         },
         "required": [
@@ -2175,7 +2248,7 @@
         "type": "object"
       },
       "TaskOut": {
-        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    progress: For a promise, what it holds: done against all, the cancelled and withdrawn\n        left out (decision 0031).\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
+        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    delivery: The task's meaning in the business's language (decision 0036).\n    works_for: The number of the task whose delivery this one works for.\n    working_for_it: The numbers of the tasks that work for this one's delivery.\n    subtask: Its parent is a task: it works for that task's delivery (decision 0036).\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    progress: For a promise, what it holds: done against all, the cancelled and withdrawn\n        left out (decision 0031).\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
         "properties": {
           "area": {
             "title": "Area",
@@ -2214,6 +2287,11 @@
               }
             ],
             "title": "Created By"
+          },
+          "delivery": {
+            "default": "",
+            "title": "Delivery",
+            "type": "string"
           },
           "finished_at": {
             "anyOf": [
@@ -2351,6 +2429,11 @@
             ],
             "title": "Started At"
           },
+          "subtask": {
+            "default": false,
+            "title": "Subtask",
+            "type": "boolean"
+          },
           "team": {
             "title": "Team",
             "type": "string"
@@ -2377,6 +2460,24 @@
               }
             ],
             "title": "Waiting"
+          },
+          "working_for_it": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Working For It",
+            "type": "array"
+          },
+          "works_for": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works For"
           }
         },
         "required": [
@@ -2410,7 +2511,7 @@
         "type": "object"
       },
       "TaskPatch": {
-        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    parent: The number of the task or promise to move it under; ``null`` takes it out of its\n        parent (decision 0034).",
+        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    parent: The number of the task or promise to move it under; ``null`` takes it out of its\n        parent (decision 0034).\n    delivery: Its delivery's new text; empty clears it (decision 0036).\n    works_for: The number of the task whose delivery it works for; ``null`` unlinks it.",
         "properties": {
           "area": {
             "anyOf": [
@@ -2424,6 +2525,18 @@
               }
             ],
             "title": "Area"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
           },
           "description": {
             "anyOf": [
@@ -2484,6 +2597,17 @@
               }
             ],
             "title": "Title"
+          },
+          "works_for": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works For"
           }
         },
         "title": "TaskPatch",
@@ -2742,7 +2866,7 @@
         "type": "object"
       },
       "TimelineOut": {
-        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,\n        ``child_in``, ``child_out``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
+        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,\n        ``child_in``, ``child_out``, ``delivery``, ``works_for``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
         "properties": {
           "assistant": {
             "anyOf": [
@@ -3645,7 +3769,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.12.0"
+    "version": "0.13.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8138,7 +8262,7 @@
         ]
       },
       "post": {
-        "description": "Put a task in the backlog: planning, so the tracker must be on (decision 0032).\n\nIts source is the task within which it is created: the one given, or the one whose Topic\nthe calling Assistant holds (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    body: The task.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Team, Area, parent or source for the caller;\n        403 when the caller may not write there; 409 ``no_tracker`` without the tracker;\n        422 for an unknown assignee or a parent that cannot hold it.",
+        "description": "Put a task in the backlog: planning, so the tracker must be on (decision 0032).\n\nIts source is the task within which it is created: the one given, or the one whose Topic\nthe calling Assistant holds (decision 0031).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    body: The task.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such Team, Area, parent, source or task to work for;\n        403 when the caller may not write there; 409 ``no_tracker`` without the tracker;\n        422 for an unknown assignee or a parent that cannot hold it.",
         "operationId": "create_task_api_team__team__task_post",
         "parameters": [
           {
@@ -8391,7 +8515,7 @@
         ]
       },
       "patch": {
-        "description": "Edit a task's title, description, Area, period or parent; the timeline keeps each change.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may\n        not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent\n        that cannot hold it (decision 0034).",
+        "description": "Edit a task's title, description, Area, period or parent; the timeline keeps each change.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task, Area, parent or task to work for; 403\n        when the caller may not write there; 409 ``no_tracker`` for a move or a link without\n        the tracker; 422 for a parent that cannot hold it (decision 0034) or a delivery the\n        rules refuse (decision 0036).",
         "operationId": "edit_task_api_team__team__task__number__patch",
         "parameters": [
           {

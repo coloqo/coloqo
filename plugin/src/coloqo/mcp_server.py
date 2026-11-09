@@ -676,7 +676,9 @@ def list_tasks(
         "Put found work in the Team's backlog as a task, when the Team keeps one: work that is "
         "not the task at hand. It records the task it came from. Don't make tasks nobody asked "
         "for. `assignee` only when your user says whose it is; `parent` a promise or task "
-        "number it belongs to; `links` external issue keys. `promise=true`, only at your user's "
+        "number it belongs to; `links` external issue keys; `delivery` the task's meaning in the "
+        "business's language, or `works_for` the task whose delivery it works for. "
+        "`promise=true`, only at your user's "
         "word, makes a promise: a commitment for the period `period_start`..`period_end` "
         "(YYYY-MM-DD) that tasks work towards."
     )
@@ -691,6 +693,8 @@ def create_task(
     promise: bool = False,
     period_start: str | None = None,
     period_end: str | None = None,
+    delivery: str = "",
+    works_for: str | None = None,
 ) -> str:
     """Create a task, or a promise, in the backlog.
 
@@ -704,9 +708,12 @@ def create_task(
         promise: Make a promise rather than a task.
         period_start: A promise's first day, YYYY-MM-DD.
         period_end: A promise's last day.
+        delivery: The task's meaning in the business's language (decision 0036).
+        works_for: The reference of the task whose delivery it works for.
 
     Raises:
-        ToolError: The project is linked to no Team, or the server refused (no tracker).
+        ToolError: The project is linked to no Team, a task to work for of another Team, or the
+            server refused (no tracker, a delivery the rules refuse).
     """
     team = _linked_team()
     parent_number = _topic(parent)[2] if parent else None
@@ -723,6 +730,8 @@ def create_task(
             "type": "promise" if promise else "task",
             "period_start": period_start,
             "period_end": period_end,
+            "delivery": delivery,
+            "works_for": _same_team_task(works_for, team) if works_for else None,
         },
     )
     trail.mark_done()
@@ -879,13 +888,34 @@ def _close_task(task: str, outcome: str, cancelled: bool, missed: bool = False) 
     return f"Closed {data['ref']} «{data['title']}» as {data['stage']}."
 
 
+def _same_team_task(reference: str, team: str) -> int | None:
+    """Return the number a task reference names in a Team, or ``None`` for ``none``.
+
+    Args:
+        reference: ``T-12`` or ``none``.
+        team: The Team the reference must be in.
+
+    Raises:
+        ToolError: Not a task of that Team.
+    """
+    if reference.strip().lower() == "none":
+        return None
+    other_team, kind, number = _topic(reference)
+    if kind != "task" or other_team != team:
+        raise ToolError(f"{reference} is not a task or promise of the Team {team}")
+    return number
+
+
 @mcp.tool(
     description=(
         "Edit a task's `title` or `description` (every description is kept in its history), "
         "add external issue `links`, or change its parent when your user asks: `parent` a "
         "promise or task of the same Team to put it under, `none` to take it out. Any task's "
         "parent may change, someone else's or a finished one too; it keeps its Area, and its "
-        "timeline and both parents' keep the change."
+        "timeline and both parents' keep the change. `delivery`: the task's meaning in the "
+        "business's language, what value it gives (empty clears it); `works_for` a task of the "
+        "Team whose delivery this one works for, `none` to unlink — a task states its own "
+        "delivery or works for another's, not both."
     )
 )
 def edit_task(
@@ -894,8 +924,10 @@ def edit_task(
     description: str | None = None,
     links: list[str] | None = None,
     parent: str | None = None,
+    delivery: str | None = None,
+    works_for: str | None = None,
 ) -> str:
-    """Edit a task, or move it under another parent (decision 0034).
+    """Edit a task, move it under another parent (decision 0034), or set its delivery (0036).
 
     Args:
         task: The task's reference.
@@ -904,10 +936,12 @@ def edit_task(
         links: External issue keys or links to add.
         parent: The reference of the promise or task to move it under; ``none`` takes it out of
             its parent.
+        delivery: The task's meaning in the business's language; empty clears it.
+        works_for: The reference of the task whose delivery it works for; ``none`` unlinks it.
 
     Raises:
-        ToolError: Not a task reference, a parent of another Team or not a task, or the server
-            refused.
+        ToolError: Not a task reference, a parent or a task to work for of another Team or not a
+            task, or the server refused.
     """
     team, _, _ = _topic(task)
     path = _task(task)
@@ -917,20 +951,21 @@ def edit_task(
     if description is not None:
         patch["description"] = description
     if parent is not None:
-        if parent.strip().lower() == "none":
-            patch["parent"] = None
-        else:
-            parent_team, kind, number = _topic(parent)
-            if kind != "task" or parent_team != team:
-                raise ToolError(f"{parent} is not a task or promise of the Team {team}")
-            patch["parent"] = number
+        patch["parent"] = _same_team_task(parent, team)
+    if delivery is not None:
+        patch["delivery"] = delivery
+    if works_for is not None:
+        patch["works_for"] = _same_team_task(works_for, team)
     data: dict[str, Any] = {}
     if patch:
         data = _call("PATCH", path, json=patch)
     for link in links or []:
         data = _call("POST", f"{path}/link", json={"key": link})
     if not data:
-        raise ToolError("Nothing to change: give a title, a description, links or a parent")
+        raise ToolError(
+            "Nothing to change: give a title, a description, links, a parent, a delivery or "
+            "works_for"
+        )
     trail.mark_done()
     return f"Updated {data['ref']} «{data['title']}»."
 

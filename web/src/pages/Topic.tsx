@@ -30,7 +30,7 @@ import { Bell } from '../components/Bell'
 import { Page } from '../components/Layout'
 import { Markdown } from '../components/Markdown'
 import { Time } from '../components/Time'
-import { Description, TaskPanel, TimelineLine } from '../components/Task'
+import { Delivery, Description, TaskPanel, TimelineLine } from '../components/Task'
 import { StatusBadge } from '../components/Topics'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Loading, Notice, Textarea } from '../components/ui'
 import { MessageImages } from '../components/Images'
@@ -831,6 +831,7 @@ export function TaskPage({ me }: { me: Me }) {
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
+          {data.type === 'task' && <Delivery task={data} />}
           <Description task={data} />
           <Card>
             <CardHeader title={t('task.timeline')} />
@@ -1018,6 +1019,7 @@ export function TopicPage({ me, kind, task }: { me: Me; kind: TopicKind; task?: 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
           {/* A task's description has room for its sections, above the conversation. */}
+          {task?.type === 'task' && <Delivery task={task} />}
           {task && <Description task={task} />}
           <Card>
             <CardHeader title={view === 'timeline' ? t('task.timeline') : t('topic.messages', { count: data.last_number })}>

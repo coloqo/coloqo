@@ -303,6 +303,14 @@ def task_text(task: dict[str, Any], home: str | None = None) -> str:
         lines.append("Links: " + ", ".join(link["url"] or link["key"] for link in task["links"]))
     if task.get("source"):
         lines.append(f"Found within T-{task['source']}")
+    if task.get("delivery"):
+        lines.append(f"Delivery: {task['delivery']}")
+    if task.get("works_for"):
+        lines.append(f"Works for the delivery of T-{task['works_for']}")
+    if task.get("working_for_it"):
+        lines.append(
+            "Working for its delivery: " + ", ".join(f"T-{n}" for n in task["working_for_it"])
+        )
     if task.get("outcome"):
         lines.append(f"Outcome: {task['outcome']}")
     lines.append("")

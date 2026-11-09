@@ -7,7 +7,7 @@ import { api, call, topicPath, type TaskDetail, type TeamDetail, type TimelineEn
 import { issueLink } from '../lib/format'
 import { Markdown } from './Markdown'
 import { Time } from './Time'
-import { Badge, Button, Card, CardHeader, ErrorNote, Notice, Select } from './ui'
+import { Badge, Button, Card, CardHeader, ErrorNote, Notice, Select, Textarea } from './ui'
 
 /** The text of a timeline entry, for the feed and for a task without a Topic. */
 export function TimelineText({ entry }: { entry: TimelineEntry }) {
@@ -28,6 +28,11 @@ export function TimelineText({ entry }: { entry: TimelineEntry }) {
       return <>{t('timeline.area', { to: data.to })}</>
     case 'period':
       return <>{t('timeline.period')}</>
+    // A delivery and the delivery a task works for (decision 0036).
+    case 'delivery':
+      return <>{t('timeline.delivery')}</>
+    case 'works_for':
+      return <>{data.to ? t('timeline.worksFor', { to: `T-${data.to}` }) : t('timeline.worksForNone')}</>
     // A move to another parent, in the task and in both parents' timelines (decision 0034).
     case 'parent':
       return <>{data.to ? t('timeline.parent', { to: `T-${data.to}` }) : t('timeline.parentNone')}</>
@@ -250,6 +255,85 @@ function Folded({ children }: { children: React.ReactNode }) {
         </Button>
       )}
     </div>
+  )
+}
+
+/**
+ * The task's delivery: its meaning in the business's language (decision 0036). A task states its
+ * own, edited here, or works for another's, shown as a link; the tasks working for its delivery
+ * are listed. Links are set by an Assistant for now.
+ */
+export function Delivery({ task }: { task: TaskDetail }) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [text, setText] = useState<string | null>(null)
+  const save = useMutation({
+    mutationFn: (value: string) =>
+      call(
+        api.PATCH('/api/team/{team}/task/{number}', {
+          params: { path: { team: task.team, number: task.number } },
+          body: { delivery: value },
+        }),
+      ),
+    onSuccess: () => {
+      setText(null)
+      void queryClient.invalidateQueries({ queryKey: ['task', task.team] })
+    },
+  })
+  const taskLink = (number: number) => (
+    <Link key={number} to={topicPath(task.team, number, 'task')} className="font-mono text-amber-700 hover:underline dark:text-amber-400">
+      T-{number}
+    </Link>
+  )
+  return (
+    <Card>
+      <CardHeader title={t('task.delivery')} />
+      <div className="flex flex-col gap-3 px-4 py-3 text-sm">
+        {task.subtask && task.parent ? (
+          <p className="text-stone-600 dark:text-stone-400">
+            {t('task.subtaskWorksFor')} {taskLink(task.parent)}
+          </p>
+        ) : task.works_for ? (
+          <p className="text-stone-600 dark:text-stone-400">
+            {t('task.worksFor')} {taskLink(task.works_for)}
+          </p>
+        ) : text === null ? (
+          <button type="button" onClick={() => setText(task.delivery ?? '')} className="cursor-text text-left">
+            {task.delivery ? (
+              <span className="whitespace-pre-wrap">{task.delivery}</span>
+            ) : (
+              <span className="text-stone-400 dark:text-stone-500">{t('task.deliveryPlaceholder')}</span>
+            )}
+          </button>
+        ) : (
+          <>
+            <Textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder={t('task.deliveryPlaceholder')}
+              rows={3}
+              autoFocus
+              aria-label={t('task.delivery')}
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="primary" onClick={() => save.mutate(text)} disabled={save.isPending}>
+                {t('common.save')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setText(null)}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+            <ErrorNote>{save.error ? String(save.error) : null}</ErrorNote>
+          </>
+        )}
+        {(task.working_for_it ?? []).length > 0 && (
+          <p className="flex flex-wrap gap-x-2 text-stone-600 dark:text-stone-400">
+            <span>{t('task.workingForIt')}</span>
+            {(task.working_for_it ?? []).map(taskLink)}
+          </p>
+        )}
+      </div>
+    </Card>
   )
 }
 
