@@ -28,6 +28,25 @@ export function TimelineText({ entry }: { entry: TimelineEntry }) {
       return <>{t('timeline.area', { to: data.to })}</>
     case 'period':
       return <>{t('timeline.period')}</>
+    // A move to another parent, in the task and in both parents' timelines (decision 0034).
+    case 'parent':
+      return <>{data.to ? t('timeline.parent', { to: `T-${data.to}` }) : t('timeline.parentNone')}</>
+    case 'child_in':
+      return (
+        <>
+          {data.from
+            ? t('timeline.childInFrom', { task: `T-${data.task}`, from: `T-${data.from}` })
+            : t('timeline.childIn', { task: `T-${data.task}` })}
+        </>
+      )
+    case 'child_out':
+      return (
+        <>
+          {data.to
+            ? t('timeline.childOutTo', { task: `T-${data.task}`, to: `T-${data.to}` })
+            : t('timeline.childOut', { task: `T-${data.task}` })}
+        </>
+      )
     case 'stage':
       if (data.migrated) return <>{t('timeline.migrated', { to: data.to })}</>
       if (data.workflow) return <>{t('timeline.workflow', { from: data.from, to: data.to })}</>

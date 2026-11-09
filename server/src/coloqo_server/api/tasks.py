@@ -1,8 +1,9 @@
 """Tasks: the tracker's API (decisions 0031, 0032, 0033).
 
 A task is ``T-<number>`` in its Team. Only the assignee's Assistant moves and closes it; a human
-in the web plans: assigns and orders. Planning needs the tracker on; taking, moving and closing
-work without it. Every change goes to the task's timeline.
+in the web plans: assigns and orders. Planning needs the tracker on, moving a task to another
+parent included (decision 0034); taking, moving by stages and closing work without it. Every change
+goes to the task's timeline.
 """
 
 from datetime import date, datetime, timedelta
@@ -152,7 +153,8 @@ class TimelineOut(BaseModel):
 
     Attributes:
         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
-            ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``closed``.
+            ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,
+            ``child_in``, ``child_out``, ``closed``.
         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
         assistant: Name of the Assistant that did it, if any.
         data: What the kind carries.
@@ -299,6 +301,8 @@ class TaskPatch(BaseModel):
         area: A new Area, by slug; the number stays.
         period_start: A promise's first day.
         period_end: A promise's last day.
+        parent: The number of the task or promise to move it under; ``null`` takes it out of its
+            parent (decision 0034).
     """
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
@@ -306,6 +310,7 @@ class TaskPatch(BaseModel):
     area: str | None = Field(default=None, min_length=1, max_length=40)
     period_start: date | None = None
     period_end: date | None = None
+    parent: int | None = None
 
 
 class LinkIn(BaseModel):
@@ -1091,7 +1096,7 @@ async def read_task(
 async def edit_task(
     request: Request, team: str, number: int, body: TaskPatch, actor: ActorDep, db: DB
 ) -> TaskOut:
-    """Edit a task's title, description or Area; the timeline keeps every description.
+    """Edit a task's title, description, Area, period or parent; the timeline keeps each change.
 
     Args:
         request: The incoming request.
@@ -1102,11 +1107,17 @@ async def edit_task(
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such task or Area; 403 when the caller may not
-            write there.
+        HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may
+            not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent
+            that cannot hold it (decision 0034).
     """
     task, found = await task_for(db, team, number, actor, write=True)
     topic = await topic_of(db, task, lock=True)
+    moved: dict[str, int | None] = {}
+    if "parent" in body.model_fields_set:
+        # Moving is planning (decision 0032).
+        need_tracker(found)
+        moved = await move_task(db, team, actor, task, body.parent)
     if body.title is not None and body.title.strip() != task.title:
         record(db, task, "retitled", actor, {"from": task.title, "to": body.title.strip()})
         task.title = body.title.strip()
@@ -1132,11 +1143,97 @@ async def edit_task(
             task.area_id = area.id
             if topic is not None:
                 topic.area_id = area.id
-    recipients = await task_event(db, actor, task, "edited")
+    more = {"parent_from": moved["from"], "parent_to": moved["to"]} if moved else {}
+    recipients = await task_event(db, actor, task, "edited", **more)
     await db.commit()
     request.app.state.bus.wake(recipients)
     (out,) = await task_outs(db, [task])
     return out
+
+
+async def move_task(
+    db: AsyncSession, team: str, actor: Actor, task: Task, number: int | None
+) -> dict[str, int | None]:
+    """Move a task under another parent, or out of its parent (decision 0034).
+
+    The checks of creation apply (``check_parent``), and those only a move needs: no cycle, a
+    task with subtasks does not become a subtask. The parent is looked up in the task's Team, so
+    another Team's is not found. The task keeps its Area; finished tasks and parents move too.
+    The task's timeline gets ``parent``, the former parent ``child_out``, the new one
+    ``child_in``; nobody is notified.
+
+    The checks read a tree no other move changes meanwhile. The task is locked by the caller,
+    and the former and the new parent are locked here, in the order of their ids, before the
+    checks: two moves into one promise take turns, so it cannot end up holding both promises and
+    tasks. A crossing move (the parent being moved under the task) holds the parent's row, which
+    this move locks, and sets a ``parent_id`` that holds the task's key, which the caller
+    locked; either lock alone makes one move wait for the other or the database refuse one of
+    the two: no cycle. A task created under the parent at the same moment is
+    not held back: creation locks the Team, not the parent.
+
+    Args:
+        db: Database session.
+        team: The Team's slug.
+        actor: The caller.
+        task: The task, locked for the edit.
+        number: The new parent's number; ``None`` takes the task out of its parent.
+
+    Returns:
+        ``from`` and ``to``: the former and the new parent's numbers; empty when nothing moved.
+
+    Raises:
+        HTTPException: 404 when there is no such parent in the Team; 422 for a parent that
+            cannot hold the task.
+    """
+    parent = None
+    if number is not None:
+        parent, _ = await task_for(db, team, number, actor)
+    if (parent.id if parent else None) == task.parent_id:
+        return {}
+    touched = sorted({x for x in (task.parent_id, parent.id if parent else None) if x is not None})
+    held = {
+        t.id: t
+        for t in await db.scalars(
+            select(Task)
+            .where(Task.id.in_(touched))
+            .order_by(Task.id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+    }
+    former = held.get(task.parent_id or 0)
+    if parent is not None:
+        ancestor: Task | None = parent
+        while ancestor is not None:
+            if ancestor.id == task.id:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    f"{ref(parent.number)} is {ref(task.number)} or lies under it; a task does "
+                    "not go under itself",
+                )
+            ancestor = (
+                await db.get(Task, ancestor.parent_id) if ancestor.parent_id is not None else None
+            )
+        if (
+            parent.type == TaskType.Task
+            and task.type == TaskType.Task
+            and await db.scalar(select(Task.id).where(Task.parent_id == task.id).limit(1))
+        ):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"{ref(task.number)} has subtasks, so it cannot become a subtask; a subtask "
+                "holds nothing",
+            )
+        await check_parent(db, parent, task.type)
+    old = former.number if former else None
+    new = parent.number if parent else None
+    record(db, task, "parent", actor, {"from": old, "to": new})
+    if former is not None:
+        record(db, former, "child_out", actor, {"task": task.number, "to": new})
+    if parent is not None:
+        record(db, parent, "child_in", actor, {"task": task.number, "from": old})
+    task.parent_id = parent.id if parent else None
+    return {"from": old, "to": new}
 
 
 @router.post("/team/{team}/task/{number}/take")

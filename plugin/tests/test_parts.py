@@ -926,3 +926,27 @@ def test_a_task_handed_over_is_told_to_both_assignees() -> None:
 
     assert former is not None and "handed to bob" in former and "Don't move" in former
     assert new is not None and "in work: take it with take_task" in new
+
+
+def test_edit_task_moves_a_task_under_a_parent_or_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``parent`` sends the parent's number, ``none`` a null; another Team's parent or a free
+    Topic is refused before the server (decision 0034).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = AnsweringApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    moved = mcp_server.edit_task("T-3", parent="T-7")
+    out = mcp_server.edit_task("T-3", title="Fix it", parent="None")
+    with pytest.raises(ToolError, match="not a task or promise of the Team acme"):
+        mcp_server.edit_task("T-3", parent="globex/T-7")
+    with pytest.raises(ToolError, match="not a task or promise"):
+        mcp_server.edit_task("T-3", parent="F-7")
+
+    assert api.sent == [
+        ("PATCH", "/team/acme/task/3", {"parent": 7}),
+        ("PATCH", "/team/acme/task/3", {"title": "Fix it", "parent": None}),
+    ]
+    assert moved == out == "Updated T-3 «Fix»."

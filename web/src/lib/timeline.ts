@@ -1,7 +1,18 @@
 import type { TimelineEntry } from '../api/client'
 
 /** Timeline kinds the feed shows as lines of their own; the rest already have a line there. */
-const OWN_LINE = new Set(['created', 'assigned', 'described', 'linked', 'retitled', 'area', 'period'])
+const OWN_LINE = new Set([
+  'created',
+  'assigned',
+  'described',
+  'linked',
+  'retitled',
+  'area',
+  'period',
+  'parent',
+  'child_in',
+  'child_out',
+])
 
 /** Whether a timeline entry gets a line of its own in the Topic's feed (decision 0033). */
 export function ownLine(entry: TimelineEntry): boolean {

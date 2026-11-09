@@ -1243,7 +1243,7 @@ export interface paths {
         head?: never;
         /**
          * Edit Task
-         * @description Edit a task's title, description or Area; the timeline keeps every description.
+         * @description Edit a task's title, description, Area, period or parent; the timeline keeps each change.
          *
          *     Args:
          *         request: The incoming request.
@@ -1254,8 +1254,9 @@ export interface paths {
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such task or Area; 403 when the caller may not
-         *             write there.
+         *         HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may
+         *             not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent
+         *             that cannot hold it (decision 0034).
          */
         patch: operations["edit_task_api_team__team__task__number__patch"];
         trace?: never;
@@ -3251,12 +3252,16 @@ export interface components {
          *         area: A new Area, by slug; the number stays.
          *         period_start: A promise's first day.
          *         period_end: A promise's last day.
+         *         parent: The number of the task or promise to move it under; ``null`` takes it out of its
+         *             parent (decision 0034).
          */
         TaskPatch: {
             /** Area */
             area?: string | null;
             /** Description */
             description?: string | null;
+            /** Parent */
+            parent?: number | null;
             /** Period End */
             period_end?: string | null;
             /** Period Start */
@@ -3416,7 +3421,8 @@ export interface components {
          *
          *     Attributes:
          *         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
-         *             ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``closed``.
+         *             ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,
+         *             ``child_in``, ``child_out``, ``closed``.
          *         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
          *         assistant: Name of the Assistant that did it, if any.
          *         data: What the kind carries.

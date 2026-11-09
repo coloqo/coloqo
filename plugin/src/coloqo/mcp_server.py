@@ -841,7 +841,10 @@ def _close_task(task: str, outcome: str, cancelled: bool, missed: bool = False) 
 @mcp.tool(
     description=(
         "Edit a task's `title` or `description` (every description is kept in its history), "
-        "or add external issue `links`."
+        "add external issue `links`, or change its parent when your user asks: `parent` a "
+        "promise or task of the same Team to put it under, `none` to take it out. Any task's "
+        "parent may change, someone else's or a finished one too; it keeps its Area, and its "
+        "timeline and both parents' keep the change."
     )
 )
 def edit_task(
@@ -849,26 +852,44 @@ def edit_task(
     title: str | None = None,
     description: str | None = None,
     links: list[str] | None = None,
+    parent: str | None = None,
 ) -> str:
-    """Edit a task.
+    """Edit a task, or move it under another parent (decision 0034).
 
     Args:
         task: The task's reference.
         title: A new title.
         description: A new description.
         links: External issue keys or links to add.
+        parent: The reference of the promise or task to move it under; ``none`` takes it out of
+            its parent.
 
     Raises:
-        ToolError: Not a task reference, or the server refused.
+        ToolError: Not a task reference, a parent of another Team or not a task, or the server
+            refused.
     """
+    team, _, _ = _topic(task)
     path = _task(task)
+    patch: dict[str, Any] = {}
+    if title is not None:
+        patch["title"] = title
+    if description is not None:
+        patch["description"] = description
+    if parent is not None:
+        if parent.strip().lower() == "none":
+            patch["parent"] = None
+        else:
+            parent_team, kind, number = _topic(parent)
+            if kind != "task" or parent_team != team:
+                raise ToolError(f"{parent} is not a task or promise of the Team {team}")
+            patch["parent"] = number
     data: dict[str, Any] = {}
-    if title is not None or description is not None:
-        data = _call("PATCH", path, json={"title": title, "description": description})
+    if patch:
+        data = _call("PATCH", path, json=patch)
     for link in links or []:
         data = _call("POST", f"{path}/link", json={"key": link})
     if not data:
-        raise ToolError("Nothing to change: give a title, a description or links")
+        raise ToolError("Nothing to change: give a title, a description, links or a parent")
     trail.mark_done()
     return f"Updated {data['ref']} «{data['title']}»."
 
