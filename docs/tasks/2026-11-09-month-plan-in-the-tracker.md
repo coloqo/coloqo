@@ -203,3 +203,7 @@ decided; they were asked:
   removed but can be postponed. The off-plan task's "what is dropped" and the postponed task's
   reason name each other as text; neither is derived from the other. Lowering priority stays the
   board's order.
+- **Finished work does not enter a plan** (the author, 2026-11-10, round 1 of PR #32): a task
+  finished before the period, added by number, would count as planned and done in a month no work
+  of it went into; refused, as a promise already brings only its unfinished tasks. A finished task
+  moved under planned work does not join either.

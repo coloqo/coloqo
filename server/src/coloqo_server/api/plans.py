@@ -31,7 +31,7 @@ from coloqo_server.models import (
     TaskType,
     Team,
 )
-from coloqo_server.planning import join, unfinished_under
+from coloqo_server.planning import finished, join, unfinished_under
 from coloqo_server.security import DB, Actor, ActorDep, now, require_reader, require_writer
 from coloqo_server.tracker import record
 
@@ -522,7 +522,7 @@ async def add_to_plan(
     Raises:
         HTTPException: 404 when there is no such plan or task; 403 when the caller may not write
             there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,
-            ``closed`` for a closed plan.
+            ``closed`` for a closed plan, ``finished`` for a finished promise or task.
     """
     plan, found = await plan_for(db, team, number, actor, write=True)
     if plan.closed_at is not None:
@@ -533,6 +533,14 @@ async def add_to_plan(
         need_human(actor, "Adding work to an approved plan")
     for task_number in body.tasks:
         task, _ = await task_for(db, team, task_number, actor)
+        if await finished(db, task):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "finished",
+                    "message": f"{ref(task.number)} is finished: finished work has nothing to plan",
+                },
+            )
         for each in [
             task,
             *(await unfinished_under(db, task) if task.type == TaskType.Promise else []),

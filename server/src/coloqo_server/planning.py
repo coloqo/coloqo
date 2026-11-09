@@ -5,6 +5,7 @@ the plans' own API both use it.
 """
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coloqo_server.models import CATEGORY, Category, Plan, PlanItem, PlanMark, Stage, Task
@@ -37,10 +38,23 @@ async def mark_for(db: AsyncSession, plan: Plan, task: Task) -> PlanMark:
     return PlanMark.OffPlan
 
 
-async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) -> PlanItem | None:
-    """Put a task into a plan with the mark it gets now; nothing if it is there or closed.
+async def finished(db: AsyncSession, task: Task) -> bool:
+    """Whether a task is finished: done, cancelled, delivered and the like.
 
-    The join is kept in the task's timeline.
+    Args:
+        db: Database session.
+        task: The task.
+    """
+    stage = await db.get(Stage, task.stage_id)
+    return stage is not None and CATEGORY[stage.kind] == Category.Finished
+
+
+async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) -> bool:
+    """Put a task into a plan with the mark it gets now; return whether it joined.
+
+    Nothing happens for a closed plan, a task already in it, or a finished task: finished work
+    has nothing to plan (the author, 2026-11-10). A row another writer inserts at the same moment
+    is found there rather than failing. The join is kept in the task's timeline.
 
     Args:
         db: Database session.
@@ -48,16 +62,19 @@ async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) ->
         plan: The plan.
         task: The task.
     """
-    if plan.closed_at is not None:
-        return None
-    existing = await db.get(PlanItem, (plan.id, task.id))
-    if existing is not None:
-        return None
+    if plan.closed_at is not None or await finished(db, task):
+        return False
     mark = await mark_for(db, plan, task)
-    item = PlanItem(plan_id=plan.id, task_id=task.id, mark=mark)
-    db.add(item)
+    inserted = await db.execute(
+        insert(PlanItem)
+        .values(plan_id=plan.id, task_id=task.id, mark=mark)
+        .on_conflict_do_nothing(index_elements=["plan_id", "task_id"])
+        .returning(PlanItem.task_id)
+    )
+    if inserted.scalar() is None:
+        return False
     record(db, task, "plan_joined", actor, {"plan": plan.number, "name": plan.name, "mark": mark})
-    return item
+    return True
 
 
 async def unfinished_under(db: AsyncSession, task: Task) -> list[Task]:
@@ -72,10 +89,7 @@ async def unfinished_under(db: AsyncSession, task: Task) -> list[Task]:
     while level:
         children = list(await db.scalars(select(Task).where(Task.parent_id.in_(level))))
         level = [c.id for c in children]
-        for child in children:
-            stage = await db.get(Stage, child.stage_id)
-            if stage is not None and CATEGORY[stage.kind] != Category.Finished:
-                found.append(child)
+        found.extend([child for child in children if not await finished(db, child)])
     return found
 
 

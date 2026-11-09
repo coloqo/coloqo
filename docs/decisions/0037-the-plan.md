@@ -22,7 +22,9 @@ promises, not tasks, and is a decision of its own.
 **A plan holds promises and tasks**, by membership, not hierarchy: a task has one parent and may be
 in several plans. Adding a promise brings the unfinished tasks under it, at any depth; a task later
 created under, or moved under, a member of a plan that is not closed joins that plan by itself; a
-task with no promise joins on its own — the Team's work outside promises. **A task leaves a plan
+task with no promise joins on its own — the Team's work outside promises. **Finished work does
+not enter a plan** (the author, 2026-11-10, in the review): it has nothing to plan, and it would
+count as done in a period no work of it went into. **A task leaves a plan
 only while it is a draft**: one not started, always; a started one, only before the period
 begins; a finished one, never. Once a plan is approved its rows stay, as its history.
 

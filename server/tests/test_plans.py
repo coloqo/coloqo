@@ -1,5 +1,6 @@
 """Tests of plans: drafts, approval, marks, rows, postponing, closing (decision 0037)."""
 
+import threading
 from collections.abc import Callable
 from datetime import date, timedelta
 
@@ -226,11 +227,6 @@ def test_what_leaves_a_draft(setup: Setup, alice_new: Plugin) -> None:
     idle = _task(setup, "Idle")
     started = _task(setup, "Started")
     done = _task(setup, "Done")
-    for number in (started["number"], done["number"]):
-        alice_new.client.post(f"/api/team/{setup.team}/task/{number}/take", json={"body": "On it"})
-    alice_new.client.post(
-        f"/api/team/{setup.team}/task/{done['number']}/close", json={"outcome": "Merged"}
-    )
     running = _plan(setup.alice, setup, TODAY - timedelta(days=2), TODAY + timedelta(days=20))
     coming = _plan(
         setup.alice, setup, TODAY + timedelta(days=30), TODAY + timedelta(days=60), "Next"
@@ -238,6 +234,11 @@ def test_what_leaves_a_draft(setup: Setup, alice_new: Plugin) -> None:
     every = [idle["number"], started["number"], done["number"]]
     setup.alice.post(_url(setup, running, "/item"), json={"tasks": every})
     setup.alice.post(_url(setup, coming, "/item"), json={"tasks": [started["number"]]})
+    for number in (started["number"], done["number"]):
+        alice_new.client.post(f"/api/team/{setup.team}/task/{number}/take", json={"body": "On it"})
+    alice_new.client.post(
+        f"/api/team/{setup.team}/task/{done['number']}/close", json={"outcome": "Merged"}
+    )
 
     def remove(plan: dict, number: int):
         """Try to take a task out of a plan.
@@ -276,6 +277,9 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
     shipped = _task(setup, "Shipped")
     dropped = _task(setup, "Dropped")
     left = _task(setup, "Left")
+    current = _plan(setup.alice, setup, TODAY, TODAY + timedelta(days=20), "Now")
+    every = [shipped["number"], dropped["number"], left["number"]]
+    setup.alice.post(_url(setup, current, "/item"), json={"tasks": every})
     for number in (shipped["number"], dropped["number"]):
         alice_new.client.post(f"/api/team/{setup.team}/task/{number}/take", json={"body": "On it"})
     alice_new.client.post(
@@ -285,9 +289,6 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
         f"/api/team/{setup.team}/task/{dropped['number']}/close",
         json={"outcome": "Not needed", "cancelled": True},
     )
-    current = _plan(setup.alice, setup, TODAY, TODAY + timedelta(days=20), "Now")
-    every = [shipped["number"], dropped["number"], left["number"]]
-    setup.alice.post(_url(setup, current, "/item"), json={"tasks": every})
     setup.alice.post(_url(setup, current, "/approve"))
     early = setup.alice.post(_url(setup, current, "/close"))
     # The month is over: move the plan into the past, the shipped task finished within it.
@@ -318,3 +319,74 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
     assert (closed["summary"]["planned"], closed["summary"]["planned_done"]) == (3, 1)
     assert offered == [left["number"]]
     assert _rows(taken)[left["number"]]["carried_from"] == "Now"
+
+
+def test_finished_work_does_not_enter_a_plan(setup: Setup, alice_new: Plugin) -> None:
+    """A finished task is refused by number, and does not join when moved under planned work
+    (the author, 2026-11-10; decision 0037).
+
+    Args:
+        setup: The Team.
+        alice_new: Alice's Assistant.
+    """
+    promise = _task(setup, "Invoices", "promise")
+    old = _task(setup, "Shipped in October")
+    alice_new.client.post(
+        f"/api/team/{setup.team}/task/{old['number']}/take", json={"body": "On it"}
+    )
+    alice_new.client.post(
+        f"/api/team/{setup.team}/task/{old['number']}/close", json={"outcome": "Merged"}
+    )
+    plan = _plan(setup.alice, setup, TODAY, TODAY + timedelta(days=20))
+    setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [promise["number"]]})
+
+    by_number = setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [old["number"]]})
+    setup.alice.patch(
+        f"/api/team/{setup.team}/task/{old['number']}", json={"parent": promise["number"]}
+    )
+    rows = _rows(setup.alice.get(_url(setup, plan)).json())
+
+    assert by_number.json()["detail"]["code"] == "finished"
+    assert old["number"] not in rows
+
+
+def test_a_row_joined_twice_at_once_is_found_there(
+    setup: Setup, alice_new: Plugin, settings: Settings
+) -> None:
+    """A move under planned work that meets a row another writer is inserting finds the row
+    there instead of failing (decision 0037).
+
+    Args:
+        setup: The Team.
+        alice_new: Alice's Assistant.
+        settings: Instance settings.
+    """
+    promise = _task(setup, "Invoices", "promise")
+    loose = _task(setup, "Loose")
+    plan = _plan(setup.alice, setup, TODAY, TODAY + timedelta(days=20))
+    setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [promise["number"]]})
+    answer: list = []
+    with _connect(settings.database_url) as other:
+        other.execute("BEGIN")
+        other.execute(
+            "INSERT INTO plan_items (plan_id, task_id, mark) VALUES ("
+            "(SELECT id FROM plans WHERE number = %s), "
+            "(SELECT id FROM tasks WHERE number = %s AND team_id = "
+            "(SELECT id FROM teams WHERE slug = %s)), 'planned')",
+            (plan["number"], loose["number"], setup.team),
+        )
+        mover = threading.Thread(
+            target=lambda: answer.append(
+                setup.alice.patch(
+                    f"/api/team/{setup.team}/task/{loose['number']}",
+                    json={"parent": promise["number"]},
+                )
+            )
+        )
+        mover.start()
+        mover.join(1)
+        other.execute("COMMIT")
+    mover.join(30)
+
+    assert answer[0].status_code == 200, answer[0].text
+    assert loose["number"] in _rows(setup.alice.get(_url(setup, plan)).json())
