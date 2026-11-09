@@ -4,13 +4,47 @@ Kept apart from the API modules so that tasks, when created or moved under a pla
 the plans' own API both use it.
 """
 
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from coloqo_server.models import CATEGORY, Category, Plan, PlanItem, PlanMark, Stage, Task
-from coloqo_server.security import Actor
+from coloqo_server.models import CATEGORY, Category, Plan, PlanItem, PlanMark, Stage, Task, Team
+from coloqo_server.security import Actor, now
 from coloqo_server.tracker import record
+
+
+def local_day(moment: datetime, zone: str) -> date:
+    """Return the day a moment falls on in a time zone.
+
+    Args:
+        moment: The moment, aware.
+        zone: An IANA time zone name.
+    """
+    return moment.astimezone(ZoneInfo(zone)).date()
+
+
+async def zone_of(db: AsyncSession, plan: Plan) -> str:
+    """Return the time zone a plan counts its days in: its Team's (decision 0037).
+
+    Args:
+        db: Database session.
+        plan: The plan.
+    """
+    team = await db.get(Team, plan.team_id)
+    return team.time_zone if team is not None else "UTC"
+
+
+async def today_of(db: AsyncSession, plan: Plan) -> date:
+    """Return today in the plan's Team.
+
+    Args:
+        db: Database session.
+        plan: The plan.
+    """
+    return local_day(now(), await zone_of(db, plan))
 
 
 async def mark_for(db: AsyncSession, plan: Plan, task: Task) -> PlanMark:
@@ -53,8 +87,8 @@ async def finished_before(db: AsyncSession, plan: Plan, task: Task) -> bool:
     """Whether a task was finished before the plan's period began: such work has nothing to plan.
 
     Work finished within the period may still join: a plan moved into Coloqo in the middle of its
-    month takes in what was done since its first day (the author, 2026-11-10). A finished task with
-    no moment of finishing counts as finished before.
+    month takes in what was done since its first day (the author, 2026-11-10). Days are the Team's,
+    in its time zone. A finished task with no moment of finishing counts as finished before.
 
     Args:
         db: Database session.
@@ -63,7 +97,9 @@ async def finished_before(db: AsyncSession, plan: Plan, task: Task) -> bool:
     """
     if not await finished(db, task):
         return False
-    return task.finished_at is None or task.finished_at.date() < plan.period_start
+    if task.finished_at is None:
+        return True
+    return local_day(task.finished_at, await zone_of(db, plan)) < plan.period_start
 
 
 async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) -> bool:

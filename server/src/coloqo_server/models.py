@@ -399,6 +399,8 @@ class Team(Base):
         task_idle_days: Days a task in work may go without activity before its assignee is told
             (decision 0032).
         task_idle_repeat_days: Days between such notices while it stays quiet.
+        time_zone: The Team's time zone, an IANA name such as ``Europe/Moscow``: its plans'
+            dates are days there (decision 0037).
         created_at: Creation time.
     """
 
@@ -415,6 +417,7 @@ class Team(Base):
     tracker: Mapped[bool] = mapped_column(default=False, server_default="false")
     task_idle_days: Mapped[int] = mapped_column(Integer, default=7, server_default="7")
     task_idle_repeat_days: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    time_zone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -31,7 +31,14 @@ from coloqo_server.models import (
     TaskType,
     Team,
 )
-from coloqo_server.planning import finished_before, join, joinable_under
+from coloqo_server.planning import (
+    finished_before,
+    join,
+    joinable_under,
+    local_day,
+    today_of,
+    zone_of,
+)
 from coloqo_server.security import DB, Actor, ActorDep, now, require_reader, require_writer
 from coloqo_server.tracker import record
 
@@ -173,8 +180,8 @@ class PlanDetail(PlanOut):
     Attributes:
         items: Its rows, promises first, then by number.
         summary: What it came to.
-        previous_unfinished: For a draft: unfinished tasks of the previous closed plan not done
-            there and not in this one.
+        previous_unfinished: For a draft: tasks of the previous closed plan not done there, not
+            in this one and not finished before this one's period.
     """
 
     items: list[PlanRowOut]
@@ -348,6 +355,7 @@ async def plan_detail(db: AsyncSession, plan: Plan) -> PlanDetail:
     rows.sort(key=lambda r: (r.task.type != TaskType.Promise, r.task.number))
     work = [r for r in rows if r.task.type != TaskType.Promise]
     planned = [r for r in work if r.mark == PlanMark.Planned]
+    zone = await zone_of(db, plan)
 
     def done(row: PlanRowOut) -> bool:
         """Whether a row counts as done: as fixed at closing, or finished by the period's end.
@@ -361,7 +369,7 @@ async def plan_detail(db: AsyncSession, plan: Plan) -> PlanDetail:
         return (
             row.task.stage_kind in (StageKind.Done, StageKind.Delivered)
             and finished is not None
-            and finished.date() <= plan.period_end
+            and local_day(finished, zone) <= plan.period_end
         )
 
     summary = PlanSummary(
@@ -382,9 +390,8 @@ async def plan_detail(db: AsyncSession, plan: Plan) -> PlanDetail:
                 .where(PlanItem.plan_id == before.id, PlanItem.result == PlanResult.NotDone)
                 .order_by(Task.number)
             ):
-                stage = await db.get(Stage, task.stage_id)
-                unfinished = stage is not None and CATEGORY[stage.kind] != Category.Finished
-                if unfinished and task.id not in tasks:
+                # The same rule as every way in: not work finished before this period (0037).
+                if task.id not in tasks and not await finished_before(db, plan, task):
                     previous.append(task.number)
     return PlanDetail(
         **head.model_dump(), items=rows, summary=summary, previous_unfinished=previous
@@ -602,7 +609,7 @@ async def remove_from_plan(
                 "message": f"{ref(task.number)} is finished: it stays in the plan",
             },
         )
-    if category == Category.InProgress and now().date() >= plan.period_start:
+    if category == Category.InProgress and await today_of(db, plan) >= plan.period_start:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {
@@ -728,7 +735,8 @@ async def close_plan(
     """A human closes an approved plan after its period; each row's result is fixed (0037).
 
     Done is Done, or a promise Delivered, by the period's last day; cancelled is Cancelled or
-    Withdrawn; the rest is not done. Work finished later does not change it.
+    Withdrawn; the rest is not done. Work finished later does not change it. Days are the Team's,
+    in its time zone.
 
     Args:
         request: The incoming request.
@@ -753,7 +761,8 @@ async def close_plan(
             status.HTTP_409_CONFLICT,
             {"code": "not_approved", "message": f"«{plan.name}» is a draft: approve it first"},
         )
-    if now().date() <= plan.period_end:
+    zone = await zone_of(db, plan)
+    if local_day(now(), zone) <= plan.period_end:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {"code": "period", "message": f"«{plan.name}» runs until {plan.period_end}"},
@@ -769,7 +778,7 @@ async def close_plan(
         elif (
             stage.kind in (StageKind.Done, StageKind.Delivered)
             and finished is not None
-            and finished.date() <= plan.period_end
+            and local_day(finished, zone) <= plan.period_end
         ):
             item.result = PlanResult.Done
         else:

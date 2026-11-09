@@ -52,12 +52,18 @@ The off-plan task's "what is dropped" and the postponed task's reason name each 
 neither is derived from the other. Lowering a task's priority stays the board's order.
 
 **Carried** work is read, not marked: a row shows "from <plan>" when the task was in an earlier
-closed plan and not done there. A new draft offers the previous plan's unfinished work.
+closed plan and not done there. A new draft offers what the previous plan left undone, but work
+finished before the new period.
 
 **Closing** fixes each row's result: done (Done, or a promise Delivered, by the period's last day),
 cancelled (Cancelled or Withdrawn), or not done; work finished later does not rewrite the month.
 The plan then shows planned done and not done, postponed apart, found and off-plan counts, what
 off-plan work dropped, and its promises' outcomes.
+
+**A plan's days are its Team's** (the author, 2026-11-10, in the review): a Team has a time zone,
+and "finished before the period", "done by the period's last day", "the period has begun" and
+"after the period" are read in it. A new Team takes its creator's browser's zone; existing Teams
+start in UTC; the owner changes it in the Team's settings.
 
 **No dates on tasks**: decision 0031 stands; a forecast from each member's speed comes with the
 estimates. Newcomers' tasks wait unassigned until they log in.

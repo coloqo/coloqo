@@ -1645,7 +1645,7 @@
         "type": "object"
       },
       "PlanDetail": {
-        "description": "A plan with its rows, what it came to, and, for a draft, what the previous one left.\n\nAttributes:\n    items: Its rows, promises first, then by number.\n    summary: What it came to.\n    previous_unfinished: For a draft: unfinished tasks of the previous closed plan not done\n        there and not in this one.",
+        "description": "A plan with its rows, what it came to, and, for a draft, what the previous one left.\n\nAttributes:\n    items: Its rows, promises first, then by number.\n    summary: What it came to.\n    previous_unfinished: For a draft: tasks of the previous closed plan not done there, not\n        in this one and not finished before this one's period.",
         "properties": {
           "approved_at": {
             "anyOf": [
@@ -3158,6 +3158,11 @@
             "title": "Task Idle Repeat Days",
             "type": "integer"
           },
+          "time_zone": {
+            "default": "UTC",
+            "title": "Time Zone",
+            "type": "string"
+          },
           "tracker": {
             "default": false,
             "title": "Tracker",
@@ -3181,7 +3186,7 @@
         "type": "object"
       },
       "TeamIn": {
-        "description": "A new Team.\n\nAttributes:\n    name: Shown name.\n    slug: Its address; offered from the name when omitted.",
+        "description": "A new Team.\n\nAttributes:\n    name: Shown name.\n    slug: Its address; offered from the name when omitted.\n    time_zone: Its time zone, an IANA name; the web sends its creator's browser's, else UTC.",
         "properties": {
           "name": {
             "maxLength": 100,
@@ -3199,6 +3204,12 @@
               }
             ],
             "title": "Slug"
+          },
+          "time_zone": {
+            "default": "UTC",
+            "maxLength": 64,
+            "title": "Time Zone",
+            "type": "string"
           }
         },
         "required": [
@@ -3208,7 +3219,7 @@
         "type": "object"
       },
       "TeamOut": {
-        "description": "A Team as one of its Members sees it.\n\nAttributes:\n    slug: Its address, ``acme``.\n    name: Shown name.\n    role: The caller's role.\n    turn_limit: Assistants' turns without a human before a Topic waits.\n    tracker: The task tracker is on (decision 0031).\n    task_idle_days: Days a task in work may go quiet before its assignee is told (0032).\n    task_idle_repeat_days: Days between such notices while it stays quiet.\n    created_at: Creation time.",
+        "description": "A Team as one of its Members sees it.\n\nAttributes:\n    slug: Its address, ``acme``.\n    name: Shown name.\n    role: The caller's role.\n    turn_limit: Assistants' turns without a human before a Topic waits.\n    tracker: The task tracker is on (decision 0031).\n    task_idle_days: Days a task in work may go quiet before its assignee is told (0032).\n    task_idle_repeat_days: Days between such notices while it stays quiet.\n    time_zone: Its time zone: its plans' days are days there (decision 0037).\n    created_at: Creation time.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -3236,6 +3247,11 @@
             "title": "Task Idle Repeat Days",
             "type": "integer"
           },
+          "time_zone": {
+            "default": "UTC",
+            "title": "Time Zone",
+            "type": "string"
+          },
           "tracker": {
             "default": false,
             "title": "Tracker",
@@ -3257,7 +3273,7 @@
         "type": "object"
       },
       "TeamPatch": {
-        "description": "Changes to a Team's settings.\n\nAttributes:\n    name: New name.\n    slug: New address; the former one keeps leading to the Team.\n    turn_limit: Assistants' turns in a Topic without a human before it waits (0007).\n    tracker: Turn the task tracker on or off (decision 0031).\n    task_idle_days: Days a task in work may go quiet before its assignee is told (0032).\n    task_idle_repeat_days: Days between such notices while it stays quiet.",
+        "description": "Changes to a Team's settings.\n\nAttributes:\n    name: New name.\n    slug: New address; the former one keeps leading to the Team.\n    turn_limit: Assistants' turns in a Topic without a human before it waits (0007).\n    tracker: Turn the task tracker on or off (decision 0031).\n    task_idle_days: Days a task in work may go quiet before its assignee is told (0032).\n    task_idle_repeat_days: Days between such notices while it stays quiet.\n    time_zone: Its time zone, an IANA name: its plans' days are days there (decision 0037).",
         "properties": {
           "name": {
             "anyOf": [
@@ -3308,6 +3324,18 @@
               }
             ],
             "title": "Task Idle Repeat Days"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
           },
           "tracker": {
             "anyOf": [
@@ -4241,7 +4269,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.14.1"
+    "version": "0.15.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7575,7 +7603,7 @@
         ]
       },
       "patch": {
-        "description": "Change a Team's name, address, turn limit or tracker settings.\n\nA changed slug is kept as a former one, so links to the Team keep working; going back to a\nformer slug takes it out of the former ones.\n\nArgs:\n    team: The Team's slug.\n    body: The changes.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409\n        when the new slug is another Team's.",
+        "description": "Change a Team's name, address, turn limit, tracker settings or time zone.\n\nA changed slug is kept as a former one, so links to the Team keep working; going back to a\nformer slug takes it out of the former ones.\n\nArgs:\n    team: The Team's slug.\n    body: The changes.\n    actor: The logged-in owner.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when not its owner; 409\n        when the new slug is another Team's.",
         "operationId": "update_team_api_team__team__patch",
         "parameters": [
           {
@@ -9007,7 +9035,7 @@
     },
     "/api/team/{team}/plan/{number}/close": {
       "post": {
-        "description": "A human closes an approved plan after its period; each row's result is fixed (0037).\n\nDone is Done, or a promise Delivered, by the period's last day; cancelled is Cancelled or\nWithdrawn; the rest is not done. Work finished later does not change it.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    actor: The human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan; 403 for an Assistant or when the caller\n        may not write there; 409 ``no_tracker`` without the tracker, ``not_approved`` for a\n        draft, ``closed`` for a closed plan, ``period`` before the period's end.",
+        "description": "A human closes an approved plan after its period; each row's result is fixed (0037).\n\nDone is Done, or a promise Delivered, by the period's last day; cancelled is Cancelled or\nWithdrawn; the rest is not done. Work finished later does not change it. Days are the Team's,\nin its time zone.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    actor: The human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan; 403 for an Assistant or when the caller\n        may not write there; 409 ``no_tracker`` without the tracker, ``not_approved`` for a\n        draft, ``closed`` for a closed plan, ``period`` before the period's end.",
         "operationId": "close_plan_api_team__team__plan__number__close_post",
         "parameters": [
           {

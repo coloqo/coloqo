@@ -954,7 +954,7 @@ export interface paths {
         head?: never;
         /**
          * Update Team
-         * @description Change a Team's name, address, turn limit or tracker settings.
+         * @description Change a Team's name, address, turn limit, tracker settings or time zone.
          *
          *     A changed slug is kept as a former one, so links to the Team keep working; going back to a
          *     former slug takes it out of the former ones.
@@ -1278,7 +1278,8 @@ export interface paths {
          * @description A human closes an approved plan after its period; each row's result is fixed (0037).
          *
          *     Done is Done, or a promise Delivered, by the period's last day; cancelled is Cancelled or
-         *     Withdrawn; the rest is not done. Work finished later does not change it.
+         *     Withdrawn; the rest is not done. Work finished later does not change it. Days are the Team's,
+         *     in its time zone.
          *
          *     Args:
          *         request: The incoming request.
@@ -3151,8 +3152,8 @@ export interface components {
          *     Attributes:
          *         items: Its rows, promises first, then by number.
          *         summary: What it came to.
-         *         previous_unfinished: For a draft: unfinished tasks of the previous closed plan not done
-         *             there and not in this one.
+         *         previous_unfinished: For a draft: tasks of the previous closed plan not done there, not
+         *             in this one and not finished before this one's period.
          */
         PlanDetail: {
             /** Approved At */
@@ -3860,6 +3861,11 @@ export interface components {
              */
             task_idle_repeat_days?: number;
             /**
+             * Time Zone
+             * @default UTC
+             */
+            time_zone?: string;
+            /**
              * Tracker
              * @default false
              */
@@ -3874,12 +3880,18 @@ export interface components {
          *     Attributes:
          *         name: Shown name.
          *         slug: Its address; offered from the name when omitted.
+         *         time_zone: Its time zone, an IANA name; the web sends its creator's browser's, else UTC.
          */
         TeamIn: {
             /** Name */
             name: string;
             /** Slug */
             slug?: string | null;
+            /**
+             * Time Zone
+             * @default UTC
+             */
+            time_zone?: string;
         };
         /**
          * TeamOut
@@ -3893,6 +3905,7 @@ export interface components {
          *         tracker: The task tracker is on (decision 0031).
          *         task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
          *         task_idle_repeat_days: Days between such notices while it stays quiet.
+         *         time_zone: Its time zone: its plans' days are days there (decision 0037).
          *         created_at: Creation time.
          */
         TeamOut: {
@@ -3917,6 +3930,11 @@ export interface components {
              */
             task_idle_repeat_days?: number;
             /**
+             * Time Zone
+             * @default UTC
+             */
+            time_zone?: string;
+            /**
              * Tracker
              * @default false
              */
@@ -3935,6 +3953,7 @@ export interface components {
          *         tracker: Turn the task tracker on or off (decision 0031).
          *         task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
          *         task_idle_repeat_days: Days between such notices while it stays quiet.
+         *         time_zone: Its time zone, an IANA name: its plans' days are days there (decision 0037).
          */
         TeamPatch: {
             /** Name */
@@ -3945,6 +3964,8 @@ export interface components {
             task_idle_days?: number | null;
             /** Task Idle Repeat Days */
             task_idle_repeat_days?: number | null;
+            /** Time Zone */
+            time_zone?: string | null;
             /** Tracker */
             tracker?: boolean | null;
             /** Turn Limit */

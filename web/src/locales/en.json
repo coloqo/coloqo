@@ -123,7 +123,9 @@
     "settingsReadOnly": "The Team's owner changes these settings; you see them as they are.",
     "trackerOff": "The tracker is off: task stages and the board appear once the owner turns it on.",
     "topicsPage": "Topics",
-    "pages": "The Team's pages"
+    "pages": "The Team's pages",
+    "timeZone": "Time zone",
+    "timeZoneHint": "A plan's days are days in this zone: when work counts as finished, when a period ends."
   },
   "area": {
     "name": "Name",

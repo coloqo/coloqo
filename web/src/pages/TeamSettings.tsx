@@ -9,7 +9,7 @@ import { Page } from '../components/Layout'
 import { TeamPageFrame } from '../components/TeamBar'
 import { Time } from '../components/Time'
 import { TrackerSettings } from '../components/TrackerSettings'
-import { Button, Card, CardHeader, CopyButton, ErrorNote, Field, Input, Loading, Notice } from '../components/ui'
+import { Button, Card, CardHeader, CopyButton, ErrorNote, Field, Input, Loading, Notice, Select } from '../components/ui'
 import { errorText } from '../lib/format'
 
 function InviteCard({ team }: { team: TeamDetail }) {
@@ -47,6 +47,9 @@ function InviteCard({ team }: { team: TeamDetail }) {
 }
 
 /** The Team's own settings: the owner edits them, a member sees them. */
+/** The time zones the browser knows, UTC first. */
+const ZONES = ['UTC', ...Intl.supportedValuesOf('timeZone').filter((name) => name !== 'UTC')]
+
 function GeneralSettings({ team, readOnly }: { team: TeamDetail; readOnly: boolean }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -57,6 +60,7 @@ function GeneralSettings({ team, readOnly }: { team: TeamDetail; readOnly: boole
   const [tracker, setTracker] = useState(team.tracker ?? false)
   const [idle, setIdle] = useState(String(team.task_idle_days ?? 7))
   const [repeat, setRepeat] = useState(String(team.task_idle_repeat_days ?? 1))
+  const [zone, setZone] = useState(team.time_zone ?? 'UTC')
   const save = useMutation({
     mutationFn: () =>
       call(
@@ -69,6 +73,7 @@ function GeneralSettings({ team, readOnly }: { team: TeamDetail; readOnly: boole
             tracker,
             task_idle_days: Number(idle),
             task_idle_repeat_days: Number(repeat),
+            time_zone: zone,
           },
         }),
       ),
@@ -89,7 +94,8 @@ function GeneralSettings({ team, readOnly }: { team: TeamDetail; readOnly: boole
     limitNumber !== team.turn_limit ||
     tracker !== (team.tracker ?? false) ||
     Number(idle) !== (team.task_idle_days ?? 7) ||
-    Number(repeat) !== (team.task_idle_repeat_days ?? 1)
+    Number(repeat) !== (team.task_idle_repeat_days ?? 1) ||
+    zone !== (team.time_zone ?? 'UTC')
   return (
     <Card>
       <CardHeader title={t('team.settings')} />
@@ -138,6 +144,17 @@ function GeneralSettings({ team, readOnly }: { team: TeamDetail; readOnly: boole
         <Field label={t('team.taskIdleRepeatDays')} hint={t('team.taskIdleRepeatDaysHint')}>
           <Input type="number" min={1} max={365} value={repeat} onChange={(event) => setRepeat(event.target.value)} className="w-28" required />
         </Field>
+        {/* A plan's days are the Team's (decision 0037). */}
+        <Field label={t('team.timeZone')} hint={t('team.timeZoneHint')}>
+          <Select value={zone} onChange={(event) => setZone(event.target.value)} className="max-w-xs">
+            {ZONES.includes(zone) ? null : <option value={zone}>{zone}</option>}
+            {ZONES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        </Field>
         </fieldset>
         <ErrorNote>
           {save.error && (save.error instanceof ApiError && save.error.status === 409 ? t('team.slugTaken') : errorText(save.error, t))}
@@ -180,7 +197,7 @@ export function TeamSettingsPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-5">
           <GeneralSettings
-            key={`${data.name}-${data.slug}-${data.turn_limit}-${data.tracker}-${data.task_idle_days}-${data.task_idle_repeat_days}`}
+            key={`${data.name}-${data.slug}-${data.turn_limit}-${data.tracker}-${data.task_idle_days}-${data.task_idle_repeat_days}-${data.time_zone}`}
             team={data}
             readOnly={!owner}
           />

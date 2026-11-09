@@ -2,7 +2,7 @@
 
 import threading
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -12,7 +12,8 @@ from tests.conftest import Plugin, Setup, _connect
 NEW = "0.11.0"
 """A plugin release that knows tasks and deliveries."""
 
-TODAY = date.today()
+TODAY = datetime.now(UTC).date()
+"""Today in a test Team, which counts its days in UTC unless a test sets its time zone."""
 
 
 @pytest.fixture
@@ -277,8 +278,9 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
     shipped = _task(setup, "Shipped")
     dropped = _task(setup, "Dropped")
     left = _task(setup, "Left")
+    late = _task(setup, "Finished after the month")
     current = _plan(setup.alice, setup, TODAY, TODAY + timedelta(days=20), "Now")
-    every = [shipped["number"], dropped["number"], left["number"]]
+    every = [shipped["number"], dropped["number"], left["number"], late["number"]]
     setup.alice.post(_url(setup, current, "/item"), json={"tasks": every})
     for number in (shipped["number"], dropped["number"]):
         alice_new.client.post(f"/api/team/{setup.team}/task/{number}/take", json={"body": "On it"})
@@ -304,6 +306,11 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
         )
     by_assistant = alice_new.client.post(_url(setup, current, "/close"))
     closed = setup.alice.post(_url(setup, current, "/close")).json()
+    # Left undone in the closed month, finished today: within the next plan's period.
+    alice_new.client.post(f"/api/team/{setup.team}/task/{late['number']}/take", json={"body": "On"})
+    alice_new.client.post(
+        f"/api/team/{setup.team}/task/{late['number']}/close", json={"outcome": "Merged later"}
+    )
     following = _plan(alice_new.client, setup, TODAY, TODAY + timedelta(days=20), "Next")
     offered = following["previous_unfinished"]
     taken = alice_new.client.post(_url(setup, following, "/item"), json={"tasks": offered}).json()
@@ -315,9 +322,10 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
         shipped["number"]: "done",
         dropped["number"]: "cancelled",
         left["number"]: "not_done",
+        late["number"]: "not_done",
     }
-    assert (closed["summary"]["planned"], closed["summary"]["planned_done"]) == (3, 1)
-    assert offered == [left["number"]]
+    assert (closed["summary"]["planned"], closed["summary"]["planned_done"]) == (4, 1)
+    assert offered == [left["number"], late["number"]]
     assert _rows(taken)[left["number"]]["carried_from"] == "Now"
 
 
@@ -337,7 +345,8 @@ def test_work_finished_before_the_period_stays_out(
     old = _task(setup, "Shipped in October")
     under = _task(setup, "Shipped in October too", parent=promise["number"])
     recent = _task(setup, "Shipped this month", parent=promise["number"])
-    for task in (old, under, recent):
+    loose = _task(setup, "Also shipped this month")
+    for task in (old, under, recent, loose):
         number = task["number"]
         alice_new.client.post(f"/api/team/{setup.team}/task/{number}/take", json={"body": "On it"})
         alice_new.client.post(f"/api/team/{setup.team}/task/{number}/close", json={"outcome": "Ok"})
@@ -351,6 +360,7 @@ def test_work_finished_before_the_period_stays_out(
     setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [promise["number"]]})
 
     by_number = setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [old["number"]]})
+    within = setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [loose["number"]]})
     setup.alice.patch(
         f"/api/team/{setup.team}/task/{old['number']}", json={"parent": promise["number"]}
     )
@@ -360,6 +370,8 @@ def test_work_finished_before_the_period_stays_out(
     assert old["number"] not in rows
     assert under["number"] not in rows
     assert rows[recent["number"]]["mark"] == "planned"
+    assert within.status_code == 200, within.text
+    assert rows[loose["number"]]["mark"] == "planned"
 
 
 def test_a_row_joined_twice_at_once_is_found_there(
@@ -402,3 +414,59 @@ def test_a_row_joined_twice_at_once_is_found_there(
 
     assert answer[0].status_code == 200, answer[0].text
     assert loose["number"] in _rows(setup.alice.get(_url(setup, plan)).json())
+
+
+def test_a_plan_counts_days_in_its_team_s_time_zone(
+    setup: Setup, alice_new: Plugin, settings: Settings
+) -> None:
+    """A Team's time zone sets its plans' days: a task finished at 20:00 UTC the evening before
+    the period is finished on its first day in Tokyo, so it joins (decision 0037). Only the owner
+    sets the zone, and only a zone the server knows.
+
+    Args:
+        setup: The Team.
+        alice_new: Alice's Assistant.
+        settings: Instance settings.
+    """
+    start = TODAY + timedelta(days=3)
+    task = _task(setup, "Shipped at dawn in Tokyo")
+    alice_new.client.post(f"/api/team/{setup.team}/task/{task['number']}/take", json={"body": "On"})
+    alice_new.client.post(
+        f"/api/team/{setup.team}/task/{task['number']}/close", json={"outcome": "Ok"}
+    )
+    evening = datetime.combine(start - timedelta(days=1), datetime.min.time(), UTC) + timedelta(
+        hours=20
+    )
+    with _connect(settings.database_url) as connection:
+        connection.execute(
+            "UPDATE tasks SET finished_at = %s WHERE number = %s "
+            "AND team_id = (SELECT id FROM teams WHERE slug = %s)",
+            (evening, task["number"], setup.team),
+        )
+    plan = _plan(setup.alice, setup, start, start + timedelta(days=20))
+
+    in_utc = setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [task["number"]]})
+    by_member = setup.bob.patch(f"/api/team/{setup.team}", json={"time_zone": "Asia/Tokyo"})
+    unknown = setup.alice.patch(f"/api/team/{setup.team}", json={"time_zone": "Mars/Olympus"})
+    zoned = setup.alice.patch(f"/api/team/{setup.team}", json={"time_zone": "Asia/Tokyo"}).json()
+    in_tokyo = setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [task["number"]]})
+
+    assert in_utc.json()["detail"]["code"] == "finished"
+    assert by_member.status_code == 403
+    assert unknown.status_code == 422
+    assert zoned["time_zone"] == "Asia/Tokyo"
+    assert in_tokyo.status_code == 200, in_tokyo.text
+    assert task["number"] in _rows(in_tokyo.json())
+
+
+def test_a_new_team_takes_the_zone_it_is_given(setup: Setup) -> None:
+    """The web sends its creator's browser's zone; without one a Team starts in UTC (0037).
+
+    Args:
+        setup: The Team.
+    """
+    given = setup.alice.post("/api/team", json={"name": "Zoned", "time_zone": "Europe/Moscow"})
+    plain = setup.alice.post("/api/team", json={"name": "Plain"})
+
+    assert given.json()["time_zone"] == "Europe/Moscow"
+    assert plain.json()["time_zone"] == "UTC"
