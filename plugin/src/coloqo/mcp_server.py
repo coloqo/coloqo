@@ -751,7 +751,8 @@ def create_plan(name: str, period_start: str, period_end: str) -> str:
 @mcp.tool(
     description=(
         "Add promises and tasks to a draft plan of the linked Team, when your user asks: "
-        "`tasks` as references (T-12); a promise brings its unfinished tasks. After approval "
+        "`tasks` as references (T-12); a promise brings its tasks, but those finished before "
+        "the plan's period. After approval "
         "only a human adds work; tasks created under planned work join by themselves."
     )
 )

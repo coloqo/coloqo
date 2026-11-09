@@ -31,7 +31,7 @@ from coloqo_server.models import (
     TaskType,
     Team,
 )
-from coloqo_server.planning import finished, join, unfinished_under
+from coloqo_server.planning import finished_before, join, joinable_under
 from coloqo_server.security import DB, Actor, ActorDep, now, require_reader, require_writer
 from coloqo_server.tracker import record
 
@@ -506,7 +506,10 @@ async def read_plan(team: str, number: int, actor: ActorDep, db: DB) -> PlanDeta
 async def add_to_plan(
     request: Request, team: str, number: int, body: PlanAddIn, actor: ActorDep, db: DB
 ) -> PlanDetail:
-    """Add promises and tasks; a promise brings its unfinished tasks at any depth (0037).
+    """Add promises and tasks; a promise brings its tasks at any depth (decision 0037).
+
+    Work finished before the plan's period is refused, and a promise does not bring it; work
+    finished within the period joins.
 
     An Assistant adds to a draft only; after approval a human adds, and the work joins found or
     off-plan by the rule.
@@ -522,7 +525,7 @@ async def add_to_plan(
     Raises:
         HTTPException: 404 when there is no such plan or task; 403 when the caller may not write
             there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,
-            ``closed`` for a closed plan, ``finished`` for a finished promise or task.
+            ``closed`` for a closed plan, ``finished`` for work finished before the period.
     """
     plan, found = await plan_for(db, team, number, actor, write=True)
     if plan.closed_at is not None:
@@ -533,17 +536,18 @@ async def add_to_plan(
         need_human(actor, "Adding work to an approved plan")
     for task_number in body.tasks:
         task, _ = await task_for(db, team, task_number, actor)
-        if await finished(db, task):
+        if await finished_before(db, plan, task):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 {
                     "code": "finished",
-                    "message": f"{ref(task.number)} is finished: finished work has nothing to plan",
+                    "message": f"{ref(task.number)} was finished before the plan's period: it has "
+                    "nothing to plan",
                 },
             )
         for each in [
             task,
-            *(await unfinished_under(db, task) if task.type == TaskType.Promise else []),
+            *(await joinable_under(db, plan, task) if task.type == TaskType.Promise else []),
         ]:
             await join(db, actor, plan, each)
     recipients = await plan_event(db, found, plan, "added")

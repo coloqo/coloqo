@@ -321,23 +321,33 @@ def test_closing_fixes_the_month_and_the_next_draft_carries_it(
     assert _rows(taken)[left["number"]]["carried_from"] == "Now"
 
 
-def test_finished_work_does_not_enter_a_plan(setup: Setup, alice_new: Plugin) -> None:
-    """A finished task is refused by number, and does not join when moved under planned work
-    (the author, 2026-11-10; decision 0037).
+def test_work_finished_before_the_period_stays_out(
+    setup: Setup, alice_new: Plugin, settings: Settings
+) -> None:
+    """Work finished before the plan's period is refused by number, is not brought by its
+    promise and does not join when moved under planned work; work finished within the period
+    joins (the author, 2026-11-10; decision 0037).
 
     Args:
         setup: The Team.
         alice_new: Alice's Assistant.
+        settings: Instance settings.
     """
     promise = _task(setup, "Invoices", "promise")
     old = _task(setup, "Shipped in October")
-    alice_new.client.post(
-        f"/api/team/{setup.team}/task/{old['number']}/take", json={"body": "On it"}
-    )
-    alice_new.client.post(
-        f"/api/team/{setup.team}/task/{old['number']}/close", json={"outcome": "Merged"}
-    )
-    plan = _plan(setup.alice, setup, TODAY, TODAY + timedelta(days=20))
+    under = _task(setup, "Shipped in October too", parent=promise["number"])
+    recent = _task(setup, "Shipped this month", parent=promise["number"])
+    for task in (old, under, recent):
+        number = task["number"]
+        alice_new.client.post(f"/api/team/{setup.team}/task/{number}/take", json={"body": "On it"})
+        alice_new.client.post(f"/api/team/{setup.team}/task/{number}/close", json={"outcome": "Ok"})
+    with _connect(settings.database_url) as connection:
+        connection.execute(
+            "UPDATE tasks SET finished_at = finished_at - interval '30 days' "
+            "WHERE number = ANY(%s) AND team_id = (SELECT id FROM teams WHERE slug = %s)",
+            ([old["number"], under["number"]], setup.team),
+        )
+    plan = _plan(setup.alice, setup, TODAY - timedelta(days=5), TODAY + timedelta(days=20))
     setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [promise["number"]]})
 
     by_number = setup.alice.post(_url(setup, plan, "/item"), json={"tasks": [old["number"]]})
@@ -348,6 +358,8 @@ def test_finished_work_does_not_enter_a_plan(setup: Setup, alice_new: Plugin) ->
 
     assert by_number.json()["detail"]["code"] == "finished"
     assert old["number"] not in rows
+    assert under["number"] not in rows
+    assert rows[recent["number"]]["mark"] == "planned"
 
 
 def test_a_row_joined_twice_at_once_is_found_there(

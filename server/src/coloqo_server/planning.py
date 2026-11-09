@@ -49,12 +49,30 @@ async def finished(db: AsyncSession, task: Task) -> bool:
     return stage is not None and CATEGORY[stage.kind] == Category.Finished
 
 
+async def finished_before(db: AsyncSession, plan: Plan, task: Task) -> bool:
+    """Whether a task was finished before the plan's period began: such work has nothing to plan.
+
+    Work finished within the period may still join: a plan moved into Coloqo in the middle of its
+    month takes in what was done since its first day (the author, 2026-11-10). A finished task with
+    no moment of finishing counts as finished before.
+
+    Args:
+        db: Database session.
+        plan: The plan.
+        task: The task.
+    """
+    if not await finished(db, task):
+        return False
+    return task.finished_at is None or task.finished_at.date() < plan.period_start
+
+
 async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) -> bool:
     """Put a task into a plan with the mark it gets now; return whether it joined.
 
-    Nothing happens for a closed plan, a task already in it, or a finished task: finished work
-    has nothing to plan (the author, 2026-11-10). A row another writer inserts at the same moment
-    is found there rather than failing. The join is kept in the task's timeline.
+    Nothing happens for a closed plan, a task already in it, or a task finished before the plan's
+    period: it has nothing to plan (the author, 2026-11-10); work finished within the period joins.
+    A row another writer inserts at the same moment is found there rather than failing. The join
+    is kept in the task's timeline.
 
     Args:
         db: Database session.
@@ -62,7 +80,7 @@ async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) ->
         plan: The plan.
         task: The task.
     """
-    if plan.closed_at is not None or await finished(db, task):
+    if plan.closed_at is not None or await finished_before(db, plan, task):
         return False
     mark = await mark_for(db, plan, task)
     inserted = await db.execute(
@@ -77,11 +95,13 @@ async def join(db: AsyncSession, actor: Actor | None, plan: Plan, task: Task) ->
     return True
 
 
-async def unfinished_under(db: AsyncSession, task: Task) -> list[Task]:
-    """Return the unfinished tasks and promises under a task, at any depth, nearest first.
+async def joinable_under(db: AsyncSession, plan: Plan, task: Task) -> list[Task]:
+    """Return the tasks and promises under a task, at any depth, nearest first, that a plan takes:
+    all but those finished before its period.
 
     Args:
         db: Database session.
+        plan: The plan.
         task: The promise or task above.
     """
     found: list[Task] = []
@@ -89,7 +109,7 @@ async def unfinished_under(db: AsyncSession, task: Task) -> list[Task]:
     while level:
         children = list(await db.scalars(select(Task).where(Task.parent_id.in_(level))))
         level = [c.id for c in children]
-        found.extend([child for child in children if not await finished(db, child)])
+        found.extend([c for c in children if not await finished_before(db, plan, c)])
     return found
 
 

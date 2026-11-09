@@ -207,3 +207,9 @@ decided; they were asked:
   finished before the period, added by number, would count as planned and done in a month no work
   of it went into; refused, as a promise already brings only its unfinished tasks. A finished task
   moved under planned work does not join either.
+- **Work finished within the period does enter** (the author, 2026-11-10, after the deploy of
+  server 0.14.0; a side review): the question was asked about a task finished before the period,
+  but the code refused any finished task. The November plan is moved in after 10 November, so the
+  work done from 1 to 10 November could not join and November's result would miss it. Now only
+  work finished before the period is refused; within it, a task joins by number or with its
+  promise.

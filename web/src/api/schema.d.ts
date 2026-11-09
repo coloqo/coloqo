@@ -1310,7 +1310,10 @@ export interface paths {
         put?: never;
         /**
          * Add To Plan
-         * @description Add promises and tasks; a promise brings its unfinished tasks at any depth (0037).
+         * @description Add promises and tasks; a promise brings its tasks at any depth (decision 0037).
+         *
+         *     Work finished before the plan's period is refused, and a promise does not bring it; work
+         *     finished within the period joins.
          *
          *     An Assistant adds to a draft only; after approval a human adds, and the work joins found or
          *     off-plan by the rule.
@@ -1326,7 +1329,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when there is no such plan or task; 403 when the caller may not write
          *             there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,
-         *             ``closed`` for a closed plan, ``finished`` for a finished promise or task.
+         *             ``closed`` for a closed plan, ``finished`` for work finished before the period.
          */
         post: operations["add_to_plan_api_team__team__plan__number__item_post"];
         delete?: never;

@@ -20,13 +20,15 @@ another, never in two at once; a plan of a larger period around monthly ones wou
 promises, not tasks, and is a decision of its own.
 
 **A plan holds promises and tasks**, by membership, not hierarchy: a task has one parent and may be
-in several plans. Adding a promise brings the unfinished tasks under it, at any depth; a task later
-created under, or moved under, a member of a plan that is not closed joins that plan by itself; a
-task with no promise joins on its own — the Team's work outside promises. **Finished work does
-not enter a plan** (the author, 2026-11-10, in the review): it has nothing to plan, and it would
-count as done in a period no work of it went into. **A task leaves a plan
-only while it is a draft**: one not started, always; a started one, only before the period
-begins; a finished one, never. Once a plan is approved its rows stay, as its history.
+in several plans. Adding a promise brings the tasks under it, at any depth, but those finished
+before the period; a task later created under, or moved under, a member of a plan that is not closed
+joins that plan by itself; a task with no promise joins on its own — the Team's work outside
+promises. **Work finished before the plan's period does not enter it** (the author, 2026-11-10, in
+the review): it has nothing to plan, and it would count as done in a period no work of it went into.
+Work finished within the period does enter, by number or with its promise: a plan moved into Coloqo
+in the middle of its month takes in what was done since its first day. **A task leaves a plan only
+while it is a draft**: one not started, always; a started one, only before the period begins; a
+finished one, never. Once a plan is approved its rows stay, as its history.
 
 **Every row has a mark, set by itself:**
 

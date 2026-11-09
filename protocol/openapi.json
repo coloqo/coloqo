@@ -4241,7 +4241,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.14.0"
+    "version": "0.14.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9123,7 +9123,7 @@
     },
     "/api/team/{team}/plan/{number}/item": {
       "post": {
-        "description": "Add promises and tasks; a promise brings its unfinished tasks at any depth (0037).\n\nAn Assistant adds to a draft only; after approval a human adds, and the work joins found or\noff-plan by the rule.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    body: The numbers to add.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan or task; 403 when the caller may not write\n        there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,\n        ``closed`` for a closed plan, ``finished`` for a finished promise or task.",
+        "description": "Add promises and tasks; a promise brings its tasks at any depth (decision 0037).\n\nWork finished before the plan's period is refused, and a promise does not bring it; work\nfinished within the period joins.\n\nAn Assistant adds to a draft only; after approval a human adds, and the work joins found or\noff-plan by the rule.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    body: The numbers to add.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan or task; 403 when the caller may not write\n        there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,\n        ``closed`` for a closed plan, ``finished`` for work finished before the period.",
         "operationId": "add_to_plan_api_team__team__plan__number__item_post",
         "parameters": [
           {
