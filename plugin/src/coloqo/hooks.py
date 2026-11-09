@@ -1,25 +1,35 @@
-"""Claude Code hooks: what the session learns at start, on each prompt, and when its work
-starts showing to the team (decisions 0006, 0023).
+"""The agent's hooks: what the session learns at start, on each prompt, and when its work
+starts showing to the team (decisions 0006, 0023). The same hooks serve Claude Code, Codex and
+Qwen Code (decision 0035).
 
 A hook never fails the session: on any problem it prints a short note or nothing and exits 0.
 """
 
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from coloqo import focus, trail
+from coloqo import agents, focus, trail
 from coloqo.api import Api, ColoqoError, NotLoggedIn, Project
 from coloqo.render import topic_line
 
-FILE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
-"""Tools that change a file; a change inside the project is a change the team will see."""
+FILE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit", "edit", "write_file"})
+"""Tools that change a file named in ``file_path``: Claude Code's, and Qwen Code's ``edit`` and
+``write_file``. A change inside the project is a change the team will see."""
 
-SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
-"""Tools that run shell commands: Bash, and PowerShell, which Claude Code uses on Windows."""
+PATCH_TOOLS = frozenset({"apply_patch"})
+"""Codex's file tool: its one argument, ``command``, holds a patch naming the files it changes."""
+
+PATCHED_FILE = re.compile(
+    r"^\*\*\* (?:Update|Add|Delete) File: (.+?)\s*$|^\*\*\* Move to: (.+?)\s*$", re.M
+)
+"""A line of a Codex patch that names a file it changes."""
+
+SHELL_TOOLS = frozenset({"Bash", "PowerShell", "run_shell_command"})
+"""Tools that run shell commands: Bash (Claude Code, Codex), PowerShell, which Claude Code uses on
+Windows, and Qwen Code's ``run_shell_command``."""
 
 GIT_WRITE = re.compile(
     r"\bgit\b[^;&|\n]*?\s(?:commit|push|checkout\s+-b|switch\s+-c)(?=\s|$)"
@@ -74,7 +84,7 @@ def session_start() -> None:
             lines.append("Mention them to the user; read with the coloqo read_topic tool.")
         lines.append(
             f"This session's Coloqo focus: {current.describe()} (what reaches it unasked; the "
-            "user changes it with /coloqo:focus or by asking you to call set_focus)."
+            f"user changes it with {agents.skill('focus')} or by asking you to call set_focus)."
         )
     print("\n".join(lines))
 
@@ -137,13 +147,17 @@ def visible_change(tool: str, tool_input: dict[str, Any], project: Path) -> bool
     it reads the verbs in the tool's name.
 
     Args:
-        tool: The tool's name, as Claude Code gives it.
+        tool: The tool's name, as the agent gives it.
         tool_input: Its arguments.
         project: The project directory.
     """
     if tool in FILE_TOOLS:
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
         return bool(path) and (project / str(path)).resolve().is_relative_to(project)
+    if tool in PATCH_TOOLS:
+        patch = str(tool_input.get("command") or tool_input.get("input") or "")
+        paths = [a or b for a, b in PATCHED_FILE.findall(patch)]
+        return any((project / p).resolve().is_relative_to(project) for p in paths)
     if tool in SHELL_TOOLS:
         return bool(GIT_WRITE.search(str(tool_input.get("command") or "")))
     if tool.startswith("mcp__"):
@@ -177,12 +191,17 @@ def reminder(held: list[dict[str, Any]]) -> str:
 
 
 def _session(data: dict[str, Any]) -> str:
-    """Return the Claude Code session a hook serves; empty when Claude Code does not say.
+    """Return the session a hook serves; empty when the agent does not say.
+
+    Under Codex the session is also left for the MCP server, which Codex does not tell it
+    (decision 0035).
 
     Args:
         data: The hook's input.
     """
-    return str(data.get("session_id") or focus.session_id() or "")
+    session = str(data.get("session_id") or focus.session_id() or "")
+    agents.remember(session)
+    return session
 
 
 def _project(data: dict[str, Any]) -> Path:
@@ -191,7 +210,7 @@ def _project(data: dict[str, Any]) -> Path:
     Args:
         data: The hook's input.
     """
-    return Project.directory(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd"))
+    return Project.directory(agents.project_dir() or data.get("cwd"))
 
 
 def task_reminder(session: str, project: Path) -> str | None:
@@ -201,7 +220,7 @@ def task_reminder(session: str, project: Path) -> str | None:
     unreachable server leaves it unmarked, to try again later.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
         project: The project directory.
     """
     api = Api(timeout=3)

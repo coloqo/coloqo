@@ -17,8 +17,8 @@ export interface paths {
          * Register Assistant
          * @description Register the calling session's Assistant (decisions 0003, 0024).
          *
-         *     One Assistant per project and Claude Code session: the plugin's tools, hooks and watch in
-         *     that session act as it.
+         *     One Assistant per project and agent session (decisions 0024, 0035): the plugin's tools, hooks
+         *     and watch in that session act as it.
          *
          *     Args:
          *         body: The project and the session.
@@ -2131,7 +2131,7 @@ export interface components {
          *             project whose person is a member of it, and never overrides a link (decision 0020).
          *         team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one
          *             more release (decision 0025).
-         *         session_id: The Claude Code session id; without it the project has one Assistant.
+         *         session_id: The agent's session id; without it the project has one Assistant.
          */
         AssistantIn: {
             /** Project Key */
@@ -2156,7 +2156,7 @@ export interface components {
          *         project: The project folder's name.
          *         last_seen_at: Its last request.
          *         online: Its session runs now (decision 0029).
-         *         session_id: The Claude Code session id; only its owner gets it.
+         *         session_id: The agent's session id; only its owner gets it.
          */
         AssistantOut: {
             /** Key */
@@ -3865,6 +3865,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3902,6 +3903,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 key: string;
@@ -3937,6 +3939,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 key: string;
@@ -4007,6 +4010,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4127,6 +4131,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 pseudonym: string;
@@ -4162,6 +4167,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4261,6 +4267,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 user_code: string;
@@ -4296,6 +4303,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 user_code: string;
@@ -4331,6 +4339,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 user_code: string;
@@ -4369,6 +4378,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4424,6 +4434,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4457,6 +4468,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4490,6 +4502,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 key: string;
@@ -4523,6 +4536,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 token: string;
@@ -4558,6 +4572,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 token: string;
@@ -4593,6 +4608,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4626,6 +4642,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 token: string;
@@ -4661,6 +4678,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 token: string;
@@ -4700,6 +4718,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4733,6 +4752,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4764,6 +4784,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4795,6 +4816,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4826,6 +4848,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4863,6 +4886,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4900,6 +4924,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4933,6 +4958,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 key: string;
@@ -4972,6 +4998,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -5005,6 +5032,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -5042,6 +5070,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5077,6 +5106,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5116,6 +5146,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5151,6 +5182,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5190,6 +5222,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5234,6 +5267,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5269,6 +5303,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5310,6 +5345,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5346,6 +5382,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5387,6 +5424,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5422,6 +5460,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5464,6 +5503,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5500,6 +5540,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5540,6 +5581,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5580,6 +5622,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5622,6 +5665,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5658,6 +5702,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5694,6 +5739,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5734,6 +5780,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5774,6 +5821,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5814,6 +5862,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5854,6 +5903,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5890,6 +5940,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5930,6 +5981,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -5975,6 +6027,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6011,6 +6064,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6056,6 +6110,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6091,6 +6146,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6135,6 +6191,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6171,6 +6228,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6213,6 +6271,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6249,6 +6308,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6285,6 +6345,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6325,6 +6386,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6365,6 +6427,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6405,6 +6468,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;
@@ -6440,6 +6504,7 @@ export interface operations {
                 authorization?: string | null;
                 "x-coloqo-assistant"?: string | null;
                 "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
             };
             path: {
                 team: string;

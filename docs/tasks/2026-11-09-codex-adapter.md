@@ -99,16 +99,154 @@ liveness without `watch`, the session id for the MCP server, the update hint.
 
 1. **Form of delivery**: an installer writing user-level Codex settings now, a Codex plugin later —
    or wait for plugin hooks in the CLI?
+
+   **Answer (author, 2026-11-09): an installer**, one for both agents: `uvx coloqo install --agent
+   codex|qwen` writes, once per computer and at the user level, the hooks (`~/.codex/hooks.json`;
+   `hooks` in `~/.qwen/settings.json`), the MCP server (`~/.codex/config.toml`; `mcpServers` in
+   `~/.qwen/settings.json`) and the skill (`~/.agents/skills/coloqo`, read by both). Neither agent's
+   plugins carry hooks today: Codex's docs contradict each other on plugin hooks in the CLI, and
+   Qwen's extensions list no hooks; without hooks there is no briefing and no Inbox reminder. A
+   plugin may replace the installer once its hooks work. **The functionality is to be checked on
+   both Codex and Qwen** (the author).
 2. **Liveness of a Codex session** (decision 0029): live for a while after its last hook call, or a
    detached `watch` started by the session start hook?
+
+   **Answer (author, 2026-11-09): a heartbeat from the MCP server, with "a minute after a request"
+   as the fallback.** The agent starts Coloqo's MCP server per session and it dies with the
+   session (its stdin closes), so a background thread there calls the server every 15 s with no
+   orphaned process. It needs the MCP server to know its session id — to check by running (Qwen
+   may give `QWEN_CODE_SESSION_ID`; Codex's hook environment had none). Without it, decision 0029's
+   rule already applies: the prompt hook asks `/inbox` at each prompt and the tools call the
+   server, so a session is online for a minute after each; a Message to it while it is offline
+   goes to its person and shows at the next prompt. Not taken: a detached `watch` started by the
+   SessionStart hook — unverified under the agents' sandboxes, and a session killed without
+   SessionEnd would stay "online" for good, its Messages going to a dead session.
 3. **Which agent drives the plugin**: told by the installer (an argument in each hook command) or
    detected from the environment?
+
+   **Answer (author, 2026-11-09): told by the installer.** It adds `--agent codex` or `--agent qwen`
+   to each hook command and to the MCP server's arguments; without the flag the agent is Claude
+   Code, so the Claude Code plugin and its pins work as before. The plugin sends the agent to the
+   server in a header beside its version, so the update hint (decision 0027) names that agent's
+   commands. The environment is read only within the agent already known (Qwen's session id from
+   `QWEN_CODE_SESSION_ID`). Not taken: detecting the agent — Codex's hook environment has nothing of
+   its own, and guessing from input fields (`turn_id`, `model`) breaks with the agent's versions.
 4. **Commands `/coloqo:focus` and `/coloqo:link`** in Codex: skills of their own, or only through
    the main skill and the tools (`set_focus`, `link_project`)?
+
+   **Answer (author, 2026-11-09): two small skills, `coloqo-focus` and `coloqo-link`**, installed
+   beside the main one in `~/.agents/skills`, with the text of the Claude Code commands and made
+   from the same source; invoked as `$coloqo-focus quiet` in Codex, `/coloqo-focus quiet` in Qwen,
+   and listed by `/skills`. Their narrow descriptions keep them from firing unasked. Not taken: only
+   the main skill and words — a member would learn of the focus only if told.
 5. **Updates** (decision 0027) for Codex: the hint tells the assistant to run the installer with the
    new version — enough?
+
+   **Answer (author, 2026-11-09): try a pinned version in every command, re-approved after each
+   update.** The hint names the installer with the new version (`uvx coloqo@<new> install --agent
+   codex`), then "approve the changed hooks in `/hooks` and restart the session". A changed command
+   line is a changed hook definition, so each update likely asks for approval again — to confirm on
+   the pilot. Nothing is worked around: the user sees the hooks changed, within the agent's own
+   trust mechanism. The alternative, kept for the case the re-approvals prove painful: a fixed
+   command line calling a wrapper whose version lives in a file the installer rewrites — changing a
+   script does not revoke approval, so updates would pass silently, but that sidesteps the very
+   check the agent has. "Let's try (a)" — revisited after the pilot if needed.
+
+   **The update path is checked on purpose, not learned from bugs** (author, 2026-11-09: "so that
+   we control updates rather than catch bugs"). Before newcomers install, and again for every
+   release that changes what the installer writes: install version N, then N+1 by the hint's own
+   command; see whether the agent asks to approve the hooks again; after approving and a restart,
+   the hooks and the MCP server run N+1 (the server sees N+1 in the header) and nothing of N is
+   left in the settings. A failure here blocks the rollout.
+
+   **Run from within the session** (a side review, 2026-11-09): the installer rewrites files in
+   `~/.codex` and `~/.qwen`, outside the project, while Codex runs in `workspace-write` and may refuse
+   or ask; item 8 was checked with `bump.sh` from a plain terminal, not by the Assistant. So the
+   hint has the Assistant run the command and, if the sandbox refuses, ask its user to run it in a
+   terminal; the pilot runs the update by the hint's command from within a Codex and a Qwen session.
 6. **Pilot**: who checks it first and against what — the team's new member, before they start on
    tasks.
+
+   **Answer (author, 2026-11-09): two steps.**
+   - **The author first**, on their machine, in both Codex and Qwen, against a test Team on
+     `app.coloqo.team`: (1) the installer writes the hooks and the MCP server, the hooks approved in
+     `/hooks`; (2) the briefing at session start; (3) the Inbox reminder at a prompt with an
+     addressed Message; (4) the tools: `read_topic`, `post_message`, `take_task`, `change_stage`;
+     (5) the trail on file edits — `Bash` and `apply_patch` in Codex, `write_file` and `edit` in
+     Qwen, with `apply_patch`'s name confirmed; (6) the MCP server knows its session and keeps the
+     heartbeat, or the minute rule holds; (7) the skills `coloqo-link` and `coloqo-focus`; (8) the
+     update path from N to N+1 as above, by the hint's command run by the Assistant from within
+     the session, and by the user in a terminal when the sandbox refuses; (9) the network from hooks and the MCP server under the
+     agent's sandbox.
+   - **Then the team's newcomers**, on their first day before any task, one in Codex and one in
+     Qwen, with the author or the lead: the install, the briefing and one test Topic on their own
+     machines, so that what breaks only there (Windows, a proxy, the sandbox) is fixed before work.
+   - Items 5, 6 and 9 are checked **before the code**, with test hooks as on 2026-11-09: item 6
+     decides how the heartbeat is built (answer 2).
+
+## Settled (2026-11-09)
+
+- `uvx coloqo install --agent codex|qwen` writes, at the user level, the hooks, the MCP server and
+  three skills (`coloqo`, `coloqo-focus`, `coloqo-link` in `~/.agents/skills`); a plugin may
+  replace it once the agents' plugins carry hooks.
+- The agent is told by `--agent` in each hook command and the MCP server's arguments; none means
+  Claude Code. The plugin sends it to the server beside its version.
+- Liveness: a heartbeat from the MCP server if it learns its session; otherwise decision 0029's
+  minute after a request.
+- Delivery: the Inbox and new Messages reach a Codex or Qwen session at the next prompt; no monitor.
+- Updates: the hint names the installer with the new version, then approving the hooks and a
+  restart; the update path is checked on purpose before each rollout.
+- Pilot: the author in both agents first, by the list above; then the newcomers before their tasks.
+
+## Checked by running (2026-11-09, Codex 0.160, Qwen Code 0.27.1)
+
+Sandbox projects with a logging test hook; hooks approved by the author by hand.
+
+- **The SessionStart hook's plain stdout reaches the model** — in both.
+- **Changing the hook's script does not revoke the approval** — in both: Codex keeps a hash of the
+  hook's definition (`[hooks.state."<hooks.json path>:<event>:i:j"] trusted_hash` in
+  `config.toml`), Qwen a hash of the config (`~/.qwen/hookApprovals.json`). A changed command line
+  (a new pinned version) is a changed definition — not run, expected to ask again.
+- **Hook input, Codex**: `session_id`, `cwd`, `transcript_path`, `model`, `permission_mode`; tool
+  events add `tool_name`, `tool_input`, `tool_response`, `tool_use_id`, `turn_id`. The shell shows
+  as `Bash` with `command`, as in Claude Code. No session id in the hook's environment.
+- **Hook input, Qwen**: the same fields plus `timestamp`, `prompt_id`; the environment carries
+  `QWEN_CODE_SESSION_ID` and `QWEN_PROJECT_DIR`, the analogues of Claude Code's. A file write is
+  `write_file` with `file_path`.
+- Not checked: the name of `apply_patch` in a Codex hook's input (the nested sandbox failed to write
+  in the test), the MCP server's knowledge of its session, network under the agents' sandboxes.
+
+## Checked by running, second pass (2026-11-09 evening, Codex 0.160.0, Qwen Code 0.27.1)
+
+A probe (one stdlib script acting as a hook and as a stdio MCP server, logging all it sees) in two
+sandbox projects, run by the author from a plain terminal; the MCP server given to Codex with
+`-c mcp_servers…` at launch, so `~/.codex/config.toml` stayed unchanged.
+
+- **The MCP server learns its session — in both.** Qwen puts `QWEN_CODE_SESSION_ID` into the MCP
+  server's environment at start, equal to the hooks' `session_id`. Codex puts nothing into its
+  environment, but every `tools/call` carries `_meta.sessionId` (and
+  `_meta["x-codex-turn-metadata"].session_id`) equal to the hooks' `session_id`; and the hooks and
+  the MCP server share their parent process (`codex`, `node` for Qwen), so a hook can leave the
+  session id under the agent's pid for the MCP server to read before any tool call. The heartbeat
+  from the MCP server (answer 2) is possible in both.
+- **The MCP server dies with the session — in both**: Qwen closes its stdin, Codex kills it; no
+  process was left.
+- **Network — in both**: hooks and the MCP server got HTTP 200 from `app.coloqo.team`; Codex ran in
+  `workspace-write`.
+- **Tools seen by PostToolUse.** Qwen: `write_file` (`file_path`, `content`), `run_shell_command`
+  (`command`, `description`), MCP tools as `mcp__<server>__<tool>`. Codex: `Bash` (`command`),
+  MCP tools as `mcp__<server>__<tool>`. Asked to, both edited a file with their own tool: Codex's
+  `apply_patch` comes with one argument, `command`, holding the patch text — the paths are in its
+  `*** Update File: <path>` (and `Add File`, `Delete File`) lines, absolute here; Qwen's `edit`
+  comes with `file_path`, `old_string`, `new_string`, like Claude Code's `Edit`. Qwen also showed
+  `read_file` (`file_path`) and `tool_search` (`query`).
+- **A changed hook command asks for approval again — in both** (a `-B` added to every command, as
+  a new pinned version would). The author: "one question after an update, looks acceptable, not a
+  bother". Answer 5 holds.
+- **Traps for the code.** Qwen's `QWEN_CODE_PROJECT_DIR` is Qwen's own storage
+  (`~/.qwen/projects/…`), not the project; the project is `QWEN_PROJECT_DIR`, which hooks see and the
+  MCP server does not (it has `cwd`). Codex fires SessionStart at the first prompt, not at launch,
+  while its MCP server starts at launch: the briefing comes with the first prompt.
 
 ## To check by running Codex before the code
 

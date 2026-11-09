@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -179,6 +180,27 @@ def test_outdated_plugin_is_told_to_update(setup: Setup, app: FastAPI) -> None:
     assert "claude plugin update coloqo@coloqo" in outdated
     assert "claude plugin update" not in current
     assert "claude plugin update" not in unknown
+
+
+@pytest.mark.parametrize("agent", ["codex", "qwen"])
+def test_an_outdated_codex_or_qwen_session_runs_the_installer(
+    setup: Setup, app: FastAPI, agent: str
+) -> None:
+    """Under Codex or Qwen Code the update is the installer of the new version (decision 0035).
+
+    Args:
+        setup: The Team.
+        app: The application, where the latest release is kept.
+        agent: The agent the plugin says it runs under.
+    """
+    app.state.latest_plugin = (0, 5, 1)
+    hint = setup.alice_api.client.get("/api/briefing", headers={"X-Coloqo-Agent": agent}).json()
+    unknown = setup.alice_api.client.get("/api/briefing", headers={"X-Coloqo-Agent": "vim"}).json()
+
+    assert f"`uvx coloqo@0.5.1 install --agent {agent}`" in hint["text"]
+    assert "ask your user to run it in a terminal" in hint["text"]
+    assert "claude plugin update" not in hint["text"]
+    assert "claude plugin update coloqo@coloqo" in unknown["text"]
 
 
 def test_link_page_by_a_one_time_token(setup: Setup, plugin: Callable[..., Plugin]) -> None:

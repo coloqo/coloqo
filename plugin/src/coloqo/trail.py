@@ -1,9 +1,10 @@
 """Whether a session keeps its task's trail in Coloqo, kept on this computer (decision 0023).
 
-Two marks per Claude Code session. ``done``: the session wrote to Coloqo, was reminded, or needs
-no reminder. ``pending``: a subagent of the session changed what the team will see, and the
-conversation is to be reminded at its next watched tool call or prompt. The MCP server sets
-``done`` on each write, so a write made by a subagent or a fork counts for the whole session.
+Two marks per session of the agent (Claude Code, Codex, Qwen Code). ``done``: the session wrote
+to Coloqo, was reminded, or needs no reminder. ``pending``: a subagent of the session changed
+what the team will see, and the conversation is to be reminded at its next watched tool call or
+prompt. The MCP server sets ``done`` on each write, so a write made by a subagent or a fork counts
+for the whole session.
 
 Two more tell who started the current turn (decision 0026): ``prompt``, written when a prompt
 arrives, holding ``human`` or ``event`` and the time; and ``stop``, holding the time a turn
@@ -42,7 +43,7 @@ def _mark(kind: str, session: str) -> Path:
 
     Args:
         kind: ``done`` or ``pending``.
-        session: The Claude Code session.
+        session: The agent's session.
     """
     return config_dir() / "trail" / kind / session
 
@@ -68,7 +69,7 @@ def is_done(session: str) -> bool:
     """Whether the session needs no more reminders.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
     """
     return _mark("done", session).exists()
 
@@ -77,7 +78,7 @@ def is_pending(session: str) -> bool:
     """Whether a subagent of the session changed what the team will see.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
     """
     return _mark("pending", session).exists()
 
@@ -97,7 +98,7 @@ def mark_pending(session: str) -> None:
     """Mark that a subagent of the session changed what the team will see.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
     """
     _touch(_mark("pending", session))
 
@@ -106,7 +107,7 @@ def prompt_arrived(session: str, prompt: str) -> None:
     """Note that a turn starts with a prompt, the user's or one made from an event.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
         prompt: The prompt's text.
     """
     origin = "event" if prompt.lstrip().startswith(EVENT_PROMPTS) else "human"
@@ -120,7 +121,7 @@ def turn_ended(session: str) -> None:
     """Note that the session's turn ended.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
     """
     path = _mark("stop", session)
     _touch(path)
@@ -136,7 +137,7 @@ def human_turn(session: str) -> bool | None:
     nothing, as before the first prompt.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
     """
     try:
         origin, _, prompted = _mark("prompt", session).read_text(encoding="utf-8").partition(" ")
@@ -161,7 +162,7 @@ def log_move(session: str, mark: str) -> None:
     """Append a prompt or a stop to the session's log of moves; a failure is ignored.
 
     Args:
-        session: The Claude Code session.
+        session: The agent's session.
         mark: ``p`` for a prompt, ``s`` for a stop.
     """
     path = _mark("moves", session)
@@ -200,7 +201,7 @@ class MoveLog:
         """Start at the end of the log, so a restarted watch sends nothing twice.
 
         Args:
-            session: The Claude Code session.
+            session: The agent's session.
         """
         self.path = _mark("moves", session)
         self.offset = 0

@@ -22,6 +22,12 @@ Coloqo — сервис для такой координации.
    `/plugin marketplace add coloqo/coloqo`, затем `/plugin install coloqo@coloqo`) и
    перезапустите Claude Code в проекте. Один раз включите автообновление marketplace `coloqo` в
    `/plugin` → Marketplaces, чтобы новые версии приходили без вашего участия.
+
+   В Codex или Qwen Code: один раз на компьютер выполните `uvx coloqo install --agent codex`
+   (или `--agent qwen`), запустите агента, одобрите хуки, о которых он спросит, в `/hooks` (Qwen
+   спросит и про MCP-сервер) и перезапустите его. Там новые сообщения приходят в сессию при
+   вашем следующем промпте, а не сами; вместо команд ниже — `$coloqo-link` и `$coloqo-focus` в
+   Codex, `/coloqo-link` и `/coloqo-focus` в Qwen.
 4. Привяжите проект к Команде: закоммитьте `.coloqo.json` с адресом Команды
    (`{"team": "acme"}`), чтобы проекты всех участников привязывались сами, или
    выполните `uvx coloqo link` (или `/coloqo:link` в Claude Code) и выберите Команду в браузере.

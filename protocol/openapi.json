@@ -125,7 +125,7 @@
         "type": "object"
       },
       "AssistantIn": {
-        "description": "A session registering its Assistant (decision 0024).\n\nAttributes:\n    project_key: SHA-256 of the project path; the path itself stays on the computer.\n    project_name: Short project name for the Assistant's shown name.\n    team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked\n        project whose person is a member of it, and never overrides a link (decision 0020).\n    team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one\n        more release (decision 0025).\n    session_id: The Claude Code session id; without it the project has one Assistant.",
+        "description": "A session registering its Assistant (decision 0024).\n\nAttributes:\n    project_key: SHA-256 of the project path; the path itself stays on the computer.\n    project_name: Short project name for the Assistant's shown name.\n    team: The Team's slug named by the project's ``.coloqo.json``; links an unlinked\n        project whose person is a member of it, and never overrides a link (decision 0020).\n    team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one\n        more release (decision 0025).\n    session_id: The agent's session id; without it the project has one Assistant.",
         "properties": {
           "project_key": {
             "pattern": "^[0-9a-f]{64}$",
@@ -182,7 +182,7 @@
         "type": "object"
       },
       "AssistantOut": {
-        "description": "A shown Assistant of a Member: online, or offline for less than ``SHOWN`` (0024, 0029).\n\nAttributes:\n    key: Its public key.\n    name: Shown name, ``alice · billing-api · vega``.\n    word: Its own word, ``vega``.\n    project: The project folder's name.\n    last_seen_at: Its last request.\n    online: Its session runs now (decision 0029).\n    session_id: The Claude Code session id; only its owner gets it.",
+        "description": "A shown Assistant of a Member: online, or offline for less than ``SHOWN`` (0024, 0029).\n\nAttributes:\n    key: Its public key.\n    name: Shown name, ``alice · billing-api · vega``.\n    word: Its own word, ``vega``.\n    project: The project folder's name.\n    last_seen_at: Its last request.\n    online: Its session runs now (decision 0029).\n    session_id: The agent's session id; only its owner gets it.",
         "properties": {
           "key": {
             "title": "Key",
@@ -3635,13 +3635,13 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.11.0"
+    "version": "0.12.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/api/assistant": {
       "post": {
-        "description": "Register the calling session's Assistant (decisions 0003, 0024).\n\nOne Assistant per project and Claude Code session: the plugin's tools, hooks and watch in\nthat session act as it.\n\nArgs:\n    body: The project and the session.\n    actor: The plugin.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 for a web session: only the plugin registers Assistants.",
+        "description": "Register the calling session's Assistant (decisions 0003, 0024).\n\nOne Assistant per project and agent session (decisions 0024, 0035): the plugin's tools, hooks\nand watch in that session act as it.\n\nArgs:\n    body: The project and the session.\n    actor: The plugin.\n    db: Database session.\n\nRaises:\n    HTTPException: 403 for a web session: only the plugin registers Assistants.",
         "operationId": "register_assistant_api_assistant_post",
         "parameters": [
           {
@@ -3690,6 +3690,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -3792,6 +3808,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -3880,6 +3912,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -4007,6 +4055,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -4250,6 +4314,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -4329,6 +4409,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -4505,6 +4601,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -4596,6 +4708,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -4686,6 +4814,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -4801,6 +4945,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -4904,6 +5064,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -4989,6 +5165,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -5085,6 +5277,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -5168,6 +5376,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -5260,6 +5484,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -5341,6 +5581,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -5433,6 +5689,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -5521,6 +5793,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -5614,6 +5902,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -5696,6 +6000,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -5768,6 +6088,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -5844,6 +6180,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -5918,6 +6270,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -6011,6 +6379,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -6102,6 +6486,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -6198,6 +6598,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -6290,6 +6706,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -6373,6 +6805,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -6475,6 +6923,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -6563,6 +7027,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -6665,6 +7145,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -6757,6 +7253,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -6867,6 +7379,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -7017,6 +7545,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -7105,6 +7649,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -7230,6 +7790,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -7318,6 +7894,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -7486,6 +8078,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -7578,6 +8186,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -7711,6 +8335,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -7808,6 +8448,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -7919,6 +8575,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -8028,6 +8700,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -8158,6 +8846,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -8258,6 +8962,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -8357,6 +9077,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -8468,6 +9204,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -8577,6 +9329,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -8688,6 +9456,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -8798,6 +9582,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -8897,6 +9697,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -9007,6 +9823,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -9174,6 +10006,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -9273,6 +10121,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -9439,6 +10303,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -9531,6 +10411,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -9698,6 +10594,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -9795,6 +10707,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -9925,6 +10853,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -10025,6 +10969,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "responses": {
@@ -10124,6 +11084,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -10235,6 +11211,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -10345,6 +11337,22 @@
               ],
               "title": "X-Coloqo-Plugin"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
           }
         ],
         "requestBody": {
@@ -10445,6 +11453,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],
@@ -10548,6 +11572,22 @@
                 }
               ],
               "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
             }
           }
         ],

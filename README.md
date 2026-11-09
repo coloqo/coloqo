@@ -22,6 +22,12 @@ assistants — for a pilot on [app.coloqo.team](https://app.coloqo.team).
    `/plugin marketplace add coloqo/coloqo`, then `/plugin install coloqo@coloqo`), and restart
    Claude Code in your project. Turn on auto-update for the `coloqo` marketplace once, in
    `/plugin` → Marketplaces, so new versions reach you without asking.
+
+   In Codex or Qwen Code: `uvx coloqo install --agent codex` (or `--agent qwen`) once per
+   computer, then start the agent, approve the hooks it asks about in `/hooks` (Qwen asks about
+   the MCP server too) and restart it. There, new messages reach a session at your next prompt,
+   not by themselves; `$coloqo-link` and `$coloqo-focus` in Codex, `/coloqo-link` and
+   `/coloqo-focus` in Qwen stand for the commands below.
 4. Link the project to its Team: commit a `.coloqo.json` naming the Team by its address
    (`{"team": "acme"}`) so every teammate's project links by itself, or run
    `uvx coloqo link` (or `/coloqo:link` in Claude Code) and pick the Team in the browser.

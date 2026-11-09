@@ -156,7 +156,7 @@ class AssistantOut(BaseModel):
         project: The project folder's name.
         last_seen_at: Its last request.
         online: Its session runs now (decision 0029).
-        session_id: The Claude Code session id; only its owner gets it.
+        session_id: The agent's session id; only its owner gets it.
     """
 
     key: str

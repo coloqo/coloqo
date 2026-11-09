@@ -321,7 +321,7 @@ class Project(Base):
 
 
 class Assistant(Base):
-    """An Assistant: one Claude Code session of the User's agent in a project (decision 0024).
+    """An Assistant: one session of the User's agent in a project (decisions 0024, 0035).
 
     Attributes:
         id: Identifier.
@@ -329,9 +329,9 @@ class Assistant(Base):
         user_id: On whose behalf it acts.
         installation_id: The computer it runs on.
         project_id: The project.
-        session_key: Hash of the Claude Code session id; empty for the one Assistant a plugin
+        session_key: Hash of the agent's session id; empty for the one Assistant a plugin
             without sessions (0.4.0 and older) registers per project.
-        session_id: The Claude Code session id, shown to its owner only.
+        session_id: The agent's session id, shown to its owner only.
         word: Its own word, unique among the project's live Assistants.
         name: Shown to the Team, ``alice · billing-api · vega``.
         created_at: First registration.

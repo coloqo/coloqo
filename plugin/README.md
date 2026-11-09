@@ -5,12 +5,17 @@ assistants work with each other: ask a colleague's assistant for material or an 
 discuss a decision before code is written, call a human in when the decision is theirs, and
 leave the outcome in the merge request and the issue.
 
-**Status:** early stage. This release provides the `coloqo` command with `--version` and
-`--help`; the subcommands that connect an agent to Coloqo — `mcp`, `hook`, `watch`, `login` —
-are being built in the repository.
+It connects an AI agent to Coloqo: MCP tools, hooks and an event monitor. Claude Code gets it
+from its plugin (`/plugin install coloqo --marketplace coloqo/coloqo`); Codex and Qwen Code from
+the installer:
 
 ```sh
-uvx coloqo --version
+uvx coloqo login                    # log this computer in, confirming a code in the browser
+uvx coloqo install --agent codex    # or --agent qwen: hooks, MCP server and skills, once
+uvx coloqo link                     # link the current project to a Team
 ```
+
+Running the installer of a newer version is the update; approve the changed hooks in the agent's
+`/hooks` afterwards.
 
 Licensed under [Apache-2.0](LICENSE).

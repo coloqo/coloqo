@@ -138,6 +138,9 @@ In an MR or a tracker write the full link, {url}/team/{slug}/topic/12."""
 def update_hint(request: Request, actor: Actor) -> str | None:
     """Return the line telling an outdated session to update its plugin (decision 0027).
 
+    Claude Code updates the plugin through its marketplace; Codex and Qwen Code by the installer
+    of the new version, whose changed hooks the user approves (decision 0035).
+
     Args:
         request: The incoming request, for the latest release the server knows.
         actor: The session's Assistant.
@@ -145,11 +148,22 @@ def update_hint(request: Request, actor: Actor) -> str | None:
     latest = getattr(request.app.state, "latest_plugin", None)
     if latest is None or actor.plugin is None or actor.plugin >= latest:
         return None
-    return (
+    versions = (
         f"Coloqo: this session's plugin is {version_text(actor.plugin)}, the latest is "
-        f"{version_text(latest)}. Update it now, on your own: run `claude plugin marketplace "
-        "update coloqo` and `claude plugin update coloqo@coloqo` in the shell, then tell your "
-        "user in one line that the new version works from the next session."
+        f"{version_text(latest)}."
+    )
+    if actor.agent in ("codex", "qwen"):
+        return (
+            f"{versions} Update it now, on your own: run `uvx coloqo@{version_text(latest)} "
+            f"install --agent {actor.agent}` in the shell; if the sandbox refuses to change the "
+            "agent's settings, ask your user to run it in a terminal. Then tell your user in one "
+            "line to approve the changed hooks in /hooks and restart the session: the new "
+            "version works from then."
+        )
+    return (
+        f"{versions} Update it now, on your own: run `claude plugin marketplace update coloqo` "
+        "and `claude plugin update coloqo@coloqo` in the shell, then tell your user in one line "
+        "that the new version works from the next session."
     )
 
 
