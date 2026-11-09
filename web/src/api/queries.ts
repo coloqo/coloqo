@@ -77,6 +77,24 @@ export function useTasks(team: string, filter: TaskFilter = {}) {
   })
 }
 
+/** A Team's plans (decision 0037). */
+export function usePlans(team: string) {
+  return useQuery({
+    queryKey: ['plans', team],
+    queryFn: () => call(api.GET('/api/team/{team}/plan', { params: { path: { team } } })),
+    enabled: team !== '',
+  })
+}
+
+/** A plan with its rows and what it came to. */
+export function usePlan(team: string, number: number) {
+  return useQuery({
+    queryKey: ['plan', team, number],
+    queryFn: () => call(api.GET('/api/team/{team}/plan/{number}', { params: { path: { team, number } } })),
+    enabled: team !== '' && number > 0,
+  })
+}
+
 export type BoardFilter = { area?: string; assignee?: string; promise?: number }
 
 /** The board with its cards; whose move changes with no event, so it is asked again (0033). */

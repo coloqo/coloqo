@@ -33,6 +33,19 @@ export function TimelineText({ entry }: { entry: TimelineEntry }) {
       return <>{t('timeline.delivery')}</>
     case 'works_for':
       return <>{data.to ? t('timeline.worksFor', { to: `T-${data.to}` }) : t('timeline.worksForNone')}</>
+    // A task's rows in plans (decision 0037).
+    case 'plan_joined':
+      return <>{t('timeline.planJoined', { name: data.name, mark: t(`plans.mark.${data.mark}`) })}</>
+    case 'plan_left':
+      return <>{t('timeline.planLeft', { name: data.name })}</>
+    case 'plan_mark':
+      return <>{t('timeline.planMark', { plan: data.plan, to: t(`plans.mark.${data.to}`) })}</>
+    case 'plan_dropped':
+      return <>{t('timeline.planDropped', { plan: data.plan, text: data.text })}</>
+    case 'plan_postponed':
+      return <>{t('timeline.planPostponed', { plan: data.plan, reason: data.reason })}</>
+    case 'plan_resumed':
+      return <>{t('timeline.planResumed', { plan: data.plan })}</>
     // A move to another parent, in the task and in both parents' timelines (decision 0034).
     case 'parent':
       return <>{data.to ? t('timeline.parent', { to: `T-${data.to}` }) : t('timeline.parentNone')}</>

@@ -1160,6 +1160,234 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/team/{team}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Plans
+         * @description List a Team's plans, the latest period first.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team.
+         */
+        get: operations["list_plans_api_team__team__plan_get"];
+        put?: never;
+        /**
+         * Create Plan
+         * @description Create a plan, a draft; its period must not overlap another of the Team's plans (0037).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         body: The plan.
+         *         actor: The caller: a human or an Assistant.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the caller is not in the Team; 403 when it may not write there;
+         *             409 ``no_tracker`` without the tracker, ``overlap`` when the period overlaps a plan.
+         */
+        post: operations["create_plan_api_team__team__plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/plan/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Plan
+         * @description Return a plan with its rows and what it came to.
+         *
+         *     Args:
+         *         team: The Team's slug.
+         *         number: The plan's number.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such plan in the caller's Teams.
+         */
+        get: operations["read_plan_api_team__team__plan__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/plan/{number}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Plan
+         * @description A human approves a draft: what joins from now on is found or off-plan (0037).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The plan's number.
+         *         actor: The human.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such plan; 403 for an Assistant or when the caller
+         *             may not write there; 409 ``no_tracker`` without the tracker, ``not_draft`` for a plan
+         *             approved already.
+         */
+        post: operations["approve_plan_api_team__team__plan__number__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/plan/{number}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Plan
+         * @description A human closes an approved plan after its period; each row's result is fixed (0037).
+         *
+         *     Done is Done, or a promise Delivered, by the period's last day; cancelled is Cancelled or
+         *     Withdrawn; the rest is not done. Work finished later does not change it.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The plan's number.
+         *         actor: The human.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such plan; 403 for an Assistant or when the caller
+         *             may not write there; 409 ``no_tracker`` without the tracker, ``not_approved`` for a
+         *             draft, ``closed`` for a closed plan, ``period`` before the period's end.
+         */
+        post: operations["close_plan_api_team__team__plan__number__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/plan/{number}/item": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add To Plan
+         * @description Add promises and tasks; a promise brings its unfinished tasks at any depth (0037).
+         *
+         *     An Assistant adds to a draft only; after approval a human adds, and the work joins found or
+         *     off-plan by the rule.
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The plan's number.
+         *         body: The numbers to add.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such plan or task; 403 when the caller may not write
+         *             there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,
+         *             ``closed`` for a closed plan.
+         */
+        post: operations["add_to_plan_api_team__team__plan__number__item_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/team/{team}/plan/{number}/item/{task_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove From Plan
+         * @description Take a task out of a draft: one not started always, a started one only before the period
+         *     begins, a finished one never (decision 0037).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The plan's number.
+         *         task_number: The task's number.
+         *         actor: The caller.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such plan, task or row; 403 when the caller may not
+         *             write there; 409 ``no_tracker`` without the tracker, ``not_draft`` for an approved or
+         *             closed plan, ``finished`` or ``started`` for a task that cannot leave.
+         */
+        delete: operations["remove_from_plan_api_team__team__plan__number__item__task_number__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change Row
+         * @description A human corrects a row's mark, names what off-plan work drops, or postpones a row (0037).
+         *
+         *     Args:
+         *         request: The incoming request.
+         *         team: The Team's slug.
+         *         number: The plan's number.
+         *         task_number: The task's number.
+         *         body: What changes.
+         *         actor: The human.
+         *         db: Database session.
+         *
+         *     Raises:
+         *         HTTPException: 404 when there is no such plan, task or row; 403 for an Assistant or when
+         *             the caller may not write there; 409 ``no_tracker`` without the tracker, ``closed``
+         *             for a closed plan; 422 for a mark before approval or on planned work, or a
+         *             postponement without a reason.
+         */
+        patch: operations["change_row_api_team__team__plan__number__item__task_number__patch"];
+        trace?: never;
+    };
     "/api/team/{team}/task": {
         parameters: {
             query?: never;
@@ -2901,6 +3129,241 @@ export interface components {
             after?: number | null;
             /** Before */
             before?: number | null;
+        };
+        /**
+         * PlanAddIn
+         * @description Work to add to a plan: a promise brings its unfinished tasks.
+         *
+         *     Attributes:
+         *         tasks: The numbers of the promises and tasks.
+         */
+        PlanAddIn: {
+            /** Tasks */
+            tasks: number[];
+        };
+        /**
+         * PlanDetail
+         * @description A plan with its rows, what it came to, and, for a draft, what the previous one left.
+         *
+         *     Attributes:
+         *         items: Its rows, promises first, then by number.
+         *         summary: What it came to.
+         *         previous_unfinished: For a draft: unfinished tasks of the previous closed plan not done
+         *             there and not in this one.
+         */
+        PlanDetail: {
+            /** Approved At */
+            approved_at: string | null;
+            /** Approved By */
+            approved_by: string | null;
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: string | null;
+            /** Created By */
+            created_by: string | null;
+            /** Items */
+            items: components["schemas"]["PlanRowOut"][];
+            /** Name */
+            name: string;
+            /** Number */
+            number: number;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /** Previous Unfinished */
+            previous_unfinished: number[];
+            /** Rows */
+            rows: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "closed";
+            summary: components["schemas"]["PlanSummary"];
+        };
+        /**
+         * PlanIn
+         * @description A new plan, a draft (decision 0037).
+         *
+         *     Attributes:
+         *         name: What people call it, e.g. ``November 2026``.
+         *         period_start: Its first day.
+         *         period_end: Its last day.
+         */
+        PlanIn: {
+            /** Name */
+            name: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+        };
+        /**
+         * PlanItemPatch
+         * @description A human's change to a row (decision 0037).
+         *
+         *     Attributes:
+         *         mark: ``found`` or ``off_plan``, after approval.
+         *         dropped: For off-plan work: what it drops from the plan.
+         *         postponed: ``true`` with a ``reason`` postpones the row; ``false`` undoes it.
+         *         reason: Why it is postponed.
+         */
+        PlanItemPatch: {
+            /** Dropped */
+            dropped?: string | null;
+            /** Mark */
+            mark?: ("found" | "off_plan") | null;
+            /** Postponed */
+            postponed?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * PlanMark
+         * @description How a task came into a plan; set by itself when it joins (decision 0037).
+         *
+         *     Attributes:
+         *         Planned: It joined before the plan was approved.
+         *         Found: It joined after approval, found within a task of the plan named by its creator.
+         *         OffPlan: It joined after approval otherwise; it names what it drops from the plan.
+         * @enum {string}
+         */
+        PlanMark: "planned" | "found" | "off_plan";
+        /**
+         * PlanOut
+         * @description A plan, as lists show it.
+         *
+         *     Attributes:
+         *         number: Its number among the Team's plans.
+         *         name: Its name.
+         *         period_start: Its first day.
+         *         period_end: Its last day.
+         *         state: ``draft``, ``approved`` or ``closed``.
+         *         created_by: Who made it.
+         *         approved_by: Who approved it.
+         *         approved_at: When.
+         *         closed_by: Who closed it.
+         *         closed_at: When.
+         *         rows: How many promises and tasks it holds.
+         */
+        PlanOut: {
+            /** Approved At */
+            approved_at: string | null;
+            /** Approved By */
+            approved_by: string | null;
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: string | null;
+            /** Created By */
+            created_by: string | null;
+            /** Name */
+            name: string;
+            /** Number */
+            number: number;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /** Rows */
+            rows: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "closed";
+        };
+        /**
+         * PlanResult
+         * @description A row's result, fixed when the plan closes (decision 0037).
+         *
+         *     Attributes:
+         *         Done: Done, or a promise Delivered, by the period's last day.
+         *         Cancelled: Cancelled, or a promise Withdrawn.
+         *         NotDone: Anything else.
+         * @enum {string}
+         */
+        PlanResult: "done" | "cancelled" | "not_done";
+        /**
+         * PlanRowOut
+         * @description A promise or task in a plan.
+         *
+         *     Attributes:
+         *         task: The promise or task.
+         *         mark: ``planned``, ``found`` or ``off_plan``.
+         *         dropped: For off-plan work: what it drops; empty until a human names it.
+         *         joined_at: When it joined.
+         *         postponed: Whether a human postponed it in this plan.
+         *         postponed_reason: Why.
+         *         postponed_by: Who.
+         *         result: ``done``, ``cancelled`` or ``not_done``, once the plan is closed.
+         *         carried_from: The name of the earlier closed plan where it was not done, if any.
+         */
+        PlanRowOut: {
+            /** Carried From */
+            carried_from: string | null;
+            /** Dropped */
+            dropped: string;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            mark: components["schemas"]["PlanMark"];
+            /** Postponed */
+            postponed: boolean;
+            /** Postponed By */
+            postponed_by: string | null;
+            /** Postponed Reason */
+            postponed_reason: string;
+            result: components["schemas"]["PlanResult"] | null;
+            task: components["schemas"]["TaskOut"];
+        };
+        /**
+         * PlanSummary
+         * @description What a plan came to, counted over its tasks (promises apart).
+         *
+         *     Attributes:
+         *         planned: Planned tasks.
+         *         planned_done: Of them, done in the period (once closed: as fixed).
+         *         postponed: Rows postponed.
+         *         found: Found tasks.
+         *         off_plan: Off-plan tasks.
+         *         dropped_unnamed: Off-plan tasks that do not say yet what they drop.
+         */
+        PlanSummary: {
+            /** Dropped Unnamed */
+            dropped_unnamed: number;
+            /** Found */
+            found: number;
+            /** Off Plan */
+            off_plan: number;
+            /** Planned */
+            planned: number;
+            /** Planned Done */
+            planned_done: number;
+            /** Postponed */
+            postponed: number;
         };
         /**
          * Progress
@@ -5467,6 +5930,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plans_api_team__team__plan_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_plan_api_team__team__plan_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_plan_api_team__team__plan__number__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_plan_api_team__team__plan__number__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_plan_api_team__team__plan__number__close_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_to_plan_api_team__team__plan__number__item_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_from_plan_api_team__team__plan__number__item__task_number__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+                task_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_row_api_team__team__plan__number__item__task_number__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-coloqo-assistant"?: string | null;
+                "x-coloqo-plugin"?: string | null;
+                "x-coloqo-agent"?: string | null;
+            };
+            path: {
+                team: string;
+                number: number;
+                task_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
                 };
             };
             /** @description Validation Error */

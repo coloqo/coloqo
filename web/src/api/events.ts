@@ -62,10 +62,19 @@ export function useEventStream(enabled: boolean) {
         void queryClient.invalidateQueries({ queryKey: ['task', data.team] })
         void queryClient.invalidateQueries({ queryKey: ['tasks', data.team] })
         void queryClient.invalidateQueries({ queryKey: ['board', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['plan', data.team] })
       }
       onTopicChange(event)
     }
     source.addEventListener('task', onTaskChange)
+    // A plan changed: its page and the list (decision 0037).
+    source.addEventListener('plan', (event: MessageEvent<string>) => {
+      const data = parse(event)
+      if (data.team !== undefined) {
+        void queryClient.invalidateQueries({ queryKey: ['plans', data.team] })
+        void queryClient.invalidateQueries({ queryKey: ['plan', data.team] })
+      }
+    })
     source.onerror = () => {
       if (source.readyState === EventSource.CLOSED) {
         retry = window.setTimeout(() => {

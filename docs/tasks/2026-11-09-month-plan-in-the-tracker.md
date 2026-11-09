@@ -171,3 +171,35 @@ Item 2 is done: decision 0034, PR #29 (server 0.11.0, plugin 0.9.0).
   session holds, if exactly one. An Assistant working on planned T-12 that files an unrelated,
   urgent task would make it "found", and nobody would name what it drops — the very case the
   Team's rule is there to catch. One way out: found only when the `source` was given explicitly.
+
+  **Answer (author, 2026-11-10): found only by an explicit `source`.** The server keeps whether the
+  caller gave the `source` or the server filled it in; a filled-in `source` still tells where the
+  task came from but does not set the mark — such a task joins off-plan and asks for "what is
+  dropped".
+
+## Settled while writing decision 0037 (2026-11-10)
+
+A side review found that the first draft of decision 0037 recorded forks the author had not
+decided; they were asked:
+
+- **"What is dropped" is written by a human only** — a conscious choice; the empty line stays the
+  signal. An Assistant does not fill it, so it cannot write something plausible to silence it.
+- **An Assistant creates a plan and fills its draft** (the first move of the month plan was the
+  lead's Assistant). Approving and closing are a human's; after approval work is added explicitly by
+  a human, and tasks under planned work join by themselves.
+- **A task leaves a plan only while it is a draft**, and not every task: one not started, always;
+  a started one, only before the plan's period begins; a finished one, never. The plan is not
+  strict, but work under way in its period stays in it and in its result.
+- **A Team's plans do not overlap in time**; the server refuses an overlap. A task has one promise
+  (decision 0031); it is in several plans one after another (carried), never in two at once. A plan
+  of a larger period around the monthly ones (a quarter) holds plans or the quarter's promises, not
+  tasks: a decision of its own when it is needed.
+- **A row may be postponed** (the author, 2026-11-10): a task in a plan is put off in favour of
+  off-plan work, or because its time was misjudged — it is not removed but stays in the plan and is
+  not done in this period. Postponing is a state of the row, not the task; its reason is required
+  ("in favour of T-57", "misjudged, no time"); a human postpones and may undo it; it goes to the
+  task's timeline. At closing a postponed row not done is "not done" and counted apart as
+  postponed; done anyway, it is done. In a draft whose period has begun a started task cannot be
+  removed but can be postponed. The off-plan task's "what is dropped" and the postponed task's
+  reason name each other as text; neither is derived from the other. Lowering priority stays the
+  board's order.

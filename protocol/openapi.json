@@ -1625,6 +1625,478 @@
         "title": "OrderIn",
         "type": "object"
       },
+      "PlanAddIn": {
+        "description": "Work to add to a plan: a promise brings its unfinished tasks.\n\nAttributes:\n    tasks: The numbers of the promises and tasks.",
+        "properties": {
+          "tasks": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "PlanAddIn",
+        "type": "object"
+      },
+      "PlanDetail": {
+        "description": "A plan with its rows, what it came to, and, for a draft, what the previous one left.\n\nAttributes:\n    items: Its rows, promises first, then by number.\n    summary: What it came to.\n    previous_unfinished: For a draft: unfinished tasks of the previous closed plan not done\n        there and not in this one.",
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanRowOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "previous_unfinished": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Previous Unfinished",
+            "type": "array"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "approved",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PlanSummary"
+          }
+        },
+        "required": [
+          "number",
+          "name",
+          "period_start",
+          "period_end",
+          "state",
+          "created_by",
+          "approved_by",
+          "approved_at",
+          "closed_by",
+          "closed_at",
+          "rows",
+          "items",
+          "summary",
+          "previous_unfinished"
+        ],
+        "title": "PlanDetail",
+        "type": "object"
+      },
+      "PlanIn": {
+        "description": "A new plan, a draft (decision 0037).\n\nAttributes:\n    name: What people call it, e.g. ``November 2026``.\n    period_start: Its first day.\n    period_end: Its last day.",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "period_start",
+          "period_end"
+        ],
+        "title": "PlanIn",
+        "type": "object"
+      },
+      "PlanItemPatch": {
+        "description": "A human's change to a row (decision 0037).\n\nAttributes:\n    mark: ``found`` or ``off_plan``, after approval.\n    dropped: For off-plan work: what it drops from the plan.\n    postponed: ``true`` with a ``reason`` postpones the row; ``false`` undoes it.\n    reason: Why it is postponed.",
+        "properties": {
+          "dropped": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dropped"
+          },
+          "mark": {
+            "anyOf": [
+              {
+                "enum": [
+                  "found",
+                  "off_plan"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mark"
+          },
+          "postponed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postponed"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "PlanItemPatch",
+        "type": "object"
+      },
+      "PlanMark": {
+        "description": "How a task came into a plan; set by itself when it joins (decision 0037).\n\nAttributes:\n    Planned: It joined before the plan was approved.\n    Found: It joined after approval, found within a task of the plan named by its creator.\n    OffPlan: It joined after approval otherwise; it names what it drops from the plan.",
+        "enum": [
+          "planned",
+          "found",
+          "off_plan"
+        ],
+        "title": "PlanMark",
+        "type": "string"
+      },
+      "PlanOut": {
+        "description": "A plan, as lists show it.\n\nAttributes:\n    number: Its number among the Team's plans.\n    name: Its name.\n    period_start: Its first day.\n    period_end: Its last day.\n    state: ``draft``, ``approved`` or ``closed``.\n    created_by: Who made it.\n    approved_by: Who approved it.\n    approved_at: When.\n    closed_by: Who closed it.\n    closed_at: When.\n    rows: How many promises and tasks it holds.",
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "approved",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "name",
+          "period_start",
+          "period_end",
+          "state",
+          "created_by",
+          "approved_by",
+          "approved_at",
+          "closed_by",
+          "closed_at",
+          "rows"
+        ],
+        "title": "PlanOut",
+        "type": "object"
+      },
+      "PlanResult": {
+        "description": "A row's result, fixed when the plan closes (decision 0037).\n\nAttributes:\n    Done: Done, or a promise Delivered, by the period's last day.\n    Cancelled: Cancelled, or a promise Withdrawn.\n    NotDone: Anything else.",
+        "enum": [
+          "done",
+          "cancelled",
+          "not_done"
+        ],
+        "title": "PlanResult",
+        "type": "string"
+      },
+      "PlanRowOut": {
+        "description": "A promise or task in a plan.\n\nAttributes:\n    task: The promise or task.\n    mark: ``planned``, ``found`` or ``off_plan``.\n    dropped: For off-plan work: what it drops; empty until a human names it.\n    joined_at: When it joined.\n    postponed: Whether a human postponed it in this plan.\n    postponed_reason: Why.\n    postponed_by: Who.\n    result: ``done``, ``cancelled`` or ``not_done``, once the plan is closed.\n    carried_from: The name of the earlier closed plan where it was not done, if any.",
+        "properties": {
+          "carried_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carried From"
+          },
+          "dropped": {
+            "title": "Dropped",
+            "type": "string"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "mark": {
+            "$ref": "#/components/schemas/PlanMark"
+          },
+          "postponed": {
+            "title": "Postponed",
+            "type": "boolean"
+          },
+          "postponed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postponed By"
+          },
+          "postponed_reason": {
+            "title": "Postponed Reason",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task": {
+            "$ref": "#/components/schemas/TaskOut"
+          }
+        },
+        "required": [
+          "task",
+          "mark",
+          "dropped",
+          "joined_at",
+          "postponed",
+          "postponed_reason",
+          "postponed_by",
+          "result",
+          "carried_from"
+        ],
+        "title": "PlanRowOut",
+        "type": "object"
+      },
+      "PlanSummary": {
+        "description": "What a plan came to, counted over its tasks (promises apart).\n\nAttributes:\n    planned: Planned tasks.\n    planned_done: Of them, done in the period (once closed: as fixed).\n    postponed: Rows postponed.\n    found: Found tasks.\n    off_plan: Off-plan tasks.\n    dropped_unnamed: Off-plan tasks that do not say yet what they drop.",
+        "properties": {
+          "dropped_unnamed": {
+            "title": "Dropped Unnamed",
+            "type": "integer"
+          },
+          "found": {
+            "title": "Found",
+            "type": "integer"
+          },
+          "off_plan": {
+            "title": "Off Plan",
+            "type": "integer"
+          },
+          "planned": {
+            "title": "Planned",
+            "type": "integer"
+          },
+          "planned_done": {
+            "title": "Planned Done",
+            "type": "integer"
+          },
+          "postponed": {
+            "title": "Postponed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planned",
+          "planned_done",
+          "postponed",
+          "found",
+          "off_plan",
+          "dropped_unnamed"
+        ],
+        "title": "PlanSummary",
+        "type": "object"
+      },
       "Progress": {
         "description": "What a promise holds, done against all.\n\nAttributes:\n    done: Done or delivered.\n    total: All but the cancelled and withdrawn.",
         "properties": {
@@ -3769,7 +4241,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.13.0"
+    "version": "0.14.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8072,6 +8544,964 @@
         "summary": "Create Invite",
         "tags": [
           "teams"
+        ]
+      }
+    },
+    "/api/team/{team}/plan": {
+      "get": {
+        "description": "List a Team's plans, the latest period first.\n\nArgs:\n    team: The Team's slug.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team.",
+        "operationId": "list_plans_api_team__team__plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanOut"
+                  },
+                  "title": "Response List Plans Api Team  Team  Plan Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Plans",
+        "tags": [
+          "plans"
+        ]
+      },
+      "post": {
+        "description": "Create a plan, a draft; its period must not overlap another of the Team's plans (0037).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    body: The plan.\n    actor: The caller: a human or an Assistant.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when the caller is not in the Team; 403 when it may not write there;\n        409 ``no_tracker`` without the tracker, ``overlap`` when the period overlaps a plan.",
+        "operationId": "create_plan_api_team__team__plan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Plan",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/team/{team}/plan/{number}": {
+      "get": {
+        "description": "Return a plan with its rows and what it came to.\n\nArgs:\n    team: The Team's slug.\n    number: The plan's number.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan in the caller's Teams.",
+        "operationId": "read_plan_api_team__team__plan__number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Plan",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/team/{team}/plan/{number}/approve": {
+      "post": {
+        "description": "A human approves a draft: what joins from now on is found or off-plan (0037).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    actor: The human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan; 403 for an Assistant or when the caller\n        may not write there; 409 ``no_tracker`` without the tracker, ``not_draft`` for a plan\n        approved already.",
+        "operationId": "approve_plan_api_team__team__plan__number__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Plan",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/team/{team}/plan/{number}/close": {
+      "post": {
+        "description": "A human closes an approved plan after its period; each row's result is fixed (0037).\n\nDone is Done, or a promise Delivered, by the period's last day; cancelled is Cancelled or\nWithdrawn; the rest is not done. Work finished later does not change it.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    actor: The human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan; 403 for an Assistant or when the caller\n        may not write there; 409 ``no_tracker`` without the tracker, ``not_approved`` for a\n        draft, ``closed`` for a closed plan, ``period`` before the period's end.",
+        "operationId": "close_plan_api_team__team__plan__number__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close Plan",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/team/{team}/plan/{number}/item": {
+      "post": {
+        "description": "Add promises and tasks; a promise brings its unfinished tasks at any depth (0037).\n\nAn Assistant adds to a draft only; after approval a human adds, and the work joins found or\noff-plan by the rule.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    body: The numbers to add.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan or task; 403 when the caller may not write\n        there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,\n        ``closed`` for a closed plan.",
+        "operationId": "add_to_plan_api_team__team__plan__number__item_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanAddIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add To Plan",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/team/{team}/plan/{number}/item/{task_number}": {
+      "delete": {
+        "description": "Take a task out of a draft: one not started always, a started one only before the period\nbegins, a finished one never (decision 0037).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    task_number: The task's number.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan, task or row; 403 when the caller may not\n        write there; 409 ``no_tracker`` without the tracker, ``not_draft`` for an approved or\n        closed plan, ``finished`` or ``started`` for a task that cannot leave.",
+        "operationId": "remove_from_plan_api_team__team__plan__number__item__task_number__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_number",
+            "required": true,
+            "schema": {
+              "title": "Task Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove From Plan",
+        "tags": [
+          "plans"
+        ]
+      },
+      "patch": {
+        "description": "A human corrects a row's mark, names what off-plan work drops, or postpones a row (0037).\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The plan's number.\n    task_number: The task's number.\n    body: What changes.\n    actor: The human.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such plan, task or row; 403 for an Assistant or when\n        the caller may not write there; 409 ``no_tracker`` without the tracker, ``closed``\n        for a closed plan; 422 for a mark before approval or on planned work, or a\n        postponement without a reason.",
+        "operationId": "change_row_api_team__team__plan__number__item__task_number__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team",
+            "required": true,
+            "schema": {
+              "title": "Team",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_number",
+            "required": true,
+            "schema": {
+              "title": "Task Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-assistant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Assistant"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-plugin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Plugin"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-coloqo-agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Coloqo-Agent"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanItemPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Row",
+        "tags": [
+          "plans"
         ]
       }
     },

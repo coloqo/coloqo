@@ -14,6 +14,12 @@ const OWN_LINE = new Set([
   'child_out',
   'delivery',
   'works_for',
+  'plan_joined',
+  'plan_left',
+  'plan_mark',
+  'plan_dropped',
+  'plan_postponed',
+  'plan_resumed',
 ])
 
 /** Whether a timeline entry gets a line of its own in the Topic's feed (decision 0033). */
