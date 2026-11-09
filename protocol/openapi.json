@@ -3635,7 +3635,7 @@
   },
   "info": {
     "title": "Coloqo",
-    "version": "0.10.0"
+    "version": "0.11.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7741,7 +7741,7 @@
         ]
       },
       "patch": {
-        "description": "Edit a task's title, description, Area, period or parent; the timeline keeps each change.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may\n        not write there; 422 for a parent that cannot hold it (decision 0034).",
+        "description": "Edit a task's title, description, Area, period or parent; the timeline keeps each change.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may\n        not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent\n        that cannot hold it (decision 0034).",
         "operationId": "edit_task_api_team__team__task__number__patch",
         "parameters": [
           {

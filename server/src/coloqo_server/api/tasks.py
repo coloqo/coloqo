@@ -1107,12 +1107,15 @@ async def edit_task(
 
     Raises:
         HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may
-            not write there; 422 for a parent that cannot hold it (decision 0034).
+            not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent
+            that cannot hold it (decision 0034).
     """
     task, found = await task_for(db, team, number, actor, write=True)
     topic = await topic_of(db, task, lock=True)
     moved: dict[str, int | None] = {}
     if "parent" in body.model_fields_set:
+        # Moving is planning (decision 0032).
+        need_tracker(found)
         moved = await move_task(db, team, actor, task, body.parent)
     if body.title is not None and body.title.strip() != task.title:
         record(db, task, "retitled", actor, {"from": task.title, "to": body.title.strip()})
@@ -1158,6 +1161,15 @@ async def move_task(
     The task's timeline gets ``parent``, the former parent ``child_out``, the new one
     ``child_in``; nobody is notified.
 
+    The checks read a tree no other move changes meanwhile. The task is locked by the caller,
+    and the former and the new parent are locked here, in the order of their ids, before the
+    checks: two moves into one promise take turns, so it cannot end up holding both promises and
+    tasks. A crossing move (the parent being moved under the task) holds the parent's row, which
+    this move locks, and sets a ``parent_id`` that holds the task's key, which the caller
+    locked; either lock alone makes one move wait for the other or the database refuse one of
+    the two: no cycle. A task created under the parent at the same moment is
+    not held back: creation locks the Team, not the parent.
+
     Args:
         db: Database session.
         team: The Team's slug.
@@ -1172,12 +1184,23 @@ async def move_task(
         HTTPException: 404 when there is no such parent in the Team; 422 for a parent that
             cannot hold the task.
     """
-    former = await db.get(Task, task.parent_id) if task.parent_id is not None else None
     parent = None
     if number is not None:
         parent, _ = await task_for(db, team, number, actor)
     if (parent.id if parent else None) == task.parent_id:
         return {}
+    touched = sorted({x for x in (task.parent_id, parent.id if parent else None) if x is not None})
+    held = {
+        t.id: t
+        for t in await db.scalars(
+            select(Task)
+            .where(Task.id.in_(touched))
+            .order_by(Task.id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+    }
+    former = held.get(task.parent_id or 0)
     if parent is not None:
         ancestor: Task | None = parent
         while ancestor is not None:

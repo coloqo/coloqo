@@ -78,3 +78,5 @@ The author, 2026-11-09: "let's make changing the parent in Coloqo".
 - The move is a line in the task's timeline (who, when, from → to) and a line in the timelines of
   the former and the new parent; one ordinary Team event per moved task, no notifications.
 - `parent` in the plugin's `edit_task`.
+- Added in round 1 of the implementation's review (2026-11-09): a move is planning, refused
+  without the tracker as the backlog and assigning are (decision 0032). The author: "yes, refuse".

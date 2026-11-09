@@ -29,6 +29,10 @@ promise's progress is computed, not stored (decision 0031), so its figures follo
 
 **Anyone who may edit the task may move it**, as with its other fields.
 
+**A move is planning**: in a Team without the tracker it is refused with "turn the tracker on",
+as creating a task in the backlog and assigning are (decision 0032; the author, 2026-11-09, in the
+review of the implementation).
+
 **The move is kept in three timelines, with no notifications** (decision 0033): the task gets a
 line from → to, the former parent a line that the task left it, the new parent a line that the
 task came. The Team's stream gets the one ordinary event of an edited task, carrying the former and

@@ -1,5 +1,6 @@
 """Tests of the tracker: tasks, stages, waits, closing, planning, names (decisions 0031-0033)."""
 
+import threading
 from collections.abc import Callable
 from datetime import timedelta
 
@@ -701,3 +702,104 @@ def test_a_move_keeps_the_hierarchy(setup: Setup) -> None:
     assert "subtask holds nothing" in under_subtask["detail"]
     assert nowhere["detail"] == f"No such task {setup.team}/T-999"
     assert setup.alice.get(_path(setup, goal["number"])).json()["parent"] is None
+
+
+def test_a_move_waits_for_a_move_under_it(setup: Setup, settings: Settings) -> None:
+    """A move under the moved task, not yet committed, holds it: the move of that task waits and
+    then sees the tree as committed, so two moves at once cannot close a cycle that the board
+    and the quiet notices would walk forever (decision 0034).
+
+    Two row locks keep it, either one enough: the move locks its new parent before its checks,
+    and it locks its task (``task_for``), whose key a child's new ``parent_id`` holds. Of two
+    crossing moves one waits for the other, or the database refuses one as a deadlock.
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    _tracker(setup)
+    first = _create(setup, "Invoices", "promise")
+    second = _create(setup, "Receipts", "promise")
+    answer: list = []
+    with _connect(settings.database_url) as other:
+        # Another move, not committed yet: the second promise under the first.
+        other.execute("BEGIN")
+        other.execute(
+            "UPDATE tasks SET parent_id = (SELECT id FROM tasks WHERE number = %s AND team_id = "
+            "(SELECT id FROM teams WHERE slug = %s)) WHERE number = %s AND team_id = "
+            "(SELECT id FROM teams WHERE slug = %s)",
+            (first["number"], setup.team, second["number"], setup.team),
+        )
+        mover = threading.Thread(
+            target=lambda: answer.append(
+                setup.alice.patch(_path(setup, first["number"]), json={"parent": second["number"]})
+            )
+        )
+        mover.start()
+        mover.join(1)
+        waited = mover.is_alive()
+        other.execute("COMMIT")
+    mover.join(30)
+
+    assert waited
+    assert answer[0].status_code == 422, answer[0].text
+    assert "not go under itself" in answer[0].json()["detail"]
+
+
+def test_two_moves_into_one_promise_take_turns(setup: Setup, settings: Settings) -> None:
+    """A move into a promise waits for another move into it, then sees what that one put there:
+    a promise never ends up holding both promises and tasks (decisions 0031, 0034).
+
+    Args:
+        setup: The Team.
+        settings: Instance settings.
+    """
+    _tracker(setup)
+    target = _create(setup, "Billing by December", "promise")
+    promise = _create(setup, "Invoices", "promise")
+    task = _create(setup, "Loose task")
+    answer: list = []
+    with _connect(settings.database_url) as other:
+        # Another move, not committed yet: the promise under the target, which it records there.
+        other.execute("BEGIN")
+        other.execute(
+            "UPDATE tasks SET parent_id = (SELECT id FROM tasks WHERE number = %s AND team_id = "
+            "(SELECT id FROM teams WHERE slug = %s)) WHERE number = %s AND team_id = "
+            "(SELECT id FROM teams WHERE slug = %s)",
+            (target["number"], setup.team, promise["number"], setup.team),
+        )
+        other.execute(
+            "UPDATE tasks SET updated_at = now() WHERE number = %s AND team_id = "
+            "(SELECT id FROM teams WHERE slug = %s)",
+            (target["number"], setup.team),
+        )
+        mover = threading.Thread(
+            target=lambda: answer.append(
+                setup.alice.patch(_path(setup, task["number"]), json={"parent": target["number"]})
+            )
+        )
+        mover.start()
+        mover.join(1)
+        other.execute("COMMIT")
+    mover.join(30)
+
+    assert answer[0].status_code == 422, answer[0].text
+    assert "never both" in answer[0].json()["detail"]
+
+
+def test_moving_is_planning(setup: Setup, new: tuple[Plugin, Plugin]) -> None:
+    """Without the tracker a move is refused, as the backlog and assigning are (0032, 0034).
+
+    Args:
+        setup: The Team.
+        new: Assistants of the new plugin.
+    """
+    alice, _ = new
+    parent = _task(setup, alice)["number"]
+    child = _task(setup, alice, "Schema")["number"]
+
+    refused = alice.client.patch(_path(setup, child), json={"parent": parent})
+    retitled = alice.client.patch(_path(setup, child), json={"title": "Schema v2"})
+
+    assert refused.json()["detail"]["code"] == "no_tracker"
+    assert (retitled.status_code, retitled.json()["parent"]) == (200, None)

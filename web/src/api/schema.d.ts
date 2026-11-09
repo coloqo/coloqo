@@ -1255,7 +1255,8 @@ export interface paths {
          *
          *     Raises:
          *         HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may
-         *             not write there; 422 for a parent that cannot hold it (decision 0034).
+         *             not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent
+         *             that cannot hold it (decision 0034).
          */
         patch: operations["edit_task_api_team__team__task__number__patch"];
         trace?: never;
