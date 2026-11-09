@@ -363,7 +363,10 @@
     "id": "Сессия {{id}} — claude --resume {{id}}",
     "none": "Сессий нет.",
     "rename": "Переименовать",
-    "word": "Слово в имени сессии"
+    "word": "Слово в имени сессии",
+    "agent": "Агент: {{name}}",
+    "idCodex": "Сессия {{id}} — codex resume {{id}}",
+    "idOnly": "Сессия {{id}}"
   },
   "presence": {
     "online": "в сети",

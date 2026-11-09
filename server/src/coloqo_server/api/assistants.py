@@ -264,6 +264,7 @@ async def register(
                 session_id=session_id,
                 word=word,
                 name=assistant_name(actor.user.pseudonym, project.name, word),
+                agent=actor.agent,
                 last_seen_at=now(),
             )
             .on_conflict_do_nothing(index_elements=["project_id", "session_key"])
@@ -275,6 +276,7 @@ async def register(
         )
         assert assistant is not None
     assistant.name = assistant_name(actor.user.pseudonym, project.name, assistant.word)
+    assistant.agent = actor.agent
     assistant.last_seen_at = now()
     await db.commit()
     return assistant, project

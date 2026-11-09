@@ -182,8 +182,18 @@
         "type": "object"
       },
       "AssistantOut": {
-        "description": "A shown Assistant of a Member: online, or offline for less than ``SHOWN`` (0024, 0029).\n\nAttributes:\n    key: Its public key.\n    name: Shown name, ``alice · billing-api · vega``.\n    word: Its own word, ``vega``.\n    project: The project folder's name.\n    last_seen_at: Its last request.\n    online: Its session runs now (decision 0029).\n    session_id: The agent's session id; only its owner gets it.",
+        "description": "A shown Assistant of a Member: online, or offline for less than ``SHOWN`` (0024, 0029).\n\nAttributes:\n    key: Its public key.\n    name: Shown name, ``alice · billing-api · vega``.\n    word: Its own word, ``vega``.\n    project: The project folder's name.\n    last_seen_at: Its last request.\n    online: Its session runs now (decision 0029).\n    session_id: The agent's session id; only its owner gets it.\n    agent: The agent its session runs in: ``claude``, ``codex`` or ``qwen`` (decision 0035).",
         "properties": {
+          "agent": {
+            "default": "claude",
+            "enum": [
+              "claude",
+              "codex",
+              "qwen"
+            ],
+            "title": "Agent",
+            "type": "string"
+          },
           "key": {
             "title": "Key",
             "type": "string"

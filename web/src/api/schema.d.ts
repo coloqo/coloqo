@@ -2157,8 +2157,15 @@ export interface components {
          *         last_seen_at: Its last request.
          *         online: Its session runs now (decision 0029).
          *         session_id: The agent's session id; only its owner gets it.
+         *         agent: The agent its session runs in: ``claude``, ``codex`` or ``qwen`` (decision 0035).
          */
         AssistantOut: {
+            /**
+             * Agent
+             * @default claude
+             * @enum {string}
+             */
+            agent?: "claude" | "codex" | "qwen";
             /** Key */
             key: string;
             /** Last Seen At */

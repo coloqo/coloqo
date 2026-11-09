@@ -1,5 +1,6 @@
 """Tests of Assistants as sessions: words, renaming, taking over, the briefing (decision 0024)."""
 
+import hashlib
 from collections.abc import Callable
 
 import pytest
@@ -249,3 +250,34 @@ def test_an_assistant_addressed_by_its_project_name(setup: Setup) -> None:
     )
 
     assert response.json()["to_assistant"] == setup.alice_api.assistant
+
+
+def test_the_team_sees_which_agent_each_session_runs_in(
+    setup: Setup, sibling: Callable[..., Plugin]
+) -> None:
+    """A session registered with ``X-Coloqo-Agent`` shows its agent to the Team; one without,
+    or with an unknown one, is Claude Code's (decision 0035).
+
+    Args:
+        setup: The Team.
+        sibling: Opens another session of a project on the same computer.
+    """
+    codex = sibling(setup.alice_api, "billing-api", "s-codex")
+    codex.client.headers["X-Coloqo-Agent"] = "codex"
+    codex.client.post(
+        "/api/assistant",
+        json={
+            "project_key": hashlib.sha256(b"billing-api").hexdigest(),
+            "project_name": "billing-api",
+            "session_id": "s-codex",
+        },
+    )
+    setup.bob_web.client.headers["X-Coloqo-Agent"] = "vim"
+    setup.bob_web.client.get("/api/briefing")
+
+    team = setup.bob.get(f"/api/team/{setup.team}").json()
+    agents = {a["name"]: a["agent"] for m in team["members"] for a in m["assistants"]}
+
+    assert agents[codex.assistant] == "codex"
+    assert agents[setup.alice_api.assistant] == "claude"
+    assert agents[setup.bob_web.assistant] == "claude"

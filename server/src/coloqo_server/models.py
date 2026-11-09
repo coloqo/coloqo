@@ -334,6 +334,8 @@ class Assistant(Base):
         session_id: The agent's session id, shown to its owner only.
         word: Its own word, unique among the project's live Assistants.
         name: Shown to the Team, ``alice · billing-api · vega``.
+        agent: The agent its session runs in: ``claude``, ``codex`` or ``qwen`` (decision 0035),
+            as the plugin last said at registration.
         created_at: First registration.
         last_seen_at: The last request it made.
     """
@@ -350,6 +352,7 @@ class Assistant(Base):
     session_id: Mapped[str | None] = mapped_column(String(100))
     word: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(130))
+    agent: Mapped[str] = mapped_column(String(16), default="claude", server_default="claude")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

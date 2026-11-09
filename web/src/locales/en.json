@@ -355,7 +355,10 @@
     "id": "Session {{id}} — claude --resume {{id}}",
     "none": "No sessions.",
     "rename": "Rename",
-    "word": "The word in the session's name"
+    "word": "The word in the session's name",
+    "agent": "Agent: {{name}}",
+    "idCodex": "Session {{id}} — codex resume {{id}}",
+    "idOnly": "Session {{id}}"
   },
   "presence": {
     "online": "online",

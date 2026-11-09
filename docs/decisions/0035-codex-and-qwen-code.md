@@ -45,6 +45,13 @@ directory and the tool names, and it sends the agent to the server in `X-Coloqo-
   holds the patch with its `*** Update File: <path>` lines, and `Bash`; Qwen's `edit` and
   `write_file` (`file_path`) and `run_shell_command`.
 
+**The web shows each session's agent** (the author, 2026-11-09): the server keeps the agent an
+Assistant last registered with, and the Team page and the person's own sessions show it as an icon
+beside the session's name — a spark for Claude Code, a terminal prompt for Codex, a hexagon for
+Qwen Code, own drawings rather than the vendors' logos — with the agent's name on hover. The hint
+with a session's id names the command that resumes it where the agent has one (`claude --resume`,
+`codex resume`).
+
 **Liveness is a heartbeat from the MCP server** (decision 0029). The agent starts the MCP server for
 the session and ends it with the session, so a thread in it tells the server every 15 s that the
 session runs and posts the intervals of whose move it was (decision 0033), as `watch` does in Claude

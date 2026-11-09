@@ -1,6 +1,7 @@
 """Teams, their Members, invitations and Areas, by slug (decisions 0024, 0025)."""
 
 from datetime import datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
@@ -157,6 +158,7 @@ class AssistantOut(BaseModel):
         last_seen_at: Its last request.
         online: Its session runs now (decision 0029).
         session_id: The agent's session id; only its owner gets it.
+        agent: The agent its session runs in: ``claude``, ``codex`` or ``qwen`` (decision 0035).
     """
 
     key: str
@@ -166,6 +168,7 @@ class AssistantOut(BaseModel):
     last_seen_at: datetime | None
     online: bool = False
     session_id: str | None = None
+    agent: Literal["claude", "codex", "qwen"] = "claude"
 
 
 class MemberOut(BaseModel):
@@ -440,6 +443,7 @@ def assistant_out(assistant: Assistant, project: Project, viewer: Actor) -> Assi
         last_seen_at=assistant.last_seen_at,
         online=online(assistant),
         session_id=assistant.session_id if assistant.user_id == viewer.user.id else None,
+        agent=assistant.agent if assistant.agent in ("codex", "qwen") else "claude",
     )
 
 

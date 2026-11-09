@@ -15,6 +15,7 @@ import {
 } from '../api/client'
 import { useTeam, useTopics } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
+import { AgentIcon } from '../components/AgentIcon'
 import { Page } from '../components/Layout'
 import { PresenceDot, PresenceText } from '../components/Presence'
 import { TeamPageFrame } from '../components/TeamBar'
@@ -31,6 +32,7 @@ import {
   Select,
   Textarea,
 } from '../components/ui'
+import { sessionHint } from '../lib/agents'
 import { errorText } from '../lib/format'
 
 type StatusFilter = 'open' | 'closed' | 'all'
@@ -439,9 +441,10 @@ function Members({ team }: { team: TeamDetail }) {
                   >
                     <span
                       className="inline-flex items-center gap-1.5 text-stone-700 dark:text-stone-300"
-                      title={assistant.session_id ? t('sessions.id', { id: assistant.session_id }) : undefined}
+                      title={assistant.session_id ? sessionHint(t, assistant.agent ?? 'claude', assistant.session_id) : undefined}
                     >
                       <PresenceDot online={assistant.online ?? false} />
+                      <AgentIcon agent={assistant.agent ?? 'claude'} />
                       {assistant.name}
                     </span>
                     <PresenceText online={assistant.online ?? false} lastSeen={assistant.last_seen_at} />
