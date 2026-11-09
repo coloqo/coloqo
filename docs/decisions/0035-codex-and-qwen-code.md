@@ -47,8 +47,8 @@ directory and the tool names, and it sends the agent to the server in `X-Coloqo-
 
 **The web shows each session's agent** (the author, 2026-11-09): the server keeps the agent an
 Assistant last registered with, and the Team page and the person's own sessions show it as an icon
-beside the session's name — a spark for Claude Code, a terminal prompt for Codex, a hexagon for
-Qwen Code, own drawings rather than the vendors' logos — with the agent's name on hover. The hint
+beside the session's name — the agents' own icons, chosen by the author — with the agent's name
+on hover; beside a written name the icon is decoration, hidden from assistive technology. The hint
 with a session's id names the command that resumes it where the agent has one (`claude --resume`,
 `codex resume`).
 

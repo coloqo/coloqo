@@ -1,15 +1,20 @@
 import { useTranslation } from 'react-i18next'
 
+import claude from '../assets/agents/claude.png'
+import codex from '../assets/agents/codex.png'
+import qwen from '../assets/agents/qwen.png'
 import { AGENT_NAMES, type Agent } from '../lib/agents'
 
+const ICONS: Record<Agent, string> = { claude, codex, qwen }
+
 /**
- * A small mark of the agent a session runs in, with its name on hover: a spark for Claude Code, a
- * terminal prompt for Codex, a hexagon for Qwen Code. Own drawings, not the vendors' logos.
- * ``decorative`` hides it from assistive technology where the agent's name is written beside it.
+ * The icon of the agent a session runs in — Claude Code, Codex or Qwen Code — with its name on
+ * hover (decision 0035). ``decorative`` hides it from assistive technology where the agent's name
+ * is written beside it.
  */
 export function AgentIcon({
   agent,
-  className = 'size-3.5',
+  className = 'size-4',
   decorative = false,
 }: {
   agent: Agent
@@ -18,31 +23,16 @@ export function AgentIcon({
 }) {
   const { t } = useTranslation()
   const label = t('sessions.agent', { name: AGENT_NAMES[agent] })
-  const named = decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label }
   return (
-    <svg viewBox="0 0 16 16" {...named} className={`${className} shrink-0`}>
-      {!decorative && <title>{label}</title>}
-      {agent === 'claude' && (
-        <path
-          d="M8 1.75v12.5M1.75 8h12.5M3.6 3.6l8.8 8.8M12.4 3.6l-8.8 8.8"
-          className="stroke-orange-600 dark:stroke-orange-400"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          fill="none"
-        />
-      )}
-      {agent === 'codex' && (
-        <g className="stroke-stone-700 dark:stroke-stone-200" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
-          <rect x="1.5" y="2.5" width="13" height="11" rx="2.5" />
-          <path d="M4.75 6.25 7 8l-2.25 1.75M8.75 10h2.75" />
-        </g>
-      )}
-      {agent === 'qwen' && (
-        <g className="stroke-violet-600 dark:stroke-violet-400" strokeWidth="1.5" strokeLinejoin="round" fill="none">
-          <path d="M8 1.6 13.55 4.8v6.4L8 14.4 2.45 11.2V4.8Z" />
-          <circle cx="8" cy="8" r="1.9" className="fill-violet-600 dark:fill-violet-400" stroke="none" />
-        </g>
-      )}
-    </svg>
+    <img
+      src={ICONS[agent]}
+      width={16}
+      height={16}
+      alt={decorative ? '' : label}
+      title={decorative ? undefined : label}
+      aria-hidden={decorative || undefined}
+      draggable={false}
+      className={`${className} shrink-0 object-contain`}
+    />
   )
 }
