@@ -18,6 +18,7 @@ import { SettingsPage } from './pages/Settings'
 import { TeamPage } from './pages/Team'
 import { TeamSettingsPage } from './pages/TeamSettings'
 import { BoardPage, BoardSettingsPage } from './pages/Board'
+import { PlanPage, PlansPage } from './pages/Plans'
 import { PromisesPage } from './pages/Promises'
 import { TaskPage, TopicPage } from './pages/Topic'
 import { ChoosePseudonym, Welcome } from './pages/Welcome'
@@ -71,6 +72,8 @@ function Shell({ me }: { me: Me }) {
         <Route path="/team/:team/board/settings" element={<BoardSettingsPage />} />
         <Route path="/team/:team/settings" element={<TeamSettingsPage />} />
         <Route path="/team/:team/promises" element={<PromisesPage />} />
+        <Route path="/team/:team/plans" element={<PlansPage />} />
+        <Route path="/team/:team/plan/:number" element={<PlanPage />} />
         <Route path="/team/:team/file/:number" element={<FileAddress />} />
         <Route path="/inbox" element={<ForYouPage />} />
         <Route path="/teams/:id" element={<OldAddress />} />

@@ -49,6 +49,7 @@ from coloqo_server.models import (
     User,
     Workflow,
 )
+from coloqo_server.planning import join_by_parent
 from coloqo_server.security import DB, Actor, ActorDep, now, require_reader, require_writer
 from coloqo_server.tracker import add_link, first_link, new_task, record
 from coloqo_server.workflows import first_of, first_of_kind, stages_of, start_of, workflow_for
@@ -1052,6 +1053,10 @@ async def create_task(
         source.id if source else None,
     )
     task.period_start, task.period_end = body.period_start, body.period_end
+    # Only a source the creator named makes the task found in a plan (decision 0037).
+    task.source_given = body.source is not None
+    if parent is not None:
+        await join_by_parent(db, actor, task)
     if body.delivery.strip() or body.works_for is not None:
         await change_delivery(db, team, actor, task, body.delivery, body.works_for, link=True)
         await check_delivery(db, task)
@@ -1386,6 +1391,9 @@ async def move_task(
     if parent is not None:
         record(db, parent, "child_in", actor, {"task": task.number, "from": old})
     task.parent_id = parent.id if parent else None
+    if parent is not None:
+        # Work moved under planned work joins the plan (decision 0037).
+        await join_by_parent(db, actor, task)
     return {"from": old, "to": new}
 
 

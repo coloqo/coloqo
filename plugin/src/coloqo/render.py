@@ -321,3 +321,57 @@ def task_text(task: dict[str, Any], home: str | None = None) -> str:
     else:
         lines.append("No Topic yet: take_task opens it.")
     return "\n".join(lines)
+
+
+MARKS = {"planned": "planned", "found": "found", "off_plan": "off-plan"}
+"""How a plan's marks read (decision 0037)."""
+
+
+def plan_line(plan: dict[str, Any]) -> str:
+    """Return one line about a plan.
+
+    Args:
+        plan: A plan from the API.
+    """
+    return (
+        f"Plan {plan['number']} «{plan['name']}» · {plan['period_start']}..{plan['period_end']} · "
+        f"{plan['state']} · {plan['rows']} promises and tasks"
+    )
+
+
+def plan_text(plan: dict[str, Any], home: str | None = None) -> str:
+    """Return a plan with its rows, grouped as the web shows them, and what it came to.
+
+    Args:
+        plan: A plan's detail from the API.
+        home: The Team the project is linked to.
+    """
+    lines = [plan_line(plan)]
+    for row in plan["items"]:
+        task = row["task"]
+        parts = [f"- {task_line(task, home)}", MARKS.get(row["mark"], row["mark"])]
+        if row["mark"] == "off_plan":
+            parts.append(f"drops: {row['dropped']}" if row["dropped"] else "drops: not named")
+        if row["postponed"]:
+            parts.append(f"postponed: {row['postponed_reason']}")
+        if row["carried_from"]:
+            parts.append(f"from «{row['carried_from']}»")
+        if row["result"]:
+            parts.append(f"result: {row['result'].replace('_', ' ')}")
+        lines.append(" · ".join(parts))
+    summary = plan["summary"]
+    lines.append(
+        f"Planned {summary['planned']}, done {summary['planned_done']}; postponed "
+        f"{summary['postponed']}; found {summary['found']}; off-plan {summary['off_plan']}"
+        + (
+            f", {summary['dropped_unnamed']} not naming what they drop"
+            if summary["dropped_unnamed"]
+            else ""
+        )
+    )
+    if plan.get("previous_unfinished"):
+        lines.append(
+            "The previous plan left undone: "
+            + ", ".join(f"T-{n}" for n in plan["previous_unfinished"])
+        )
+    return "\n".join(lines)

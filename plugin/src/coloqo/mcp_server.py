@@ -4,6 +4,7 @@ import json
 import logging
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from coloqo.render import (
     file_ref,
     message_text,
     offline,
+    plan_line,
+    plan_text,
     ref_text,
     size,
     task_line,
@@ -669,6 +672,105 @@ def list_tasks(
     if not tasks:
         return "No tasks."
     return "\n".join(task_line(t, _client().team) for t in tasks)
+
+
+@mcp.tool(
+    description=(
+        "List the linked Team's plans (decision 0037): a plan is the Team's work for a period, "
+        "a draft until a human approves it, closed by a human after its period."
+    )
+)
+def list_plans() -> str:
+    """List the linked Team's plans, the latest period first.
+
+    Raises:
+        ToolError: The project is linked to no Team, or the server refused.
+    """
+    plans = _call("GET", f"/team/{_linked_team()}/plan")
+    if not plans:
+        return "No plans."
+    return "\n".join(plan_line(p) for p in plans)
+
+
+@mcp.tool(
+    description=(
+        "Read a plan of the linked Team: its promises and tasks with their marks (planned, "
+        "found, off-plan), what off-plan work drops, postponed rows and what it came to. "
+        "Without `plan`, the plan whose period holds today, else the latest."
+    )
+)
+def read_plan(plan: int | None = None) -> str:
+    """Read a plan.
+
+    Args:
+        plan: The plan's number; the current one when omitted.
+
+    Raises:
+        ToolError: The project is linked to no Team, there is no plan, or the server refused.
+    """
+    team = _linked_team()
+    number = plan
+    if number is None:
+        plans = _call("GET", f"/team/{team}/plan")
+        if not plans:
+            raise ToolError("The Team has no plan yet; create_plan makes a draft")
+        today = time.strftime("%Y-%m-%d")
+        current = [p for p in plans if p["period_start"] <= today <= p["period_end"]]
+        number = (current or plans)[0]["number"]
+    return plan_text(_call("GET", f"/team/{team}/plan/{number}"), team)
+
+
+@mcp.tool(
+    description=(
+        "Create a plan of the linked Team, a draft, when your user asks: `name` (e.g. "
+        "'November 2026') and its period `period_start`..`period_end` (YYYY-MM-DD); plans do "
+        "not overlap. Fill it with add_to_plan; a human approves and closes it in the web."
+    )
+)
+def create_plan(name: str, period_start: str, period_end: str) -> str:
+    """Create a draft plan.
+
+    Args:
+        name: What people call it.
+        period_start: Its first day, YYYY-MM-DD.
+        period_end: Its last day.
+
+    Raises:
+        ToolError: The project is linked to no Team, or the server refused (no tracker, an
+            overlap).
+    """
+    data = _call(
+        "POST",
+        f"/team/{_linked_team()}/plan",
+        json={"name": name, "period_start": period_start, "period_end": period_end},
+    )
+    trail.mark_done()
+    return f"Created the draft plan {data['number']} «{data['name']}»."
+
+
+@mcp.tool(
+    description=(
+        "Add promises and tasks to a draft plan of the linked Team, when your user asks: "
+        "`tasks` as references (T-12); a promise brings its unfinished tasks. After approval "
+        "only a human adds work; tasks created under planned work join by themselves."
+    )
+)
+def add_to_plan(plan: int, tasks: list[str]) -> str:
+    """Add work to a draft plan.
+
+    Args:
+        plan: The plan's number.
+        tasks: References of the promises and tasks.
+
+    Raises:
+        ToolError: The project is linked to no Team, a task of another Team, or the server
+            refused (an approved or closed plan).
+    """
+    team = _linked_team()
+    numbers = [n for n in (_same_team_task(t, team) for t in tasks) if n is not None]
+    data = _call("POST", f"/team/{team}/plan/{plan}/item", json={"tasks": numbers})
+    trail.mark_done()
+    return f"«{data['name']}» holds {len(data['items'])} promises and tasks."
 
 
 @mcp.tool(

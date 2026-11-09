@@ -801,6 +801,8 @@ class Task(Base):
         delivery: The task's meaning in the business's language; empty when it states none
             (decision 0036).
         works_for_id: The task whose delivery this one works for, if any (decision 0036).
+        source_given: Its creator named ``source_id``; ``False`` when the server filled it in
+            from the held Topic, which then makes no row of a plan found (decision 0037).
     """
 
     __tablename__ = "tasks"
@@ -832,6 +834,7 @@ class Task(Base):
     works_for_id: Mapped[int | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="SET NULL"), index=True
     )
+    source_given: Mapped[bool] = mapped_column(default=False, server_default="false")
 
 
 class TaskLink(Base):
@@ -989,3 +992,98 @@ class ColumnStage(Base):
         ForeignKey("stages.id", ondelete="CASCADE"), primary_key=True
     )
     board_id: Mapped[int] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"))
+
+
+class PlanMark(enum.StrEnum):
+    """How a task came into a plan; set by itself when it joins (decision 0037).
+
+    Attributes:
+        Planned: It joined before the plan was approved.
+        Found: It joined after approval, found within a task of the plan named by its creator.
+        OffPlan: It joined after approval otherwise; it names what it drops from the plan.
+    """
+
+    Planned = "planned"
+    Found = "found"
+    OffPlan = "off_plan"
+
+
+class PlanResult(enum.StrEnum):
+    """A row's result, fixed when the plan closes (decision 0037).
+
+    Attributes:
+        Done: Done, or a promise Delivered, by the period's last day.
+        Cancelled: Cancelled, or a promise Withdrawn.
+        NotDone: Anything else.
+    """
+
+    Done = "done"
+    Cancelled = "cancelled"
+    NotDone = "not_done"
+
+
+class Plan(Base):
+    """A Team's plan for a period: a draft, approved, then closed (decision 0037).
+
+    Attributes:
+        id: Identifier, never shown.
+        team_id: The Team.
+        number: Its number among the Team's plans, from 1.
+        name: What people call it, e.g. ``November 2026``.
+        period_start: Its first day.
+        period_end: Its last day.
+        created_by: Who made it.
+        created_at: When.
+        approved_by: The human who approved it; ``None`` while a draft.
+        approved_at: When it was approved.
+        closed_by: The human who closed it.
+        closed_at: When it was closed.
+    """
+
+    __tablename__ = "plans"
+    __table_args__ = (UniqueConstraint("team_id", "number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    number: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(100))
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlanItem(Base):
+    """A promise or task in a plan, with its mark there (decision 0037).
+
+    Attributes:
+        plan_id: The plan.
+        task_id: The promise or task.
+        mark: How it came in.
+        dropped: For off-plan work: what it drops from the plan; empty until a human names it.
+        joined_at: When it joined.
+        postponed_at: When a human postponed it in this plan; ``None`` while it is not.
+        postponed_by: That human.
+        postponed_reason: Why: in favour of which work, or the time misjudged.
+        result: Fixed when the plan closes; ``None`` before.
+    """
+
+    __tablename__ = "plan_items"
+
+    plan_id: Mapped[int] = mapped_column(
+        ForeignKey("plans.id", ondelete="CASCADE"), primary_key=True
+    )
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    mark: Mapped[PlanMark] = mapped_column(_enum(PlanMark, "plan_mark"))
+    dropped: Mapped[str] = mapped_column(Text, default="", server_default="")
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    postponed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    postponed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    postponed_reason: Mapped[str] = mapped_column(Text, default="", server_default="")
+    result: Mapped[PlanResult | None] = mapped_column(_enum(PlanResult, "plan_result"))

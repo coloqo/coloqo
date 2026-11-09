@@ -989,3 +989,102 @@ def test_a_task_states_a_delivery_or_works_for_one(monkeypatch: pytest.MonkeyPat
         ("PATCH", "/team/acme/task/4", {"works_for": None}),
     ]
     assert "Works for the delivery of T-3" in text
+
+
+def test_an_assistant_drafts_a_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``create_plan`` and ``add_to_plan`` send what the server expects; a plan's text shows
+    each row's mark, an off-plan row's unnamed drop and a postponed row (decision 0037).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+
+    class PlanApi(RecordingApi):
+        """Answers like the server for plans."""
+
+        def request(self, method: str, path: str, json: Any = None, **kwargs: Any) -> Any:
+            """Record a request and answer with a plan.
+
+            Args:
+                method: HTTP method.
+                path: API path.
+                json: Request body.
+                **kwargs: The rest.
+            """
+            self.sent.append((method, path, json))
+            return {"number": 2, "name": "November", "items": [{}, {}]}
+
+    api = PlanApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+    monkeypatch.setattr(mcp_server, "_linked_team", lambda: "acme")
+
+    created = mcp_server.create_plan("November", "2026-11-01", "2026-11-30")
+    filled = mcp_server.add_to_plan(2, ["T-4", "T-9"])
+    text = render.plan_text(
+        {
+            "number": 2,
+            "name": "November",
+            "period_start": "2026-11-01",
+            "period_end": "2026-11-30",
+            "state": "approved",
+            "rows": 2,
+            "items": [
+                {
+                    "task": {
+                        "team": "acme",
+                        "number": 4,
+                        "ref": "T-4",
+                        "title": "API",
+                        "area": "a",
+                        "stage": "Code",
+                    },
+                    "mark": "off_plan",
+                    "dropped": "",
+                    "postponed": False,
+                    "postponed_reason": "",
+                    "carried_from": None,
+                    "result": None,
+                },
+                {
+                    "task": {
+                        "team": "acme",
+                        "number": 9,
+                        "ref": "T-9",
+                        "title": "PDF",
+                        "area": "a",
+                        "stage": "Code",
+                    },
+                    "mark": "planned",
+                    "dropped": "",
+                    "postponed": True,
+                    "postponed_reason": "in favour of T-4",
+                    "carried_from": "October",
+                    "result": None,
+                },
+            ],
+            "summary": {
+                "planned": 1,
+                "planned_done": 0,
+                "postponed": 1,
+                "found": 0,
+                "off_plan": 1,
+                "dropped_unnamed": 1,
+            },
+        },
+        "acme",
+    )
+
+    assert api.sent == [
+        (
+            "POST",
+            "/team/acme/plan",
+            {"name": "November", "period_start": "2026-11-01", "period_end": "2026-11-30"},
+        ),
+        ("POST", "/team/acme/plan/2/item", {"tasks": [4, 9]}),
+    ]
+    assert (created, filled) == (
+        "Created the draft plan 2 «November».",
+        "«November» holds 2 promises and tasks.",
+    )
+    assert "off-plan · drops: not named" in text
+    assert "postponed: in favour of T-4 · from «October»" in text

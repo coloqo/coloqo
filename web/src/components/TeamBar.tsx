@@ -2,12 +2,12 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import { boardPath, promisesPath, teamPath, type TeamDetail } from '../api/client'
+import { boardPath, plansPath, promisesPath, teamPath, type TeamDetail } from '../api/client'
 import { Gear } from './Gear'
 import { Page } from './Layout'
 import { RoleBadge } from './Topics'
 
-export type TeamSection = 'topics' | 'board' | 'promises' | 'settings'
+export type TeamSection = 'topics' | 'board' | 'promises' | 'plans' | 'settings'
 
 /**
  * The line every page of a Team starts with, the same on each: the Team, the caller's role, its
@@ -21,6 +21,7 @@ export function TeamBar({ team, current, sub = false }: { team: TeamDetail; curr
       ? [
           { section: 'board' as const, label: t('board.title'), to: boardPath(team.slug) },
           { section: 'promises' as const, label: t('promises.title'), to: promisesPath(team.slug) },
+          { section: 'plans' as const, label: t('plans.title'), to: plansPath(team.slug) },
         ]
       : []),
   ]

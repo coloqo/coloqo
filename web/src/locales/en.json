@@ -425,7 +425,13 @@
     "closed": "closed: {{to}}",
     "delivery": "delivery changed",
     "worksFor": "works for the delivery of {{to}}",
-    "worksForNone": "works for no other delivery"
+    "worksForNone": "works for no other delivery",
+    "planJoined": "joined «{{name}}» as {{mark}}",
+    "planLeft": "taken out of «{{name}}»",
+    "planMark": "marked {{to}} in plan {{plan}}",
+    "planDropped": "drops from plan {{plan}}: {{text}}",
+    "planPostponed": "postponed in plan {{plan}}: {{reason}}",
+    "planResumed": "no longer postponed in plan {{plan}}"
   },
   "board": {
     "title": "Board",
@@ -496,5 +502,57 @@
     "moveEmpty": "Move the empty column {{name}}",
     "waitingOnlyEmpty": "Only an empty column can be the waiting one",
     "notLinear": "This board's columns do not follow the stages in one run, so they are shown as a list."
+  },
+  "plans": {
+    "title": "Plans",
+    "list": "The Team's plans",
+    "none": "No plans yet.",
+    "new": "New plan",
+    "name": "Name",
+    "namePlaceholder": "November 2026",
+    "start": "First day",
+    "end": "Last day",
+    "create": "Create a draft",
+    "rows_one": "{{count}} promise or task",
+    "rows_other": "{{count}} promises and tasks",
+    "state": {
+      "draft": "draft",
+      "approved": "approved",
+      "closed": "closed"
+    },
+    "mark": {
+      "planned": "planned",
+      "found": "found",
+      "off_plan": "off-plan"
+    },
+    "result": {
+      "done": "done",
+      "cancelled": "cancelled",
+      "not_done": "not done"
+    },
+    "carried": "from «{{name}}»",
+    "postponed": "postponed",
+    "postponedBecause": "Postponed by {{who}}: {{reason}}",
+    "drops": "Drops from the plan: {{text}}",
+    "dropsUnnamed": "What it drops from the plan: not named",
+    "dropsPlaceholder": "Which planned work it pushes out (T-31…)",
+    "reasonPlaceholder": "Why: in favour of T-57, or the time misjudged",
+    "remove": "Take out",
+    "makeFound": "Mark found",
+    "makeOffPlan": "Mark off-plan",
+    "nameDrops": "Name what it drops",
+    "postpone": "Postpone",
+    "resume": "Undo postponing",
+    "approvedBy": "approved by {{who}}",
+    "approve": "Approve",
+    "close": "Close the plan",
+    "summary": "Planned {{planned}}, done {{done}} · postponed {{postponed}} · found {{found}} · off-plan {{offPlan}}",
+    "unnamed_one": "{{count}} off-plan task does not say what it drops",
+    "unnamed_other": "{{count}} off-plan tasks do not say what they drop",
+    "addPlaceholder": "Add promises and tasks: T-12, T-15",
+    "add": "Add",
+    "takePrevious": "Take what the previous plan left: {{tasks}}",
+    "empty": "The plan holds nothing yet: add promises and tasks above.",
+    "outside": "Outside promises"
   }
 }

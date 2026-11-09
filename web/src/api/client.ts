@@ -7,6 +7,9 @@ export type Schemas = components['schemas']
 export type Me = Schemas['Me']
 export type Team = Schemas['TeamOut']
 export type TeamDetail = Schemas['TeamDetail']
+export type Plan = Schemas['PlanOut']
+export type PlanDetail = Schemas['PlanDetail']
+export type PlanRow = Schemas['PlanRowOut']
 export type Member = Schemas['MemberOut']
 export type Area = Schemas['AreaOut']
 export type Topic = Schemas['TopicOut']
@@ -171,6 +174,8 @@ export const boardPath = (team: string) => `${teamPath(team)}/board`
 
 /** The address of a Team's promises and goals (decision 0031). */
 export const promisesPath = (team: string) => `${teamPath(team)}/promises`
+export const plansPath = (team: string) => `${teamPath(team)}/plans`
+export const planPath = (team: string, number: number) => `${teamPath(team)}/plan/${number}`
 
 /** Where a logged-out person goes to log in with a provider and come back. */
 export function loginUrl(provider: string, next: string): string {
