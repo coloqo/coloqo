@@ -1201,7 +1201,7 @@ export interface paths {
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such Team, Area, parent or source for the caller;
+         *         HTTPException: 404 when there is no such Team, Area, parent, source or task to work for;
          *             403 when the caller may not write there; 409 ``no_tracker`` without the tracker;
          *             422 for an unknown assignee or a parent that cannot hold it.
          */
@@ -1254,9 +1254,10 @@ export interface paths {
          *         db: Database session.
          *
          *     Raises:
-         *         HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may
-         *             not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent
-         *             that cannot hold it (decision 0034).
+         *         HTTPException: 404 when there is no such task, Area, parent or task to work for; 403
+         *             when the caller may not write there; 409 ``no_tracker`` for a move or a link without
+         *             the tracker; 422 for a parent that cannot hold it (decision 0034) or a delivery the
+         *             rules refuse (decision 0036).
          */
         patch: operations["edit_task_api_team__team__task__number__patch"];
         trace?: never;
@@ -2289,6 +2290,11 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string | null;
+            /**
+             * Delivery
+             * @default
+             */
+            delivery?: string;
             /** Finished At */
             finished_at: string | null;
             /** Has Topic */
@@ -2340,6 +2346,10 @@ export interface components {
             updated_at: string;
             /** Waiting */
             waiting: string | null;
+            /** Working For It */
+            working_for_it?: number[];
+            /** Works For */
+            works_for?: number | null;
         };
         /**
          * Category
@@ -3062,6 +3072,11 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string | null;
+            /**
+             * Delivery
+             * @default
+             */
+            delivery?: string;
             /** Description */
             description: string;
             /** Finished At */
@@ -3111,6 +3126,10 @@ export interface components {
             updated_at: string;
             /** Waiting */
             waiting: string | null;
+            /** Working For It */
+            working_for_it?: number[];
+            /** Works For */
+            works_for?: number | null;
         };
         /**
          * TaskIn
@@ -3128,12 +3147,19 @@ export interface components {
          *         links: Keys or addresses of external issues.
          *         period_start: A promise's first day.
          *         period_end: A promise's last day.
+         *         delivery: The task's meaning in the business's language (decision 0036).
+         *         works_for: The number of the task whose delivery it works for.
          */
         TaskIn: {
             /** Area */
             area: string;
             /** Assignee */
             assignee?: string | null;
+            /**
+             * Delivery
+             * @default
+             */
+            delivery?: string;
             /**
              * Description
              * @default
@@ -3153,6 +3179,8 @@ export interface components {
             title: string;
             /** @default task */
             type?: components["schemas"]["TaskType"];
+            /** Works For */
+            works_for?: number | null;
         };
         /**
          * TaskOut
@@ -3174,6 +3202,9 @@ export interface components {
          *         outcome: How it ended.
          *         parent: The number of the task or promise it belongs to.
          *         source: The number of the task within which it was created.
+         *         delivery: The task's meaning in the business's language (decision 0036).
+         *         works_for: The number of the task whose delivery this one works for.
+         *         working_for_it: The numbers of the tasks that work for this one's delivery.
          *         links: Its links to external issues.
          *         has_topic: It has a Topic.
          *         holder: Name of the Assistant holding its Topic.
@@ -3204,6 +3235,11 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string | null;
+            /**
+             * Delivery
+             * @default
+             */
+            delivery?: string;
             /** Finished At */
             finished_at: string | null;
             /** Has Topic */
@@ -3248,6 +3284,10 @@ export interface components {
             updated_at: string;
             /** Waiting */
             waiting: string | null;
+            /** Working For It */
+            working_for_it?: number[];
+            /** Works For */
+            works_for?: number | null;
         };
         /**
          * TaskPatch
@@ -3261,10 +3301,14 @@ export interface components {
          *         period_end: A promise's last day.
          *         parent: The number of the task or promise to move it under; ``null`` takes it out of its
          *             parent (decision 0034).
+         *         delivery: Its delivery's new text; empty clears it (decision 0036).
+         *         works_for: The number of the task whose delivery it works for; ``null`` unlinks it.
          */
         TaskPatch: {
             /** Area */
             area?: string | null;
+            /** Delivery */
+            delivery?: string | null;
             /** Description */
             description?: string | null;
             /** Parent */
@@ -3275,6 +3319,8 @@ export interface components {
             period_start?: string | null;
             /** Title */
             title?: string | null;
+            /** Works For */
+            works_for?: number | null;
         };
         /**
          * TaskType

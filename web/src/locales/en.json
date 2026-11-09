@@ -393,7 +393,11 @@
     "handOver": "{{ref}} is in work with {{from}}. Their Assistant will no longer move it. Hand it to {{to}}?",
     "unfold": "Show it all",
     "fold": "Fold",
-    "descriptionPlaceholder": "Description: what to do, why, when it is done…"
+    "descriptionPlaceholder": "Description: what to do, why, when it is done…",
+    "delivery": "Delivery",
+    "deliveryPlaceholder": "What value the task gives, in the business's language…",
+    "worksFor": "Works for the delivery of",
+    "workingForIt": "Working for this delivery:"
   },
   "timeline": {
     "created": "task created",
@@ -417,7 +421,10 @@
     "skipped": "skipped {{stage}}: {{reason}}",
     "waiting": "waiting for: {{what}}",
     "resumed": "the wait is over",
-    "closed": "closed: {{to}}"
+    "closed": "closed: {{to}}",
+    "delivery": "delivery changed",
+    "worksFor": "works for the delivery of {{to}}",
+    "worksForNone": "works for no other delivery"
   },
   "board": {
     "title": "Board",

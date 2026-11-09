@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from coloqo import config, mcp_server
+from coloqo import config, mcp_server, render
 from coloqo import watch as watch_module
 from coloqo.api import ColoqoError, Project, _file_name
 from coloqo.render import file_ref, message_text, size, topic_line, topic_ref, topic_text
@@ -950,3 +950,42 @@ def test_edit_task_moves_a_task_under_a_parent_or_out(monkeypatch: pytest.Monkey
         ("PATCH", "/team/acme/task/3", {"title": "Fix it", "parent": None}),
     ]
     assert moved == out == "Updated T-3 «Fix»."
+
+
+def test_a_task_states_a_delivery_or_works_for_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``delivery`` sends the text; ``works_for`` the number, ``none`` a null; another Team's task
+    is refused before the server; the task's text shows both (decision 0036).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = AnsweringApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    mcp_server.edit_task("T-3", delivery="A clerk exports invoices")
+    mcp_server.edit_task("T-4", works_for="T-3")
+    mcp_server.edit_task("T-4", works_for="none")
+    with pytest.raises(ToolError, match="not a task or promise of the Team acme"):
+        mcp_server.edit_task("T-4", works_for="globex/T-3")
+    text = render.task_text(
+        {
+            "team": "acme",
+            "number": 4,
+            "ref": "T-4",
+            "title": "PDF",
+            "area": "contracts",
+            "stage": "Code",
+            "works_for": 3,
+            "delivery": "",
+            "working_for_it": [],
+            "topic": None,
+        },
+        "acme",
+    )
+
+    assert api.sent == [
+        ("PATCH", "/team/acme/task/3", {"delivery": "A clerk exports invoices"}),
+        ("PATCH", "/team/acme/task/4", {"works_for": 3}),
+        ("PATCH", "/team/acme/task/4", {"works_for": None}),
+    ]
+    assert "Works for the delivery of T-3" in text

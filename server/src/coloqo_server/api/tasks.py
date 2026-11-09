@@ -102,6 +102,9 @@ class TaskOut(BaseModel):
         outcome: How it ended.
         parent: The number of the task or promise it belongs to.
         source: The number of the task within which it was created.
+        delivery: The task's meaning in the business's language (decision 0036).
+        works_for: The number of the task whose delivery this one works for.
+        working_for_it: The numbers of the tasks that work for this one's delivery.
         links: Its links to external issues.
         has_topic: It has a Topic.
         holder: Name of the Assistant holding its Topic.
@@ -133,6 +136,9 @@ class TaskOut(BaseModel):
     outcome: str
     parent: int | None
     source: int | None
+    delivery: str = ""
+    works_for: int | None = None
+    working_for_it: list[int] = Field(default_factory=list)
     links: list[LinkOut]
     has_topic: bool
     holder: str | None
@@ -225,6 +231,8 @@ class TaskIn(BaseModel):
         links: Keys or addresses of external issues.
         period_start: A promise's first day.
         period_end: A promise's last day.
+        delivery: The task's meaning in the business's language (decision 0036).
+        works_for: The number of the task whose delivery it works for.
     """
 
     area: str = Field(min_length=1, max_length=40)
@@ -237,6 +245,8 @@ class TaskIn(BaseModel):
     source: int | None = None
     assignee: str | None = None
     links: list[str] = Field(default_factory=list, max_length=20)
+    delivery: str = Field(default="", max_length=2000)
+    works_for: int | None = None
 
 
 class TakeIn(BaseModel):
@@ -303,6 +313,8 @@ class TaskPatch(BaseModel):
         period_end: A promise's last day.
         parent: The number of the task or promise to move it under; ``null`` takes it out of its
             parent (decision 0034).
+        delivery: Its delivery's new text; empty clears it (decision 0036).
+        works_for: The number of the task whose delivery it works for; ``null`` unlinks it.
     """
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
@@ -311,6 +323,8 @@ class TaskPatch(BaseModel):
     period_start: date | None = None
     period_end: date | None = None
     parent: int | None = None
+    delivery: str | None = Field(default=None, max_length=2000)
+    works_for: int | None = None
 
 
 class LinkIn(BaseModel):
@@ -404,7 +418,11 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
         s.id: s
         for s in await db.scalars(select(Stage).where(Stage.id.in_({x.stage_id for x in tasks})))
     }
-    related = ({x.parent_id for x in tasks} | {x.source_id for x in tasks}) - {None}
+    related = (
+        {x.parent_id for x in tasks}
+        | {x.source_id for x in tasks}
+        | {x.works_for_id for x in tasks}
+    ) - {None}
     numbers: dict[int, int] = {
         task_id: number
         for task_id, number in await db.execute(
@@ -418,6 +436,13 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
         links.setdefault(link.task_id, []).append(LinkOut(key=link.key, url=link.url))
     topics = {t.task_id: t for t in await db.scalars(select(Topic).where(Topic.task_id.in_(ids)))}
     holders = await assistants_by_id(db, {t.holder_assistant_id for t in topics.values()})
+    working: dict[int, list[int]] = {}
+    for target, number in await db.execute(
+        select(Task.works_for_id, Task.number)
+        .where(Task.works_for_id.in_(ids))
+        .order_by(Task.number)
+    ):
+        working.setdefault(target, []).append(number)
     progress: dict[int, Progress] = {}
     promises = [x.id for x in tasks if x.type == TaskType.Promise]
     if promises:
@@ -458,6 +483,9 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
                 outcome=task.outcome,
                 parent=numbers.get(task.parent_id) if task.parent_id else None,
                 source=numbers.get(task.source_id) if task.source_id else None,
+                delivery=task.delivery,
+                works_for=numbers.get(task.works_for_id) if task.works_for_id else None,
+                working_for_it=working.get(task.id, []),
                 links=links.get(task.id, []),
                 has_topic=topic is not None,
                 holder=holder.name if holder else None,
@@ -980,7 +1008,7 @@ async def create_task(
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such Team, Area, parent or source for the caller;
+        HTTPException: 404 when there is no such Team, Area, parent, source or task to work for;
             403 when the caller may not write there; 409 ``no_tracker`` without the tracker;
             422 for an unknown assignee or a parent that cannot hold it.
     """
@@ -1019,6 +1047,9 @@ async def create_task(
         source.id if source else None,
     )
     task.period_start, task.period_end = body.period_start, body.period_end
+    if body.delivery.strip() or body.works_for is not None:
+        await change_delivery(db, team, actor, task, body.delivery, body.works_for, link=True)
+        await check_delivery(db, task)
     for key in body.links:
         await add_link(db, actor, task, key)
     recipients = await task_event(db, actor, task, "created")
@@ -1107,9 +1138,10 @@ async def edit_task(
         db: Database session.
 
     Raises:
-        HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may
-            not write there; 409 ``no_tracker`` for a move without the tracker; 422 for a parent
-            that cannot hold it (decision 0034).
+        HTTPException: 404 when there is no such task, Area, parent or task to work for; 403
+            when the caller may not write there; 409 ``no_tracker`` for a move or a link without
+            the tracker; 422 for a parent that cannot hold it (decision 0034) or a delivery the
+            rules refuse (decision 0036).
     """
     task, found = await task_for(db, team, number, actor, write=True)
     topic = await topic_of(db, task, lock=True)
@@ -1118,6 +1150,14 @@ async def edit_task(
         # Moving is planning (decision 0032).
         need_tracker(found)
         moved = await move_task(db, team, actor, task, body.parent)
+    linking = "works_for" in body.model_fields_set
+    if linking:
+        # Linking to a delivery is planning too (decision 0036).
+        need_tracker(found)
+    if body.delivery is not None or linking:
+        await change_delivery(db, team, actor, task, body.delivery, body.works_for, link=linking)
+    if moved or body.delivery is not None or linking:
+        await check_delivery(db, task)
     if body.title is not None and body.title.strip() != task.title:
         record(db, task, "retitled", actor, {"from": task.title, "to": body.title.strip()})
         task.title = body.title.strip()
@@ -1149,6 +1189,114 @@ async def edit_task(
     request.app.state.bus.wake(recipients)
     (out,) = await task_outs(db, [task])
     return out
+
+
+async def change_delivery(
+    db: AsyncSession,
+    team: str,
+    actor: Actor,
+    task: Task,
+    delivery: str | None,
+    works_for: int | None,
+    link: bool,
+) -> None:
+    """Set a task's delivery and the delivery it works for, each change in its timeline (0036).
+
+    The rules are checked afterwards on the whole task, by ``check_delivery``. The task to work for
+    is locked, so a delivery is not cleared while a task is being linked to it.
+
+    Args:
+        db: Database session.
+        team: The Team's slug.
+        actor: The caller.
+        task: The task, locked for the edit.
+        delivery: The delivery's new text; ``None`` leaves it, empty clears it.
+        works_for: The number of the task whose delivery it works for; ``None`` unlinks.
+        link: Whether ``works_for`` was given at all.
+
+    Raises:
+        HTTPException: 404 when there is no such task to work for in the Team.
+    """
+    text = delivery.strip() if delivery is not None else None
+    if text is not None and text != task.delivery:
+        record(db, task, "delivery", actor, {"text": text})
+        task.delivery = text
+    if not link:
+        return
+    target = None
+    if works_for is not None:
+        target, _ = await task_for(db, team, works_for, actor, write=True)
+    if (target.id if target else None) == task.works_for_id:
+        return
+    former = await db.get(Task, task.works_for_id) if task.works_for_id is not None else None
+    record(
+        db,
+        task,
+        "works_for",
+        actor,
+        {"from": former.number if former else None, "to": target.number if target else None},
+    )
+    task.works_for_id = target.id if target else None
+
+
+async def check_delivery(db: AsyncSession, task: Task) -> None:
+    """Refuse a task whose delivery and link break decision 0036's rules.
+
+    A promise states no delivery and works for none; a subtask works for its task's delivery by
+    being its subtask; a task states its own delivery or works for another's, not both; the task
+    worked for states a delivery; a delivery is not cleared while tasks work for it.
+
+    Args:
+        db: Database session.
+        task: The task in its new state.
+
+    Raises:
+        HTTPException: 422 with the rule broken.
+    """
+    states, linked = bool(task.delivery), task.works_for_id is not None
+    if not (states or linked):
+        others = list(
+            await db.scalars(
+                select(Task.number).where(Task.works_for_id == task.id).order_by(Task.number)
+            )
+        )
+        if others:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"{', '.join(ref(n) for n in others)} work for the delivery of {ref(task.number)}; "
+                "unlink them first",
+            )
+        return
+    if task.type == TaskType.Promise:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "A promise states no delivery and works for none: deliveries belong to tasks",
+        )
+    parent_type = (
+        await db.scalar(select(Task.type).where(Task.id == task.parent_id))
+        if task.parent_id is not None
+        else None
+    )
+    if parent_type == TaskType.Task:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"{ref(task.number)} is a subtask: it works for its task's delivery by being its "
+            "subtask, and states or links to none",
+        )
+    if states and linked:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"{ref(task.number)} either states a delivery of its own or works for another's, not "
+            "both",
+        )
+    if linked:
+        target = await db.get(Task, task.works_for_id)
+        assert target is not None
+        if target.id == task.id or not target.delivery:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"{ref(target.number)} states no delivery to work for",
+            )
 
 
 async def move_task(

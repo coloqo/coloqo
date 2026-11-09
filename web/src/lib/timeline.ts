@@ -12,6 +12,8 @@ const OWN_LINE = new Set([
   'parent',
   'child_in',
   'child_out',
+  'delivery',
+  'works_for',
 ])
 
 /** Whether a timeline entry gets a line of its own in the Topic's feed (decision 0033). */
