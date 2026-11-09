@@ -46,6 +46,7 @@ STALE_SECONDS = 14 * 24 * 3600
 
 _current = Agent.Claude
 _seen: str | None = None
+_seen_at = 0.0
 
 
 def use(agent: Agent) -> None:
@@ -69,9 +70,9 @@ def seen(session: str | None) -> None:
     Args:
         session: The session id; ``None`` or empty changes nothing.
     """
-    global _seen
+    global _seen, _seen_at
     if session:
-        _seen = str(session)
+        _seen, _seen_at = str(session), time.time()
 
 
 def session_id() -> str | None:
@@ -79,13 +80,17 @@ def session_id() -> str | None:
 
     Claude Code and Qwen Code name it in the environment. Codex names it only in hooks' input and
     in tool calls' ``_meta``; before the first tool call the MCP server finds what its hooks left
-    under their shared parent.
+    under their shared parent. Of the two, the one told last wins: Codex starts a new chat in the
+    same process (``/new``, ``/clear``, ``/fork``), whose hooks speak before its first tool call.
     """
     agent = current()
     variable = SESSION_ENV.get(agent)
     if variable:
         return os.environ.get(variable) or None
-    return _seen or remembered()
+    left = _left()
+    if _seen and (left is None or _seen_at >= left[1]):
+        return _seen
+    return left[0] if left else None
 
 
 def project_dir() -> str | None:
@@ -199,11 +204,19 @@ def remember(session: str) -> None:
 
 def remembered() -> str | None:
     """Return the session hooks left under this process's agent; ``None`` when there is none."""
+    left = _left()
+    return left[0] if left else None
+
+
+def _left() -> tuple[str, float] | None:
+    """Return the session hooks left under this process's agent and when; ``None`` if none."""
     pid = agent_pid()
     if pid is None:
         return None
+    path = _session_file(pid)
     try:
-        return _session_file(pid).read_text(encoding="utf-8").strip() or None
+        session = path.read_text(encoding="utf-8").strip()
+        return (session, path.stat().st_mtime) if session else None
     except OSError:
         return None
 

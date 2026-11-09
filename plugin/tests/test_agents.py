@@ -460,3 +460,48 @@ def test_the_agent_s_process_is_looked_up_once(monkeypatch: pytest.MonkeyPatch) 
     pids = [agents.agent_pid() for _ in range(3)]
 
     assert (pids, len(walks)) == ([40, 40, 40], 1)
+
+
+def test_a_new_chat_in_the_same_codex_process_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After ``/new`` the hooks of the new session speak before its first tool call: the MCP
+    server follows them, not the last session a tool call named (decision 0035).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    agents.use(Agent.Codex)
+    monkeypatch.setattr(agents, "_parents", lambda: [(40, "codex")])
+    monkeypatch.setattr(agents.time, "time", lambda: 1.0)
+    agents.seen("codex-old")
+
+    hooks._session({"session_id": "codex-new"})
+
+    assert agents.session_id() == "codex-new"
+
+
+def test_a_missing_codex_leaves_nothing_behind(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Without ``codex`` the installer stops before writing the hooks (decision 0035).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+        tmp_path: Temporary directory from pytest.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+
+    def missing(args: list[str]) -> None:
+        """Fail as a command that is not installed.
+
+        Args:
+            args: The command.
+        """
+        raise install.InstallError(f"`{args[0]}` is not found: is the agent installed?")
+
+    monkeypatch.setattr(install, "_run", missing)
+
+    with pytest.raises(install.InstallError, match="not found"):
+        install.install(Agent.Codex)
+
+    assert not (tmp_path / "codex" / "hooks.json").exists()

@@ -226,18 +226,20 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
 def install_codex() -> list[str]:
     """Write Coloqo's hooks, MCP server and skills for Codex; return what was done.
 
-    The MCP server goes through Codex's own ``codex mcp add``, which keeps its settings' format.
+    The MCP server goes through Codex's own ``codex mcp add``, which keeps its settings' format;
+    it goes first, so a missing ``codex`` leaves nothing behind.
 
     Raises:
         InstallError: A file cannot be changed, or ``codex`` failed.
     """
     path = codex_home() / "hooks.json"
-    _write_json(path, merge_hooks(_read_json(path), Agent.Codex))
+    hooks = merge_hooks(_read_json(path), Agent.Codex)
     _run(["codex", "mcp", "remove", "coloqo"])
     args = command(Agent.Codex, "mcp").split()
     added = _run(["codex", "mcp", "add", "coloqo", "--", *args])
     if added.returncode != 0:
         raise InstallError(f"`codex mcp add` failed: {added.stderr.strip() or added.stdout}")
+    _write_json(path, hooks)
     skills = write_skills(Agent.Codex)
     return [
         f"hooks: {path}",
