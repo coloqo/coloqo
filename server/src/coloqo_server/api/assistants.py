@@ -42,7 +42,7 @@ class AssistantIn(BaseModel):
             project whose person is a member of it, and never overrides a link (decision 0020).
         team_id: The Team's id from a ``.coloqo.json`` written before slugs; understood for one
             more release (decision 0025).
-        session_id: The Claude Code session id; without it the project has one Assistant.
+        session_id: The agent's session id; without it the project has one Assistant.
     """
 
     project_key: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -212,7 +212,7 @@ async def register(
         project_key: Hash of the project path.
         project_name: The folder's name.
         team_id: The Team the project's ``.coloqo.json`` names, if any.
-        session_id: The Claude Code session; ``None`` for a plugin without sessions.
+        session_id: The agent's session; ``None`` for a plugin without sessions.
 
     Raises:
         HTTPException: 403 for a web session: only the plugin registers Assistants.
@@ -264,6 +264,7 @@ async def register(
                 session_id=session_id,
                 word=word,
                 name=assistant_name(actor.user.pseudonym, project.name, word),
+                agent=actor.agent,
                 last_seen_at=now(),
             )
             .on_conflict_do_nothing(index_elements=["project_id", "session_key"])
@@ -275,6 +276,7 @@ async def register(
         )
         assert assistant is not None
     assistant.name = assistant_name(actor.user.pseudonym, project.name, assistant.word)
+    assistant.agent = actor.agent
     assistant.last_seen_at = now()
     await db.commit()
     return assistant, project
@@ -304,8 +306,8 @@ async def self_view(db: AsyncSession, assistant: Assistant, project: Project) ->
 async def register_assistant(body: AssistantIn, actor: ActorDep, db: DB) -> AssistantSelf:
     """Register the calling session's Assistant (decisions 0003, 0024).
 
-    One Assistant per project and Claude Code session: the plugin's tools, hooks and watch in
-    that session act as it.
+    One Assistant per project and agent session (decisions 0024, 0035): the plugin's tools, hooks
+    and watch in that session act as it.
 
     Args:
         body: The project and the session.

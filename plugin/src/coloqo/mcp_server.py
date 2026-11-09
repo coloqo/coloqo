@@ -3,13 +3,15 @@
 import json
 import logging
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
+import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from coloqo import __version__, focus, trail
+from coloqo import __version__, agents, focus, trail
 from coloqo.api import LINK_FILE, Api, ColoqoError, NotLoggedIn, Project
 from coloqo.render import (
     file_ref,
@@ -28,7 +30,7 @@ from coloqo.render import (
 INSTRUCTIONS = """\
 Coloqo connects you with the AI assistants of your teammates. You are the Assistant of your \
 user in their Team; everything you write is signed with your name and visible to the Team. Each \
-Claude Code session is its own Assistant, with its own word in its name; your other sessions \
+session is its own Assistant, with its own word in its name; your other sessions \
 are other Assistants.
 
 - A Team has Areas. Work is kept as tasks, T-12, each with its Topic where it is discussed; a \
@@ -61,9 +63,44 @@ own words verbatim. Neither is accepted in a turn your user did not start.
 - Files shared here are not secret: never attach credentials, keys or personal data.
 """
 
-mcp = MCPServer(name="coloqo", version=__version__, instructions=INSTRUCTIONS)
+PULSE_SECONDS = 15
+"""How often the MCP server tells Coloqo its session runs, under an agent with no monitor."""
+
+
+class SessionFromMeta:
+    """Middleware that notes the session a request names in ``_meta``, as Codex does (0035).
+
+    Codex tells its MCP server nothing of the session at start; each tool call carries it as
+    ``_meta.sessionId``.
+    """
+
+    async def __call__(self, ctx: Any, call_next: Any) -> Any:
+        """Note the session, then pass the request on.
+
+        Args:
+            ctx: The request's context; ``ctx.params`` holds the raw parameters.
+            call_next: The rest of the chain.
+
+        Raises:
+            Exception: Whatever the rest of the chain raises, unchanged.
+        """
+        params = ctx.params if isinstance(ctx.params, dict) else {}
+        meta = params.get("_meta")
+        if isinstance(meta, dict):
+            turn = meta.get("x-codex-turn-metadata")
+            agents.seen(
+                meta.get("sessionId")
+                or (turn.get("session_id") if isinstance(turn, dict) else None)
+            )
+        return await call_next(ctx)
+
+
+mcp = MCPServer(
+    name="coloqo", version=__version__, instructions=INSTRUCTIONS, middleware=[SessionFromMeta()]
+)
 
 _api: Api | None = None
+_session: str | None = None
 
 NOT_YOUR_TURN = (
     "Not posted: this turn was not started by your user (it began with a notification or "
@@ -78,11 +115,13 @@ def _client() -> Api:
     Raises:
         ToolError: The computer is not logged in or Coloqo is unreachable.
     """
-    global _api
-    if _api is None or _api.assistant_key is None:
+    global _api, _session
+    session = agents.session_id()
+    stale = _api is not None and session is not None and session != _session
+    if _api is None or _api.assistant_key is None or stale:
         api = Api()
         try:
-            api.register(Project.detect())
+            api.register(Project.detect(), session)
         except NotLoggedIn as error:
             raise ToolError(
                 "This computer is not logged in to Coloqo. Ask your user to run "
@@ -91,7 +130,9 @@ def _client() -> Api:
             ) from error
         except ColoqoError as error:
             raise ToolError(str(error)) from error
-        _api = api
+        if _api is not None:
+            _api.close()
+        _api, _session = api, session
     return _api
 
 
@@ -977,7 +1018,55 @@ def link_project(write_file: bool = False) -> str:
     return f"Wrote {path} for «{mine['team_name']}»; the user commits it to link the repository."
 
 
+def pulse(stop: threading.Event, seconds: float = PULSE_SECONDS) -> None:
+    """Tell Coloqo the session runs while the MCP server lives, under an agent with no monitor.
+
+    Codex and Qwen Code start the MCP server for a session and end it with the session, so the
+    server stands in for Claude Code's watch (decisions 0029, 0035): every ``seconds`` it calls
+    the server as the session's Assistant and posts the intervals of whose move it was (0033).
+    Until the session is known (Codex names it at the first tool call, or its hooks leave it),
+    nothing is sent and decision 0029's minute after a request applies. Failures are quiet: the
+    next pass registers again and sends what is still unsent, as the watch does after a break.
+
+    Args:
+        stop: Set to end the loop.
+        seconds: The pause between calls.
+    """
+    from coloqo.watch import send_moves
+
+    api: Api | None = None
+    session: str | None = None
+    moves: trail.MoveLog | None = None
+    unsent: list[trail.Interval] = []
+    while True:
+        current = agents.session_id()
+        if current and current != session:
+            # A new session starts its own log; a failure below keeps the log and what is unsent.
+            if api is not None:
+                api.close()
+            api, session = None, current
+            moves, unsent = trail.MoveLog(current), []
+        try:
+            if current and api is None:
+                api = Api(timeout=10)
+                api.register(Project.detect(), current)
+            if api is not None and api.assistant_key and moves is not None:
+                api.request("GET", f"/assistant/{api.assistant_key}")
+                if api.team:
+                    unsent = send_moves(api, unsent + moves.take())
+        except (ColoqoError, httpx.HTTPError):
+            if api is not None:
+                api.close()
+            api = None
+        if stop.wait(seconds):
+            break
+    if api is not None:
+        api.close()
+
+
 def run() -> None:
-    """Serve the tools over stdio for the agent."""
+    """Serve the tools over stdio for the agent; with no monitor, keep the session's pulse."""
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    if agents.current() is not agents.Agent.Claude:
+        threading.Thread(target=pulse, args=(threading.Event(),), daemon=True).start()
     mcp.run("stdio")

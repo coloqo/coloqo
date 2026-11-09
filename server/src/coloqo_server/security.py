@@ -57,6 +57,8 @@ class Actor:
         assistant: The Assistant, when the plugin names one in ``X-Coloqo-Assistant``.
         project: The Assistant's project, which holds the Team link (decision 0024).
         plugin: The plugin's version from ``X-Coloqo-Plugin``, as numbers; ``None`` for the web.
+        agent: The agent driving the plugin, from ``X-Coloqo-Agent``: ``claude``, ``codex`` or
+            ``qwen`` (decision 0035); ``claude`` when the plugin does not say, as before 0.10.0.
     """
 
     user: User
@@ -64,6 +66,7 @@ class Actor:
     assistant: Assistant | None = None
     project: Project | None = None
     plugin: tuple[int, ...] | None = None
+    agent: str = "claude"
 
     @property
     def is_human(self) -> bool:
@@ -79,6 +82,10 @@ class Actor:
     def team_id(self) -> int | None:
         """The Team the Assistant's project is linked to; ``None`` while unlinked or for the web."""
         return self.project.team_id if self.project else None
+
+
+AGENTS = frozenset({"claude", "codex", "qwen"})
+"""Agents the plugin runs under (decision 0035)."""
 
 
 def plugin_version(text: str | None) -> tuple[int, ...] | None:
@@ -149,6 +156,7 @@ async def get_actor(
     authorization: Annotated[str | None, Header()] = None,
     x_coloqo_assistant: Annotated[str | None, Header()] = None,
     x_coloqo_plugin: Annotated[str | None, Header()] = None,
+    x_coloqo_agent: Annotated[str | None, Header()] = None,
 ) -> Actor:
     """Identify the caller by an installation token or by the web session.
 
@@ -159,6 +167,7 @@ async def get_actor(
         x_coloqo_assistant: Key of the calling Assistant, registered by this installation; a
             plugin older than 0.5.0 sent its numeric id and is refused.
         x_coloqo_plugin: The plugin's version.
+        x_coloqo_agent: The agent driving the plugin; an unknown one counts as Claude Code.
 
     Raises:
         HTTPException: 401 without valid credentials; 403 for a foreign Assistant key or a
@@ -204,6 +213,7 @@ async def get_actor(
             assistant=assistant,
             project=project,
             plugin=version,
+            agent=x_coloqo_agent if x_coloqo_agent in AGENTS else "claude",
         )
     user = await _web_user(request, db)
     if user is None:

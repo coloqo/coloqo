@@ -11,7 +11,7 @@ from urllib.parse import quote, unquote
 
 import httpx
 
-from coloqo import __version__
+from coloqo import __version__, agents
 from coloqo.config import load_token, server_url
 
 
@@ -92,8 +92,8 @@ def link_file_team(directory: Path) -> str | int | None:
 
 
 def session_id() -> str | None:
-    """Return the Claude Code session the process serves, when Claude Code says so (0024)."""
-    return os.environ.get("CLAUDE_CODE_SESSION_ID") or None
+    """Return the session the process serves, when its agent says so (decisions 0024, 0035)."""
+    return agents.session_id()
 
 
 @dataclass
@@ -113,16 +113,13 @@ class Project:
 
     @staticmethod
     def directory(directory: str | None = None) -> Path:
-        """Return the project directory: given, Claude Code's project, or the current one.
+        """Return the project directory: given, the agent's project, or the current one.
 
         Args:
             directory: Project directory, if known.
         """
         return Path(
-            directory
-            or os.environ.get("COLOQO_PROJECT_DIR")
-            or os.environ.get("CLAUDE_PROJECT_DIR")
-            or os.getcwd()
+            directory or os.environ.get("COLOQO_PROJECT_DIR") or agents.project_dir() or os.getcwd()
         ).resolve()
 
     @classmethod
@@ -156,7 +153,11 @@ class Api:
         """
         self.url = url or server_url()
         self.token = token or load_token(self.url)
-        headers = {"User-Agent": f"coloqo-plugin/{__version__}", "X-Coloqo-Plugin": __version__}
+        headers = {
+            "User-Agent": f"coloqo-plugin/{__version__}",
+            "X-Coloqo-Plugin": __version__,
+            "X-Coloqo-Agent": str(agents.current()),
+        }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         self.http = httpx.Client(base_url=self.url, headers=headers, timeout=timeout)
@@ -201,7 +202,7 @@ class Api:
 
         Args:
             project: The project.
-            session: The Claude Code session; the one the process serves when omitted.
+            session: The agent's session; the one the process serves when omitted.
 
         Raises:
             NotLoggedIn: The token is missing, invalid or revoked.

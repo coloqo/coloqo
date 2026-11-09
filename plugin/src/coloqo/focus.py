@@ -1,12 +1,12 @@
 """What reaches a session unasked: its focus, kept on this computer (decision 0022)."""
 
 import json
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from coloqo import agents
 from coloqo.config import config_dir
 
 MODES = ("all", "mine", "people", "quiet")
@@ -37,8 +37,8 @@ class Focus:
 
 
 def session_id() -> str | None:
-    """Return the Claude Code session the process runs in, when Claude Code says so."""
-    return os.environ.get("CLAUDE_CODE_SESSION_ID") or None
+    """Return the session the process runs in, when its agent says so (decision 0035)."""
+    return agents.session_id()
 
 
 def _folder() -> Path:
@@ -113,7 +113,7 @@ def save(focus: Focus, session: str | None = None) -> Path:
     """
     session = session or session_id()
     if not session:
-        raise ValueError("Claude Code did not say which session this is")
+        raise ValueError("The agent did not say which session this is")
     folder = _folder()
     folder.mkdir(parents=True, exist_ok=True)
     now = time.time()

@@ -7,7 +7,8 @@ import sys
 import time
 import webbrowser
 
-from coloqo import __version__
+from coloqo import __version__, agents
+from coloqo.agents import Agent
 from coloqo.api import LINK_FILE, Api, ColoqoError, Project
 from coloqo.config import config_dir, forget_token, save_token, server_url
 
@@ -36,11 +37,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--write", action="store_true", help="then write .coloqo.json to link the repository"
     )
     link.add_argument("--no-browser", action="store_true", help="do not open the browser")
-    commands.add_parser("mcp", help="serve the MCP tools over stdio (started by the agent)")
-    hook = commands.add_parser("hook", help="run a Claude Code hook (started by the agent)")
+    agent_help = "the agent that runs it (default: claude; set by `coloqo install`)"
+    mcp = commands.add_parser("mcp", help="serve the MCP tools over stdio (started by the agent)")
+    mcp.add_argument("--agent", choices=[a.value for a in Agent], help=agent_help)
+    hook = commands.add_parser("hook", help="run an agent's hook (started by the agent)")
     hook.add_argument(
         "event", choices=["session-start", "user-prompt-submit", "post-tool-use", "stop"]
     )
+    hook.add_argument("--agent", choices=[a.value for a in Agent], help=agent_help)
+    install = commands.add_parser(
+        "install",
+        help="set Coloqo up in Codex or Qwen Code: hooks, MCP server, skills (decision 0035)",
+    )
+    install.add_argument("--agent", required=True, choices=[Agent.Codex, Agent.Qwen])
     watch = commands.add_parser("watch", help="print a line per event (a Claude Code monitor)")
     watch.add_argument("--project", help="project directory (default: the current one)")
     return parser
@@ -172,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
             reconfigure(encoding="utf-8", errors="replace")
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "agent", None):
+        agents.use(Agent(args.agent))
     if args.command == "login":
         return login(args.name, not args.no_browser)
     if args.command == "logout":
@@ -181,6 +192,15 @@ def main(argv: list[str] | None = None) -> int:
         return status()
     if args.command == "link":
         return link(args.project, args.write, not args.no_browser)
+    if args.command == "install":
+        from coloqo.install import InstallError, install
+
+        try:
+            print("\n".join(install(agents.current())))
+        except InstallError as error:
+            print(f"Coloqo was not set up: {error}", file=sys.stderr)
+            return 1
+        return 0
     if args.command == "mcp":
         from coloqo.mcp_server import run
 

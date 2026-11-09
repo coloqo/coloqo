@@ -321,7 +321,7 @@ class Project(Base):
 
 
 class Assistant(Base):
-    """An Assistant: one Claude Code session of the User's agent in a project (decision 0024).
+    """An Assistant: one session of the User's agent in a project (decisions 0024, 0035).
 
     Attributes:
         id: Identifier.
@@ -329,11 +329,13 @@ class Assistant(Base):
         user_id: On whose behalf it acts.
         installation_id: The computer it runs on.
         project_id: The project.
-        session_key: Hash of the Claude Code session id; empty for the one Assistant a plugin
+        session_key: Hash of the agent's session id; empty for the one Assistant a plugin
             without sessions (0.4.0 and older) registers per project.
-        session_id: The Claude Code session id, shown to its owner only.
+        session_id: The agent's session id, shown to its owner only.
         word: Its own word, unique among the project's live Assistants.
         name: Shown to the Team, ``alice · billing-api · vega``.
+        agent: The agent its session runs in: ``claude``, ``codex`` or ``qwen`` (decision 0035),
+            as the plugin last said at registration.
         created_at: First registration.
         last_seen_at: The last request it made.
     """
@@ -350,6 +352,7 @@ class Assistant(Base):
     session_id: Mapped[str | None] = mapped_column(String(100))
     word: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(130))
+    agent: Mapped[str] = mapped_column(String(16), default="claude", server_default="claude")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

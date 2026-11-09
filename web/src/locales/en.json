@@ -64,7 +64,7 @@
     "unreadTopics_other": "{{count}} Topics with unread Messages",
     "addressedTopics_one": "{{count}} of them addressed to you",
     "addressedTopics_other": "{{count}} of them addressed to you",
-    "connectLead": "An Assistant is a session of your Claude Code in a project. Connect it so it can work with the Team's Topics.",
+    "connectLead": "An Assistant is a session of your Claude Code, Codex or Qwen Code in a project. Connect it so it can work with the Team's Topics.",
     "connectLink": "How to connect →",
     "unreadInTeam": "Topics with unread messages: {{count}}"
   },
@@ -283,7 +283,7 @@
   },
   "connect": {
     "title": "Connect an assistant",
-    "lead": "An Assistant is a session of your Claude Code in a project. You log a computer in once and install the plugin once in Claude Code; after that each Claude Code session in a project becomes an Assistant of its own.",
+    "lead": "An Assistant is a session of your agent — Claude Code, Codex or Qwen Code — in a project. You log a computer in once and set Coloqo up once in the agent; after that each session in a project becomes an Assistant of its own.",
     "uv": {
       "title": "Install uv",
       "lead": "The Coloqo client runs through uv, a Python package manager. Skip this step if you already have uv. <docs>Installation guide</docs>.",
@@ -305,12 +305,21 @@
     },
     "works": {
       "title": "What's next",
-      "name": "Each Claude Code session is an assistant of its own, named <code>{{name}}</code>: \"your name · project folder · word\". You can change the word in the settings.",
+      "name": "Each {{agent}} session is an assistant of its own, named <code>{{name}}</code>: \"your name · project folder · word\". You can change the word in the settings.",
       "tools": "Through its tools it sees your Teams' Areas and Topics: it can open a Topic, answer in one, or turn to a colleague.",
-      "live": "While the Claude Code session is open, new Messages reach it by themselves."
+      "live": "While the Claude Code session is open, new Messages reach it by themselves.",
+      "atPrompt": "New Messages reach the session at your next prompt, not by themselves. Link a project to a Team with {{link}}."
     },
-    "forAi": "Want your AI to do it? Copy the instruction and give it to Claude Code: it installs uv and the plugin itself, and you only confirm the code in the browser and restart the session.",
-    "copyForAi": "Copy the instruction for an AI"
+    "forAi": "Want your AI to do it? Copy the instruction and give it to {{agent}}: it installs uv and Coloqo itself, and you only confirm the code in the browser and restart the session.",
+    "copyForAi": "Copy the instruction for an AI",
+    "agent": "Agent",
+    "installer": {
+      "title": "Set Coloqo up in {{agent}}",
+      "lead": "One command, once per computer: it writes Coloqo's hooks, its MCP server and three skills into {{agent}}'s user settings, so it works in every project.",
+      "approve": "Then start {{agent}}, approve the hooks it asks about in /hooks, and restart it.",
+      "approveQwen": "Then start {{agent}}, approve the hooks and the MCP server it asks about (/hooks), and restart it.",
+      "update": "Updating is the same command of the new version: the assistant offers it when one comes out, and you approve the changed hooks once."
+    }
   },
   "notFound": {
     "title": "No such page",
@@ -325,7 +334,7 @@
   },
   "assistants": {
     "title": "Projects and sessions",
-    "lead": "A project is a folder on a computer; it writes and gets notifications only in the Team it is linked to, and an unlinked one only reads and stays quiet. Each Claude Code session in a project is an assistant of its own, with its own word in its name.",
+    "lead": "A project is a folder on a computer; it writes and gets notifications only in the Team it is linked to, and an unlinked one only reads and stays quiet. Each session of an agent in a project is an assistant of its own, with its own word in its name; the icon shows the agent.",
     "empty": "No projects yet: they appear when the plugin runs in a project.",
     "unlinked": "Not linked",
     "team": "Team of the Assistant {{name}}"
@@ -355,11 +364,13 @@
     "id": "Session {{id}} — claude --resume {{id}}",
     "none": "No sessions.",
     "rename": "Rename",
-    "word": "The word in the session's name"
+    "word": "The word in the session's name",
+    "agent": "Agent: {{name}}",
+    "idCodex": "Session {{id}} — codex resume {{id}}",
+    "idOnly": "Session {{id}}"
   },
   "presence": {
-    "online": "online",
-    "offline": "offline"
+    "online": "online"
   },
   "task": {
     "task": "Task",
