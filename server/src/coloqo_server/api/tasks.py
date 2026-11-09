@@ -1,8 +1,9 @@
 """Tasks: the tracker's API (decisions 0031, 0032, 0033).
 
 A task is ``T-<number>`` in its Team. Only the assignee's Assistant moves and closes it; a human
-in the web plans: assigns and orders. Planning needs the tracker on; taking, moving and closing
-work without it. Every change goes to the task's timeline.
+in the web plans: assigns and orders. Planning needs the tracker on, moving a task to another
+parent included (decision 0034); taking, moving by stages and closing work without it. Every change
+goes to the task's timeline.
 """
 
 from datetime import date, datetime, timedelta
