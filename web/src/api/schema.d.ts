@@ -1326,7 +1326,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when there is no such plan or task; 403 when the caller may not write
          *             there, or for an Assistant after approval; 409 ``no_tracker`` without the tracker,
-         *             ``closed`` for a closed plan.
+         *             ``closed`` for a closed plan, ``finished`` for a finished promise or task.
          */
         post: operations["add_to_plan_api_team__team__plan__number__item_post"];
         delete?: never;
