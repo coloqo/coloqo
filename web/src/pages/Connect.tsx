@@ -128,7 +128,7 @@ function AgentChoice({ agent, onChange }: { agent: Agent; onChange: (agent: Agen
               : 'border-stone-200 text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-400 dark:hover:bg-stone-800'
           }`}
         >
-          <AgentIcon agent={option} className="size-4" />
+          <AgentIcon agent={option} className="size-4" decorative />
           {AGENT_NAMES[option]}
         </button>
       ))}

@@ -259,3 +259,10 @@ sandbox projects, run by the author from a plain terminal; the MCP server given 
 - Whether changing the pinned version in `hooks.json` makes the hooks untrusted again until
   reviewed — then every plugin update asks the user once more.
 - The plain stdout of SessionStart: the briefing stays well under the 2,500-token preview.
+
+## Open after the implementation (2026-11-09)
+
+- **A self-hosted server under Codex or Qwen**: the installer carries no `COLOQO_URL` into the
+  hooks or the MCP server's settings, and the connect page shows the installer's command without
+  it; the agent's environment must have it, as for the Claude Code plugin. Not the pilot's case
+  (the cloud instance); to settle when a self-hosted team runs Codex or Qwen.

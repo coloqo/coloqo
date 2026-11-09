@@ -5,13 +5,23 @@ import { AGENT_NAMES, type Agent } from '../lib/agents'
 /**
  * A small mark of the agent a session runs in, with its name on hover: a spark for Claude Code, a
  * terminal prompt for Codex, a hexagon for Qwen Code. Own drawings, not the vendors' logos.
+ * ``decorative`` hides it from assistive technology where the agent's name is written beside it.
  */
-export function AgentIcon({ agent, className = 'size-3.5' }: { agent: Agent; className?: string }) {
+export function AgentIcon({
+  agent,
+  className = 'size-3.5',
+  decorative = false,
+}: {
+  agent: Agent
+  className?: string
+  decorative?: boolean
+}) {
   const { t } = useTranslation()
   const label = t('sessions.agent', { name: AGENT_NAMES[agent] })
+  const named = decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label }
   return (
-    <svg viewBox="0 0 16 16" role="img" aria-label={label} className={`${className} shrink-0`}>
-      <title>{label}</title>
+    <svg viewBox="0 0 16 16" {...named} className={`${className} shrink-0`}>
+      {!decorative && <title>{label}</title>}
       {agent === 'claude' && (
         <path
           d="M8 1.75v12.5M1.75 8h12.5M3.6 3.6l8.8 8.8M12.4 3.6l-8.8 8.8"
