@@ -162,3 +162,12 @@ Item 2 is done: decision 0034, PR #29 (server 0.11.0, plugin 0.9.0).
   is carried by joining the next plan, whose draft may offer it. The result shows planned done and
   not, found and off-plan counts, what was dropped, and the promises' outcomes.
 - **Newcomers' tasks** wait unassigned until they log in.
+
+## To settle before the plan's code
+
+- **"Found" by a `source` the server filled in** (a side review, 2026-11-09). By 3b a task
+  joining after approval is found when its `source` is in the plan. But `source` is not always
+  set on purpose: when an Assistant gives none, `create_task` fills in the task whose Topic the
+  session holds, if exactly one. An Assistant working on planned T-12 that files an unrelated,
+  urgent task would make it "found", and nobody would name what it drops — the very case the
+  Team's rule is there to catch. One way out: found only when the `source` was given explicitly.
