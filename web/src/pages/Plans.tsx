@@ -270,8 +270,8 @@ export function PlanPage() {
   const team = useTeam(slug)
   const plan = usePlan(slug, number)
   const [adding, setAdding] = useState('')
-  // Today as the server compares it with a plan's last day: in UTC.
-  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  // Today in the Team's time zone, as the server compares it with a plan's last day (0037).
+  const [now] = useState(() => new Date())
   const refresh = (fresh: PlanDetail) => {
     queryClient.setQueryData(['plan', slug, number], fresh)
     void queryClient.invalidateQueries({ queryKey: ['plans', slug] })
@@ -302,6 +302,7 @@ export function PlanPage() {
   }
   const data = plan.data
   const summary = data.summary
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: team.data.time_zone ?? 'UTC' }).format(now)
   return (
     <TeamPageFrame team={team.data} current="plans" title={data.name} sub>
       <div className="flex flex-col gap-5">

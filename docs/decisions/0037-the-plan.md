@@ -20,13 +20,15 @@ another, never in two at once; a plan of a larger period around monthly ones wou
 promises, not tasks, and is a decision of its own.
 
 **A plan holds promises and tasks**, by membership, not hierarchy: a task has one parent and may be
-in several plans. Adding a promise brings the unfinished tasks under it, at any depth; a task later
-created under, or moved under, a member of a plan that is not closed joins that plan by itself; a
-task with no promise joins on its own — the Team's work outside promises. **Finished work does
-not enter a plan** (the author, 2026-11-10, in the review): it has nothing to plan, and it would
-count as done in a period no work of it went into. **A task leaves a plan
-only while it is a draft**: one not started, always; a started one, only before the period
-begins; a finished one, never. Once a plan is approved its rows stay, as its history.
+in several plans. Adding a promise brings the tasks under it, at any depth, but those finished
+before the period; a task later created under, or moved under, a member of a plan that is not closed
+joins that plan by itself; a task with no promise joins on its own — the Team's work outside
+promises. **Work finished before the plan's period does not enter it** (the author, 2026-11-10, in
+the review): it has nothing to plan, and it would count as done in a period no work of it went into.
+Work finished within the period does enter, by number or with its promise: a plan moved into Coloqo
+in the middle of its month takes in what was done since its first day. **A task leaves a plan only
+while it is a draft**: one not started, always; a started one, only before the period begins; a
+finished one, never. Once a plan is approved its rows stay, as its history.
 
 **Every row has a mark, set by itself:**
 
@@ -50,12 +52,18 @@ The off-plan task's "what is dropped" and the postponed task's reason name each 
 neither is derived from the other. Lowering a task's priority stays the board's order.
 
 **Carried** work is read, not marked: a row shows "from <plan>" when the task was in an earlier
-closed plan and not done there. A new draft offers the previous plan's unfinished work.
+closed plan and not done there. A new draft offers what the previous plan left undone, but work
+finished before the new period.
 
 **Closing** fixes each row's result: done (Done, or a promise Delivered, by the period's last day),
 cancelled (Cancelled or Withdrawn), or not done; work finished later does not rewrite the month.
 The plan then shows planned done and not done, postponed apart, found and off-plan counts, what
 off-plan work dropped, and its promises' outcomes.
+
+**A plan's days are its Team's** (the author, 2026-11-10, in the review): a Team has a time zone,
+and "finished before the period", "done by the period's last day", "the period has begun" and
+"after the period" are read in it. A new Team takes its creator's browser's zone; existing Teams
+start in UTC; the owner changes it in the Team's settings.
 
 **No dates on tasks**: decision 0031 stands; a forecast from each member's speed comes with the
 estimates. Newcomers' tasks wait unassigned until they log in.

@@ -207,3 +207,17 @@ decided; they were asked:
   finished before the period, added by number, would count as planned and done in a month no work
   of it went into; refused, as a promise already brings only its unfinished tasks. A finished task
   moved under planned work does not join either.
+- **Work finished within the period does enter** (the author, 2026-11-10, after the deploy of
+  server 0.14.0; a side review): the question was asked about a task finished before the period,
+  but the code refused any finished task. The November plan is moved in after 10 November, so the
+  work done from 1 to 10 November could not join and November's result would miss it. Now only
+  work finished before the period is refused; within it, a task joins by number, with its
+  promise, by being moved under planned work, and from the next draft's offer of what the previous
+  plan left undone. The line above, "a finished task moved under planned work does not join
+  either", now holds for work finished before the period only.
+- **A plan's days are its Team's** (the author, 2026-11-10, round 1 of PR #33): plans compared
+  dates in UTC while their periods are local dates; for three hours after every Moscow midnight,
+  and on the first day of every period, work read as done on the day before, and a plan could not
+  be closed in the first hours of the next month. Coloqo kept no time zone. Asked: the Team's time
+  zone (not the instance's, not UTC); a new Team takes its creator's browser's zone, existing
+  Teams start in UTC; the owner changes it.

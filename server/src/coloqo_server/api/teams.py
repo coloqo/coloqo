@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
@@ -87,18 +88,39 @@ def _slug(value: str | None) -> str | None:
     return value
 
 
+def _zone(value: str | None) -> str | None:
+    """Accept an IANA time zone name the server knows, such as ``Europe/Moscow``.
+
+    Args:
+        value: The name, or ``None``.
+
+    Raises:
+        ValueError: The server does not know the zone.
+    """
+    if value is None:
+        return None
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise ValueError(f"Unknown time zone {value!r}") from error
+    return value
+
+
 class TeamIn(BaseModel):
     """A new Team.
 
     Attributes:
         name: Shown name.
         slug: Its address; offered from the name when omitted.
+        time_zone: Its time zone, an IANA name; the web sends its creator's browser's, else UTC.
     """
 
     name: str = Field(min_length=1, max_length=100)
     slug: str | None = None
+    time_zone: str = Field(default="UTC", max_length=64)
 
     _check_slug = field_validator("slug")(_slug)
+    _check_zone = field_validator("time_zone")(_zone)
 
 
 class TeamPatch(BaseModel):
@@ -111,6 +133,7 @@ class TeamPatch(BaseModel):
         tracker: Turn the task tracker on or off (decision 0031).
         task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
         task_idle_repeat_days: Days between such notices while it stays quiet.
+        time_zone: Its time zone, an IANA name: its plans' days are days there (decision 0037).
     """
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
@@ -119,8 +142,10 @@ class TeamPatch(BaseModel):
     tracker: bool | None = None
     task_idle_days: int | None = Field(default=None, ge=1, le=365)
     task_idle_repeat_days: int | None = Field(default=None, ge=1, le=365)
+    time_zone: str | None = Field(default=None, max_length=64)
 
     _check_slug = field_validator("slug")(_slug)
+    _check_zone = field_validator("time_zone")(_zone)
 
 
 class TeamOut(BaseModel):
@@ -134,6 +159,7 @@ class TeamOut(BaseModel):
         tracker: The task tracker is on (decision 0031).
         task_idle_days: Days a task in work may go quiet before its assignee is told (0032).
         task_idle_repeat_days: Days between such notices while it stays quiet.
+        time_zone: Its time zone: its plans' days are days there (decision 0037).
         created_at: Creation time.
     """
 
@@ -144,6 +170,7 @@ class TeamOut(BaseModel):
     tracker: bool = False
     task_idle_days: int = 7
     task_idle_repeat_days: int = 1
+    time_zone: str = "UTC"
     created_at: datetime
 
 
@@ -398,6 +425,7 @@ def _team_out(team: Team, role: Role) -> TeamOut:
         tracker=team.tracker,
         task_idle_days=team.task_idle_days,
         task_idle_repeat_days=team.task_idle_repeat_days,
+        time_zone=team.time_zone,
         created_at=team.created_at,
     )
 
@@ -484,7 +512,10 @@ async def create_team(body: TeamIn, actor: HumanDep, db: DB) -> TeamOut:
     if body.slug is not None and body.slug in taken:
         raise HTTPException(status.HTTP_409_CONFLICT, f"The address {body.slug!r} is taken")
     team = Team(
-        name=body.name.strip(), slug=body.slug or numbered(slugify(body.name), taken), turn_limit=10
+        name=body.name.strip(),
+        slug=body.slug or numbered(slugify(body.name), taken),
+        turn_limit=10,
+        time_zone=body.time_zone,
     )
     db.add(team)
     await db.flush()
@@ -565,7 +596,7 @@ async def get_team(team: str, actor: ActorDep, db: DB) -> TeamDetail:
 
 @router.patch("/team/{team}")
 async def update_team(team: str, body: TeamPatch, actor: HumanDep, db: DB) -> TeamOut:
-    """Change a Team's name, address, turn limit or tracker settings.
+    """Change a Team's name, address, turn limit, tracker settings or time zone.
 
     A changed slug is kept as a former one, so links to the Team keep working; going back to a
     former slug takes it out of the former ones.
@@ -599,6 +630,8 @@ async def update_team(team: str, body: TeamPatch, actor: HumanDep, db: DB) -> Te
         found.task_idle_days = body.task_idle_days
     if body.task_idle_repeat_days is not None:
         found.task_idle_repeat_days = body.task_idle_repeat_days
+    if body.time_zone is not None:
+        found.time_zone = body.time_zone
     await db.commit()
     return _team_out(found, Role.Owner)
 

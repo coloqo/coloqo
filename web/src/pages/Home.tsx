@@ -16,7 +16,9 @@ function CreateTeam() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const create = useMutation({
-    mutationFn: (value: string) => call(api.POST('/api/team', { body: { name: value } })),
+    // A new Team counts its plans' days in its creator's time zone (decision 0037).
+    mutationFn: (value: string) =>
+      call(api.POST('/api/team', { body: { name: value, time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone } })),
     onSuccess: (team) => {
       void queryClient.invalidateQueries({ queryKey: ['teams'] })
       void navigate(teamPath(team.slug))
