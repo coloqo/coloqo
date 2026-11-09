@@ -308,8 +308,7 @@ export function PlanPage() {
         <Card>
           <div className="flex flex-col gap-3 px-4 py-4">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 className="text-xl font-semibold tracking-tight">{data.name}</h1>
-              <span className="text-sm text-stone-500 dark:text-stone-400">
+              <span className="text-sm text-stone-600 dark:text-stone-300">
                 {data.period_start} — {data.period_end}
               </span>
               <Badge tone={STATE_TONE[data.state]}>{t(`plans.state.${data.state}`)}</Badge>
