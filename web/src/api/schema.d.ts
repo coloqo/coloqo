@@ -2334,6 +2334,11 @@ export interface components {
             stage_kind: components["schemas"]["StageKind"];
             /** Started At */
             started_at: string | null;
+            /**
+             * Subtask
+             * @default false
+             */
+            subtask?: boolean;
             /** Team */
             team: string;
             /** Title */
@@ -3111,6 +3116,11 @@ export interface components {
             stage_kind: components["schemas"]["StageKind"];
             /** Started At */
             started_at: string | null;
+            /**
+             * Subtask
+             * @default false
+             */
+            subtask?: boolean;
             /** Team */
             team: string;
             /** Timeline */
@@ -3205,6 +3215,7 @@ export interface components {
          *         delivery: The task's meaning in the business's language (decision 0036).
          *         works_for: The number of the task whose delivery this one works for.
          *         working_for_it: The numbers of the tasks that work for this one's delivery.
+         *         subtask: Its parent is a task: it works for that task's delivery (decision 0036).
          *         links: Its links to external issues.
          *         has_topic: It has a Topic.
          *         holder: Name of the Assistant holding its Topic.
@@ -3272,6 +3283,11 @@ export interface components {
             stage_kind: components["schemas"]["StageKind"];
             /** Started At */
             started_at: string | null;
+            /**
+             * Subtask
+             * @default false
+             */
+            subtask?: boolean;
             /** Team */
             team: string;
             /** Title */
@@ -3475,7 +3491,7 @@ export interface components {
          *     Attributes:
          *         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
          *             ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,
-         *             ``child_in``, ``child_out``, ``closed``.
+         *             ``child_in``, ``child_out``, ``delivery``, ``works_for``, ``closed``.
          *         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
          *         assistant: Name of the Assistant that did it, if any.
          *         data: What the kind carries.

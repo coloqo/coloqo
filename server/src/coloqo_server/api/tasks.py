@@ -105,6 +105,7 @@ class TaskOut(BaseModel):
         delivery: The task's meaning in the business's language (decision 0036).
         works_for: The number of the task whose delivery this one works for.
         working_for_it: The numbers of the tasks that work for this one's delivery.
+        subtask: Its parent is a task: it works for that task's delivery (decision 0036).
         links: Its links to external issues.
         has_topic: It has a Topic.
         holder: Name of the Assistant holding its Topic.
@@ -139,6 +140,7 @@ class TaskOut(BaseModel):
     delivery: str = ""
     works_for: int | None = None
     working_for_it: list[int] = Field(default_factory=list)
+    subtask: bool = False
     links: list[LinkOut]
     has_topic: bool
     holder: str | None
@@ -160,7 +162,7 @@ class TimelineOut(BaseModel):
     Attributes:
         kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,
             ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,
-            ``child_in``, ``child_out``, ``closed``.
+            ``child_in``, ``child_out``, ``delivery``, ``works_for``, ``closed``.
         author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.
         assistant: Name of the Assistant that did it, if any.
         data: What the kind carries.
@@ -423,12 +425,14 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
         | {x.source_id for x in tasks}
         | {x.works_for_id for x in tasks}
     ) - {None}
-    numbers: dict[int, int] = {
-        task_id: number
-        for task_id, number in await db.execute(
-            select(Task.id, Task.number).where(Task.id.in_(related))
-        )
-    }
+    numbers: dict[int, int] = {}
+    tasks_above: set[int] = set()
+    for task_id, number, type_ in await db.execute(
+        select(Task.id, Task.number, Task.type).where(Task.id.in_(related))
+    ):
+        numbers[task_id] = number
+        if type_ == TaskType.Task:
+            tasks_above.add(task_id)
     links: dict[int, list[LinkOut]] = {}
     for link in await db.scalars(
         select(TaskLink).where(TaskLink.task_id.in_(ids)).order_by(TaskLink.id)
@@ -485,6 +489,7 @@ async def task_outs(db: AsyncSession, tasks: list[Task]) -> list[TaskOut]:
                 source=numbers.get(task.source_id) if task.source_id else None,
                 delivery=task.delivery,
                 works_for=numbers.get(task.works_for_id) if task.works_for_id else None,
+                subtask=task.parent_id in tasks_above,
                 working_for_it=working.get(task.id, []),
                 links=links.get(task.id, []),
                 has_topic=topic is not None,

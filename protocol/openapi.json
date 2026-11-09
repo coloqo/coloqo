@@ -628,6 +628,11 @@
             ],
             "title": "Started At"
           },
+          "subtask": {
+            "default": false,
+            "title": "Subtask",
+            "type": "boolean"
+          },
           "team": {
             "title": "Team",
             "type": "string"
@@ -2026,6 +2031,11 @@
             ],
             "title": "Started At"
           },
+          "subtask": {
+            "default": false,
+            "title": "Subtask",
+            "type": "boolean"
+          },
           "team": {
             "title": "Team",
             "type": "string"
@@ -2238,7 +2248,7 @@
         "type": "object"
       },
       "TaskOut": {
-        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    delivery: The task's meaning in the business's language (decision 0036).\n    works_for: The number of the task whose delivery this one works for.\n    working_for_it: The numbers of the tasks that work for this one's delivery.\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    progress: For a promise, what it holds: done against all, the cancelled and withdrawn\n        left out (decision 0031).\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
+        "description": "A task in a list.\n\nAttributes:\n    team: The Team's slug.\n    number: Its number in the Team.\n    ref: Short reference, ``T-<number>``.\n    type: ``task`` or ``promise``.\n    area: The Area's slug.\n    area_name: The Area's name.\n    title: One line.\n    stage: Its stage's name.\n    stage_kind: That stage's fixed kind.\n    category: ``to_do``, ``in_progress`` or ``finished``.\n    assignee: Pseudonym of the human it is assigned to.\n    waiting: What it waits for, while it waits.\n    outcome: How it ended.\n    parent: The number of the task or promise it belongs to.\n    source: The number of the task within which it was created.\n    delivery: The task's meaning in the business's language (decision 0036).\n    works_for: The number of the task whose delivery this one works for.\n    working_for_it: The numbers of the tasks that work for this one's delivery.\n    subtask: Its parent is a task: it works for that task's delivery (decision 0036).\n    links: Its links to external issues.\n    has_topic: It has a Topic.\n    holder: Name of the Assistant holding its Topic.\n    holder_key: Its key.\n    created_by: Pseudonym of whoever created it.\n    rank: Its place within its status: smaller stands higher.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    progress: For a promise, what it holds: done against all, the cancelled and withdrawn\n        left out (decision 0031).\n    created_at: Creation time.\n    updated_at: Time of its newest activity.\n    started_at: Its first move into work.\n    finished_at: When it was finished.",
         "properties": {
           "area": {
             "title": "Area",
@@ -2418,6 +2428,11 @@
               }
             ],
             "title": "Started At"
+          },
+          "subtask": {
+            "default": false,
+            "title": "Subtask",
+            "type": "boolean"
           },
           "team": {
             "title": "Team",
@@ -2851,7 +2866,7 @@
         "type": "object"
       },
       "TimelineOut": {
-        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,\n        ``child_in``, ``child_out``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
+        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,\n        ``child_in``, ``child_out``, ``delivery``, ``works_for``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
         "properties": {
           "assistant": {
             "anyOf": [

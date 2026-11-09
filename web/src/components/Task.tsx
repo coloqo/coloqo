@@ -289,7 +289,11 @@ export function Delivery({ task }: { task: TaskDetail }) {
     <Card>
       <CardHeader title={t('task.delivery')} />
       <div className="flex flex-col gap-3 px-4 py-3 text-sm">
-        {task.works_for ? (
+        {task.subtask && task.parent ? (
+          <p className="text-stone-600 dark:text-stone-400">
+            {t('task.subtaskWorksFor')} {taskLink(task.parent)}
+          </p>
+        ) : task.works_for ? (
           <p className="text-stone-600 dark:text-stone-400">
             {t('task.worksFor')} {taskLink(task.works_for)}
           </p>

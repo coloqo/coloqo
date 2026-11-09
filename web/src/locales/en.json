@@ -397,7 +397,8 @@
     "delivery": "Delivery",
     "deliveryPlaceholder": "What value the task gives, in the business's language…",
     "worksFor": "Works for the delivery of",
-    "workingForIt": "Working for this delivery:"
+    "workingForIt": "Working for this delivery:",
+    "subtaskWorksFor": "A subtask works for its task's delivery:"
   },
   "timeline": {
     "created": "task created",

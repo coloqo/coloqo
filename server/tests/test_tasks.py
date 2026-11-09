@@ -892,3 +892,5 @@ def test_the_delivery_rules(setup: Setup, new: tuple[Plugin, Plugin]) -> None:
     assert "is a subtask" in on_subtask
     assert f"T-{helper['number']} states no delivery" in to_nothing
     assert "is a subtask" in stating_becomes_subtask
+    assert setup.alice.get(_path(setup, sub["number"])).json()["subtask"] is True
+    assert setup.alice.get(_path(setup, central["number"])).json()["subtask"] is False
