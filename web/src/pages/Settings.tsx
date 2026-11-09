@@ -17,7 +17,7 @@ import { useInstallations, useProjects, useTeams } from '../api/queries'
 import { AgentIcon } from '../components/AgentIcon'
 import { PersonAvatar } from '../components/Avatar'
 import { Page } from '../components/Layout'
-import { PresenceDot, PresenceText } from '../components/Presence'
+import { PresenceText } from '../components/Presence'
 import { PseudonymForm } from '../components/PseudonymForm'
 import { Time } from '../components/Time'
 import { Badge, Button, Card, CardHeader, Empty, ErrorNote, Input, Loading, Select } from '../components/ui'
@@ -150,7 +150,6 @@ function SessionRow({ assistant }: { assistant: Assistant }) {
             className={`inline-flex items-center gap-1.5 font-medium break-words ${assistant.online ? '' : 'opacity-60'}`}
             title={assistant.session_id ? sessionHint(t, assistant.agent ?? 'claude', assistant.session_id) : undefined}
           >
-            <PresenceDot online={assistant.online ?? false} />
             <AgentIcon agent={assistant.agent ?? 'claude'} />
             {assistant.name}
           </span>

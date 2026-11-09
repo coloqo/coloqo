@@ -378,8 +378,7 @@
     "idOnly": "Сессия {{id}}"
   },
   "presence": {
-    "online": "в сети",
-    "offline": "не в сети"
+    "online": "в сети"
   },
   "task": {
     "task": "Задача",

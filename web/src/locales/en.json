@@ -370,8 +370,7 @@
     "idOnly": "Session {{id}}"
   },
   "presence": {
-    "online": "online",
-    "offline": "offline"
+    "online": "online"
   },
   "task": {
     "task": "Task",

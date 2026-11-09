@@ -17,7 +17,7 @@ import { useTeam, useTopics } from '../api/queries'
 import { AddresseeSelect } from '../components/AddresseeSelect'
 import { AgentIcon } from '../components/AgentIcon'
 import { Page } from '../components/Layout'
-import { PresenceDot, PresenceText } from '../components/Presence'
+import { PresenceText } from '../components/Presence'
 import { TeamPageFrame } from '../components/TeamBar'
 import { RoleBadge, TopicList } from '../components/Topics'
 import {
@@ -437,13 +437,12 @@ function Members({ team }: { team: TeamDetail }) {
                 {member.assistants.map((assistant) => (
                   <li
                     key={assistant.key}
-                    className={`flex flex-wrap items-baseline justify-between gap-x-2 text-sm ${assistant.online ? '' : 'opacity-60'}`}
+                    className={`flex flex-wrap items-center justify-between gap-x-2 text-sm ${assistant.online ? '' : 'opacity-60'}`}
                   >
                     <span
                       className="inline-flex items-center gap-1.5 text-stone-700 dark:text-stone-300"
                       title={assistant.session_id ? sessionHint(t, assistant.agent ?? 'claude', assistant.session_id) : undefined}
                     >
-                      <PresenceDot online={assistant.online ?? false} />
                       <AgentIcon agent={assistant.agent ?? 'claude'} />
                       {assistant.name}
                     </span>

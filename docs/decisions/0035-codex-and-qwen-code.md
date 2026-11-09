@@ -48,7 +48,10 @@ directory and the tool names, and it sends the agent to the server in `X-Coloqo-
 **The web shows each session's agent** (the author, 2026-11-09): the server keeps the agent an
 Assistant last registered with, and the Team page and the person's own sessions show it as an icon
 beside the session's name — the agents' own icons, chosen by the author — with the agent's name
-on hover; beside a written name the icon is decoration, hidden from assistive technology. The hint
+on hover; beside a written name the icon is decoration, hidden from assistive technology. The
+icon takes the place of decision 0029's presence dot (the author, 2026-11-09: "the offline agent is
+grey anyway"): an online session is told by "online" beside it, an offline one by its faded line
+and when it was last seen. The hint
 with a session's id names the command that resumes it where the agent has one (`claude --resume`,
 `codex resume`).
 
