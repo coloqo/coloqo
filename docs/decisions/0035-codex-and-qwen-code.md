@@ -18,7 +18,8 @@ computer and at the user level, so it works in every project:
 - the hooks: SessionStart, UserPromptSubmit, PostToolUse, Stop — into `~/.codex/hooks.json`, or
   the `hooks` of `~/.qwen/settings.json`, each command pinned to `uvx coloqo@<version>`, as the
   Claude Code plugin pins them; entries of other tools are kept;
-- the MCP server, through the agent's own `codex mcp add` or `qwen mcp add --scope user`;
+- the MCP server: through Codex's own `codex mcp add`, which keeps its settings' format; into
+  the `mcpServers` of Qwen's settings, in the same write as the hooks;
 - three skills into `~/.agents/skills`, which both agents read: `coloqo`, and `coloqo-focus` and
   `coloqo-link` made from the Claude Code commands `/coloqo:focus` and `/coloqo:link`; invoked as
   `$coloqo-focus` in Codex and `/coloqo-focus` in Qwen.
@@ -55,8 +56,8 @@ Messages reach a session by its prompt hook (decision 0006), not by themselves. 
 SessionStart hooks at the first prompt, so the briefing comes with it.
 
 **Updates** (decision 0027): the hint names the installer with the new version for the session's
-agent. The Assistant runs it; if the agent's sandbox refuses to write the agent's settings, it asks
-its user to run the same command in a terminal. Then the user approves the changed hooks in
+agent. The Assistant runs it; if the agent's sandbox stops it (a shell command without network, or the
+agent's settings outside the project), it asks its user to run the same command in a terminal. Then the user approves the changed hooks in
 `/hooks` — a new pinned version is a changed hook definition, and both agents ask again — and
 restarts the session. The author found one approval per update acceptable (2026-11-09). The update
 path is checked on purpose before each rollout that changes what the installer writes: version N,

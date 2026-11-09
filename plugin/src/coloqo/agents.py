@@ -7,6 +7,7 @@ pinned commands work as before.
 """
 
 import contextlib
+import functools
 import os
 import subprocess
 import time
@@ -140,8 +141,22 @@ def _parent(pid: int) -> tuple[int, str] | None:
 
 
 def agent_pid() -> int | None:
-    """Return the pid of the agent's process above this one; ``None`` when not found."""
-    names = PROCESS_NAMES.get(current())
+    """Return the pid of the agent's process above this one; ``None`` when not found.
+
+    Looked up once per process and agent: the parent does not change, and on macOS each level is
+    two ``ps`` runs, which an MCP server would otherwise repeat at every call.
+    """
+    return _find_agent(current())
+
+
+@functools.cache
+def _find_agent(agent: Agent) -> int | None:
+    """Return the pid of the nearest ancestor that is the agent's process; ``None`` if none.
+
+    Args:
+        agent: The agent whose process names to look for.
+    """
+    names = PROCESS_NAMES.get(agent)
     if not names:
         return None
     for pid, name in _parents():

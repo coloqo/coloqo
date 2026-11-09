@@ -1025,7 +1025,8 @@ def pulse(stop: threading.Event, seconds: float = PULSE_SECONDS) -> None:
     server stands in for Claude Code's watch (decisions 0029, 0035): every ``seconds`` it calls
     the server as the session's Assistant and posts the intervals of whose move it was (0033).
     Until the session is known (Codex names it at the first tool call, or its hooks leave it),
-    nothing is sent and decision 0029's minute after a request applies. Failures are quiet.
+    nothing is sent and decision 0029's minute after a request applies. Failures are quiet: the
+    next pass registers again and sends what is still unsent, as the watch does after a break.
 
     Args:
         stop: Set to end the loop.
@@ -1039,13 +1040,16 @@ def pulse(stop: threading.Event, seconds: float = PULSE_SECONDS) -> None:
     unsent: list[trail.Interval] = []
     while True:
         current = agents.session_id()
+        if current and current != session:
+            # A new session starts its own log; a failure below keeps the log and what is unsent.
+            if api is not None:
+                api.close()
+            api, session = None, current
+            moves, unsent = trail.MoveLog(current), []
         try:
-            if current and (api is None or current != session):
-                if api is not None:
-                    api.close()
-                api, session = Api(timeout=10), current
+            if current and api is None:
+                api = Api(timeout=10)
                 api.register(Project.detect(), current)
-                moves, unsent = trail.MoveLog(current), []
             if api is not None and api.assistant_key and moves is not None:
                 api.request("GET", f"/assistant/{api.assistant_key}")
                 if api.team:

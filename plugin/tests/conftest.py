@@ -34,3 +34,4 @@ def agent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agents, "_current", agents.Agent.Claude)
     monkeypatch.setattr(agents, "_seen", None)
     monkeypatch.setattr(agents, "config_dir", lambda: tmp_path / "agents-config")
+    agents._find_agent.cache_clear()

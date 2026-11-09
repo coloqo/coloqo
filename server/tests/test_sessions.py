@@ -198,6 +198,7 @@ def test_an_outdated_codex_or_qwen_session_runs_the_installer(
     unknown = setup.alice_api.client.get("/api/briefing", headers={"X-Coloqo-Agent": "vim"}).json()
 
     assert f"`uvx coloqo@0.5.1 install --agent {agent}`" in hint["text"]
+    assert "if the sandbox stops it (no network" in hint["text"]
     assert "ask your user to run it in a terminal" in hint["text"]
     assert "claude plugin update" not in hint["text"]
     assert "claude plugin update coloqo@coloqo" in unknown["text"]

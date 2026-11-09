@@ -364,3 +364,99 @@ def test_the_commands_take_the_agent(monkeypatch: pytest.MonkeyPatch) -> None:
     cli.main(["hook", "stop", "--agent", "qwen"])
 
     assert served == [Agent.Qwen]
+
+
+def test_a_failed_pulse_keeps_what_is_unsent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A server failure makes the next pass register again, keeping the session's log of moves:
+    what was not sent goes then, as the watch does after a break (decisions 0033, 0035).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    opened: list[str] = []
+
+    class Moves:
+        """A log of moves that counts how often it is opened."""
+
+        def __init__(self, session: str) -> None:
+            """Open the session's log.
+
+            Args:
+                session: The session.
+            """
+            opened.append(session)
+
+        def take(self) -> list[tuple[str, int, int]]:
+            """Return the intervals finished since the last call."""
+            return [("human", 1_000_000_000, 2_000_000_000)]
+
+    class Flaky(FakeApi):
+        """A client whose first call after registering fails."""
+
+        failed = False
+
+        def request(self, method: str, path: str, **kwargs: Any) -> Any:
+            """Fail once, then record.
+
+            Args:
+                method: HTTP method.
+                path: API path.
+                **kwargs: Body and the rest.
+            """
+            if not Flaky.failed:
+                Flaky.failed = True
+                raise mcp_server.ColoqoError(502, "Bad gateway")
+            return super().request(method, path, **kwargs)
+
+    class TwoPasses:
+        """A stop that lets the loop run twice."""
+
+        def __init__(self) -> None:
+            """Start with no pass made."""
+            self.passes = 0
+
+        def wait(self, seconds: float) -> bool:
+            """Count a pass; stop after the second.
+
+            Args:
+                seconds: Ignored.
+            """
+            self.passes += 1
+            return self.passes >= 2
+
+    agents.use(Agent.Qwen)
+    monkeypatch.setenv("QWEN_CODE_SESSION_ID", "q-2")
+    monkeypatch.setattr(mcp_server, "Api", Flaky)
+    monkeypatch.setattr(mcp_server.trail, "MoveLog", Moves)
+    FakeApi.log = []
+
+    mcp_server.pulse(TwoPasses(), seconds=0)  # type: ignore[arg-type]
+
+    assert opened == ["q-2"]
+    assert FakeApi.log == [
+        ("register", "q-2"),
+        ("register", "q-2"),
+        ("GET", "/assistant/key-q-2"),
+        ("POST", "/moves"),
+    ]
+
+
+def test_the_agent_s_process_is_looked_up_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The MCP server finds the ``codex`` process once, not at every call (decision 0035).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    walks: list[int] = []
+
+    def parents() -> list[tuple[int, str]]:
+        """Count the walk and return a ``codex`` parent."""
+        walks.append(1)
+        return [(40, "codex")]
+
+    agents.use(Agent.Codex)
+    monkeypatch.setattr(agents, "_parents", parents)
+
+    pids = [agents.agent_pid() for _ in range(3)]
+
+    assert (pids, len(walks)) == ([40, 40, 40], 1)

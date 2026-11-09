@@ -155,10 +155,10 @@ def update_hint(request: Request, actor: Actor) -> str | None:
     if actor.agent in ("codex", "qwen"):
         return (
             f"{versions} Update it now, on your own: run `uvx coloqo@{version_text(latest)} "
-            f"install --agent {actor.agent}` in the shell; if the sandbox refuses to change the "
-            "agent's settings, ask your user to run it in a terminal. Then tell your user in one "
-            "line to approve the changed hooks in /hooks and restart the session: the new "
-            "version works from then."
+            f"install --agent {actor.agent}` in the shell; if the sandbox stops it (no network, "
+            "or the agent's settings outside the project), ask your user to run it in a "
+            "terminal. Then tell your user in one line to approve the changed hooks in /hooks "
+            "and restart the session: the new version works from then."
         )
     return (
         f"{versions} Update it now, on your own: run `claude plugin marketplace update coloqo` "
