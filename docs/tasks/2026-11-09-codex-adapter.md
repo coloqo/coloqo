@@ -1,4 +1,4 @@
-# Coloqo for members who work in Codex
+# Coloqo for members who work in Codex or Qwen Code
 
 ## What happened
 
@@ -54,6 +54,27 @@ The author has `codex-cli 0.160.0` installed; nothing below has been run yet.
   `claude plugin …` commands.
 - **Liveness rests on `watch`** (decision 0029): its heartbeat every 15 s is how the server knows a
   session runs and whom an address reaches. A Codex session without a monitor has no `watch`.
+
+## Qwen Code too (added 2026-11-09)
+
+A second new member will work in Qwen Code on Linux. From the docs in the QwenLM/qwen-code
+repository (`docs/users`, CLI 0.27.1 of 2026-11-09); not installed, not run. It stands much closer
+to Claude Code than Codex does:
+
+- **Hooks** — the same events in the `hooks` key of `settings.json` (`~/.qwen/`, `.qwen/`); the
+  input carries `session_id`, `cwd`, `tool_name`, `tool_input`; matchers accept Claude Code names
+  (`Bash`, `Write`) besides its own ids (`run_shell_command`, `write_file`, `edit`); plain stdout of
+  SessionStart and UserPromptSubmit reaches the model, JSON `additionalContext` too. User hooks load
+  regardless of folder trust; project hooks wait for an approval tied to the exact config.
+- **MCP** — `mcpServers` in `settings.json`, the same shape as Claude Code; `qwen mcp add`.
+- **Skills** — `SKILL.md` in `~/.qwen/skills` or `~/.agents/skills` (shared with Codex), project
+  `.qwen/skills`, `.agents/skills`; `/<skill>` invokes one.
+- **Extensions** install from git, npm or a marketplace and accept a Claude Code plugin's manifest,
+  but no hooks are listed among an extension's fields. No monitor.
+
+So the Qwen adapter may be almost pure configuration: the same `hook` commands in
+`~/.qwen/settings.json`, the same MCP entry, the skill. Its open points are the same as Codex's:
+liveness without `watch`, the session id for the MCP server, the update hint.
 
 ## Proposal (to discuss)
 
