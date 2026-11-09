@@ -221,3 +221,9 @@ decided; they were asked:
   be closed in the first hours of the next month. Coloqo kept no time zone. Asked: the Team's time
   zone (not the instance's, not UTC); a new Team takes its creator's browser's zone, existing
   Teams start in UTC; the owner changes it.
+- **November's approval moment** (a side review; the author, 2026-11-10): the Team approved the
+  November plan on 6 November, but in Coloqo it is approved after the 10th, and marks follow the
+  moment of approving. For November only, without code: tasks created after 6 November are not put
+  into the draft; after approving, a human adds them and they become off-plan (or found, with an
+  explicit `source`). An approval date set in the past is left for later, if plans keep being
+  moved in after the fact.
