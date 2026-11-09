@@ -2400,7 +2400,7 @@
         "type": "object"
       },
       "TaskPatch": {
-        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.\n    period_start: A promise's first day.\n    period_end: A promise's last day.",
+        "description": "Editing a task; every description is kept in the timeline.\n\nAttributes:\n    title: A new title.\n    description: A new description.\n    area: A new Area, by slug; the number stays.\n    period_start: A promise's first day.\n    period_end: A promise's last day.\n    parent: The number of the task or promise to move it under; ``null`` takes it out of its\n        parent (decision 0034).",
         "properties": {
           "area": {
             "anyOf": [
@@ -2426,6 +2426,17 @@
               }
             ],
             "title": "Description"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
           },
           "period_end": {
             "anyOf": [
@@ -2721,7 +2732,7 @@
         "type": "object"
       },
       "TimelineOut": {
-        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
+        "description": "An entry of a task's timeline (decision 0033).\n\nAttributes:\n    kind: ``created``, ``stage``, ``skipped``, ``assigned``, ``waiting``, ``resumed``,\n        ``described``, ``linked``, ``retitled``, ``area``, ``period``, ``parent``,\n        ``child_in``, ``child_out``, ``closed``.\n    author: Pseudonym of the human on whose behalf it happened; ``None`` for Coloqo.\n    assistant: Name of the Assistant that did it, if any.\n    data: What the kind carries.\n    created_at: When it happened.",
         "properties": {
           "assistant": {
             "anyOf": [
@@ -7730,7 +7741,7 @@
         ]
       },
       "patch": {
-        "description": "Edit a task's title, description or Area; the timeline keeps every description.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task or Area; 403 when the caller may not\n        write there.",
+        "description": "Edit a task's title, description, Area, period or parent; the timeline keeps each change.\n\nArgs:\n    request: The incoming request.\n    team: The Team's slug.\n    number: The task's number.\n    body: What changes.\n    actor: The caller.\n    db: Database session.\n\nRaises:\n    HTTPException: 404 when there is no such task, Area or parent; 403 when the caller may\n        not write there; 422 for a parent that cannot hold it (decision 0034).",
         "operationId": "edit_task_api_team__team__task__number__patch",
         "parameters": [
           {
