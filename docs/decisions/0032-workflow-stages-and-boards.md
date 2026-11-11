@@ -74,7 +74,12 @@ The Assistant moves the stage; the status follows.
   web neither moves stages nor closes tasks; they ask their Assistant. A human may still close a free
   Topic in the web.
 - **A human in the web plans**: changes the order within a status by dragging and sets the
-  assignee.
+  assignee. *Clarified 2026-11-11 (the author):* "a human plans" means the human decides; they set
+  the assignee in the web or through their own Assistant (`assign_task`), as decision 0031 says.
+  Coloqo is made to work through assistants, not by hand. An Assistant assigns only when its human
+  says whose the task is, one call per task; a task in work of another human it hands over only
+  after the refusal is shown to its human and they confirm (`hand_over`), the same question the web
+  asks. The new assignee's sessions get one line about it.
 - **The Assistant's actions:**
 
   | When | Action | What happens |
@@ -128,6 +133,7 @@ The Assistant moves the stage; the status follows.
 - A wait as a stage would erase where the task stood; as a mark with a column by condition, the
   board shows it and the stage stays.
 - The Assistant does the work around a move, so the move goes through it; ordering and assigning are
-  planning and stay with humans.
+  planning and stay with humans' decisions (clarified 2026-11-11: an Assistant assigns on its
+  human's word).
 - Final finished stages and mentions instead of relations keep the tracker from drowning in
   bureaucracy.

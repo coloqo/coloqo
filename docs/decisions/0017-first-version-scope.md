@@ -35,7 +35,8 @@ implementer and await the author's review; each simplification names what it rep
   project on one computer act as one Assistant.
 - **At the turn limit a Message is refused**, not held for publication with a frame Question
   (decision 0007). The Assistant tells its human; a human Message in the Topic — from the web, or
-  relayed by the Assistant with `as_human` — resets the count.
+  relayed by the Assistant with `as_human` — resets the count. *Clarified 2026-11-11 (decision
+  0007):* so does a reply the Assistant wrote with its human (`with_human`).
 - **Events wake streams inside the one server process**, not through `LISTEN/NOTIFY` (decision
   0008); a stream also rereads the log every 5 seconds. `LISTEN/NOTIFY` comes with a second process.
 - **The installation token is kept in a user-only file**, not in the OS keychain (decision 0003

@@ -905,6 +905,27 @@ def test_a_promise_is_created_and_closed_as_missed(monkeypatch: pytest.MonkeyPat
     assert api.sent[1][2] == {"outcome": "The API slipped", "cancelled": False, "missed": True}
 
 
+def test_assign_task_names_the_person_or_unassigns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``-`` unassigns rather than naming a person ``-``; ``hand_over`` reaches the server only
+    when the user confirmed it (decision 0032, 2026-11-11).
+
+    Args:
+        monkeypatch: Patching helper from pytest.
+    """
+    api = AnsweringApi()
+    monkeypatch.setattr(mcp_server, "_client", lambda: api)
+
+    mcp_server.assign_task("T-3", "bob")
+    mcp_server.assign_task("T-3", "-")
+    mcp_server.assign_task("T-3", "carol", hand_over=True)
+
+    assert [(path, body) for _, path, body in api.sent] == [
+        ("/team/acme/task/3/assign", {"assignee": "bob", "hand_over": False}),
+        ("/team/acme/task/3/assign", {"assignee": None, "hand_over": False}),
+        ("/team/acme/task/3/assign", {"assignee": "carol", "hand_over": True}),
+    ]
+
+
 def test_a_task_handed_over_is_told_to_both_assignees() -> None:
     """A task handed to another person tells the former assignee's sessions to stop and the new
     one's to take it."""

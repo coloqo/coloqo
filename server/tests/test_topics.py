@@ -319,6 +319,30 @@ def test_relayed_human_words_reset_the_turns(setup: Setup) -> None:
     assert bob.get(f"/api/team/{setup.team}/task/{tid}/topic").json()["turns_since_human"] == 0
 
 
+def test_a_reply_with_its_human_resets_the_turns(setup: Setup) -> None:
+    """A reply "with bob" brings bob's decision and resets the count, even at the limit; a reply
+    without him counts (decision 0007, clarified 2026-11-11).
+
+    Args:
+        setup: The Team.
+    """
+    setup.alice.patch(f"/api/team/{setup.team}", json={"turn_limit": 1})
+    tid = _open(setup)["number"]
+    bob = setup.bob_web.client
+    path = f"/api/team/{setup.team}/task/{tid}"
+    bob.post(f"{path}/message", json={"number": 2, "body": "a"})
+
+    without = bob.post(f"{path}/message", json={"number": 3, "body": "b"})
+    together = bob.post(f"{path}/message", json={"number": 3, "body": "b", "with_human": True})
+    after = bob.post(f"{path}/message", json={"number": 4, "body": "c"})
+
+    assert without.json()["detail"]["code"] == "turn_limit"
+    assert together.status_code == 201
+    assert together.json()["human_part"] == "with"
+    assert after.status_code == 201
+    assert bob.get(f"{path}/topic").json()["turns_since_human"] == 1
+
+
 def _open_free(setup: Setup) -> int:
     """Open a free Topic by Alice's Assistant, as a plugin that knows tasks; return its number.
 

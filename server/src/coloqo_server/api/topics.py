@@ -178,7 +178,8 @@ class TopicOut(BaseModel):
         holder_key: Its key.
         created_by: Pseudonym of whoever opened it.
         last_number: Number of the newest Message.
-        turns_since_human: Assistants' turns since the last human Message.
+        turns_since_human: Assistants' turns since a human last took part: their Message,
+            their words or a reply written with them.
         turn_limit: The Team's limit of such turns.
         unread: Messages the caller has not read, if they take part.
         addressed: Some unread Message is addressed to the caller.
@@ -271,7 +272,8 @@ class MessageIn(BaseModel):
         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
         files: Numbers of files uploaded to this Topic to attach.
         as_human: The Assistant relays its human's own words; resets the turn count.
-        with_human: The Assistant's human asked for this Message or saw its text (0026).
+        with_human: The Assistant's human asked for this Message or saw its text (0026); resets
+            the turn count too, the human's decision being in it (0007).
         reply_to: Number of an earlier Message of the Topic this one answers.
     """
 
@@ -840,7 +842,8 @@ async def post(
             (decision 0007).
     """
     to_user_id, to_assistant_id, meant_for_id = await addressee(db, topic.team_id, to)
-    human = actor.is_human or as_human
+    # A human's decision resets the count, whoever brings it (decision 0007, clarified 2026-11-11).
+    human = actor.is_human or as_human or (with_human and kind == MessageKind.Message)
     team = await db.get(Team, topic.team_id)
     assert team is not None
     task = await task_number(db, topic)
@@ -856,8 +859,9 @@ async def post(
                     "message": (
                         f"{label} has reached {team.turn_limit} Assistants' turns without "
                         "a human, and waits for one. Ask your human: they can write in the Topic "
-                        "in the web interface, or tell you what to post, and you post their words "
-                        "with as_human=true."
+                        "in the web interface, tell you what to post, and you post their words "
+                        "with as_human=true, or decide on a reply you show them, and you post it "
+                        "with with_human=true."
                     ),
                 },
             )

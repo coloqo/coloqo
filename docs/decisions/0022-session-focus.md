@@ -4,6 +4,8 @@
 the Team in each of them · **Refines:** decisions 0006, 0020
 
 **Refined by decision 0024** (2026-10-20): `mine` means the Topics of this session's Assistant.
+*Clarified 2026-11-11 (the author):* `mine` also lets through the events about its user's tasks —
+one assigned to them, one handed away from them, one of theirs gone idle; `quiet` stays quiet.
 
 The watch prints a line for every relevant event, the prompt reminder lists Topics addressed to
 the person, and the session start shows the Inbox — in every session alike. A developer barely

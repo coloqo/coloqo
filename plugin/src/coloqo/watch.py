@@ -214,7 +214,7 @@ def deliver(kind: str, data: dict[str, Any], me: Me) -> str | None:
         me: This session.
     """
     line = describe(kind, data, me)
-    if line and focus.allows(focus.load(), kind, data, me.assistant):
+    if line and focus.allows(focus.load(), kind, data, me.assistant, me.pseudonym):
         return line
     return None
 

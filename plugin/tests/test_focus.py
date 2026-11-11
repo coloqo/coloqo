@@ -99,6 +99,24 @@ def test_focus_lets_through_what_it_names() -> None:
     assert focus.allows(Focus("all"), "message", by_carol, MINE)
 
 
+def test_mine_lets_through_its_user_s_tasks() -> None:
+    """``mine`` passes an assignment to its user, a hand-over away from them and their idle task;
+    not another person's assignment, and ``quiet`` stays quiet (decision 0022, 2026-11-11).
+    """
+    to_me = {"ref": "T-7", "event": "assigned", "assignee": "alice", "previous": None}
+    away = {"ref": "T-7", "event": "assigned", "assignee": "bob", "previous": "alice"}
+    to_bob = {"ref": "T-7", "event": "assigned", "assignee": "bob", "previous": "carol"}
+    idle = {"ref": "T-7", "assignee": "alice", "days": 5}
+    mine = Focus("mine")
+
+    assert focus.allows(mine, "task", to_me, MINE, "alice")
+    assert focus.allows(mine, "task", away, MINE, "alice")
+    assert focus.allows(mine, "task_idle", idle, MINE, "alice")
+    assert not focus.allows(mine, "task", to_bob, MINE, "alice")
+    assert not focus.allows(mine, "message", _message(to="alice"), MINE, "alice")
+    assert not focus.allows(Focus("quiet"), "task", to_me, MINE, "alice")
+
+
 def test_watch_skips_stages_and_tells_of_inactivity() -> None:
     """Stage lines stay out of sessions; closing for inactivity and its notice come in."""
     stage = describe("message", _message(kind="stage", to="alice"), ME)
@@ -249,6 +267,24 @@ def test_watch_prints_only_what_the_focus_lets_through(config: Path) -> None:
 
     assert before is not None
     assert after is None
+
+
+def test_the_watch_under_mine_tells_of_a_task_assigned_to_its_user(config: Path) -> None:
+    """Under ``mine`` the watch still prints an assignment to its user (2026-11-11), and not one
+    to another person.
+
+    Args:
+        config: The configuration directory.
+    """
+    assigned = {"team": "acme", "ref": "T-7", "title": "Export", "event": "assigned"}
+    to_me = assigned | {"assignee": "alice", "previous": None, "stage": "Backlog", "author": "bob"}
+    to_carol = to_me | {"assignee": "carol"}
+    focus.save(Focus("mine"))
+
+    line = deliver("task", to_me, ME)
+
+    assert line is not None and "T-7" in line and "assigned to your user by bob" in line
+    assert deliver("task", to_carol, ME) is None
 
 
 def test_register_sends_the_link_files_team(monkeypatch: pytest.MonkeyPatch) -> None:

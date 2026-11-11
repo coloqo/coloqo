@@ -881,6 +881,33 @@ def take_task(
 
 @mcp.tool(
     description=(
+        "Assign a task to a person of the Team, or unassign it with `assignee` '-', only when "
+        "your user says whose it is: planning on their behalf. One call per task. A task in "
+        "work of someone else is refused, since handing it over tells their sessions to stop: "
+        "tell your user, and only if they confirm, call again with `hand_over=true`."
+    )
+)
+def assign_task(task: str, assignee: str, hand_over: bool = False) -> str:
+    """Assign a task (decisions 0031, 0032).
+
+    Args:
+        task: The task's reference.
+        assignee: The person's pseudonym; ``-`` to unassign.
+        hand_over: The user confirmed taking a task in work away from its assignee.
+
+    Raises:
+        ToolError: Not a task reference, or the server refused (no tracker, a finished task, a
+            task in work without ``hand_over``, an unknown person).
+    """
+    name = None if assignee.strip() in ("-", "") else assignee
+    data = _call("POST", f"{_task(task)}/assign", json={"assignee": name, "hand_over": hand_over})
+    trail.mark_done()
+    whom = f"assigned to {data['assignee']}" if data.get("assignee") else "unassigned"
+    return f"{data['ref']} «{data['title']}» is {whom} (stage {data['stage']})."
+
+
+@mcp.tool(
+    description=(
         "Move your user's task to another stage of its workflow (the briefing names them) when "
         "the work turns there; back moves are fine. Stages passed at once go in `skip` with "
         "the reason each, e.g. {'Documentation': 'no documentation changes'}, never silently. "
