@@ -101,11 +101,11 @@ export function TaskPanel({ task, team }: { task: TaskDetail; team?: TeamDetail 
   const queryClient = useQueryClient()
   const finished = task.category === 'finished'
   const assign = useMutation({
-    mutationFn: (assignee: string) =>
+    mutationFn: ({ assignee, handOver }: { assignee: string; handOver: boolean }) =>
       call(
         api.POST('/api/team/{team}/task/{number}/assign', {
           params: { path: { team: task.team, number: task.number } },
-          body: { assignee: assignee || null },
+          body: { assignee: assignee || null, hand_over: handOver },
         }),
       ),
     onSuccess: () => {
@@ -133,16 +133,15 @@ export function TaskPanel({ task, team }: { task: TaskDetail; team?: TeamDetail 
               onChange={(event) => {
                 const to = event.target.value
                 // Handing over a task in work: its assignee's Assistant stops moving it (0031).
+                const handOver = task.category === 'in_progress' && !!task.assignee && to !== task.assignee
                 if (
-                  task.category === 'in_progress' &&
-                  task.assignee &&
-                  to !== task.assignee &&
+                  handOver &&
                   !window.confirm(t('task.handOver', { ref: task.ref, from: task.assignee, to: to || t('task.unassigned') }))
                 ) {
-                  event.target.value = task.assignee
+                  event.target.value = task.assignee ?? ''
                   return
                 }
-                assign.mutate(to)
+                assign.mutate({ assignee: to, handOver })
               }}
               disabled={assign.isPending}
               aria-label={t('task.assignee')}

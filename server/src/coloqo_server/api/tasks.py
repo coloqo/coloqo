@@ -1,9 +1,9 @@
 """Tasks: the tracker's API (decisions 0031, 0032, 0033).
 
 A task is ``T-<number>`` in its Team. Only the assignee's Assistant moves and closes it; a human
-in the web plans: assigns and orders. Planning needs the tracker on, moving a task to another
-parent included (decision 0034); taking, moving by stages and closing work without it. Every change
-goes to the task's timeline.
+plans — assigns and orders — in the web or, for assigning, through their own Assistant. Planning
+needs the tracker on, moving a task to another parent included (decision 0034); taking, moving by
+stages and closing work without it. Every change goes to the task's timeline.
 """
 
 from datetime import date, datetime, timedelta
@@ -343,13 +343,15 @@ class LinkIn(BaseModel):
 
 
 class AssignIn(BaseModel):
-    """Assigning a task: planning (decision 0031).
+    """Assigning a task: planning (decision 0031), by a human or their Assistant (0032).
 
     Attributes:
         assignee: Pseudonym of a human of the Team; ``None`` to unassign.
+        hand_over: Take a task in work away from its assignee, after the human confirmed it.
     """
 
     assignee: str | None = None
+    hand_over: bool = False
 
 
 class OrderIn(BaseModel):
@@ -1726,10 +1728,12 @@ async def link_task(
 async def assign_task(
     request: Request, team: str, number: int, body: AssignIn, actor: ActorDep, db: DB
 ) -> TaskOut:
-    """Assign a task to a human of the Team, or unassign it: planning (decision 0031).
+    """Assign a task to a human of the Team, or unassign it: planning (decisions 0031, 0032).
 
-    A task in work may be handed over too, e.g. when its assignee is ill: the event names the
-    former assignee, whose sessions are told to stop, and the new one's to take it.
+    A human assigns in the web or through their own Assistant. A task in work may be handed over
+    too, e.g. when its assignee is ill, only with ``hand_over``: the web asks first, an Assistant
+    asks its human after the refusal. The event names the former assignee, whose sessions are told
+    to stop, and the new one's to take it.
 
     Args:
         request: The incoming request.
@@ -1741,21 +1745,37 @@ async def assign_task(
 
     Raises:
         HTTPException: 404 when there is no such task; 403 when the caller may not write there;
-            409 ``no_tracker`` without the tracker, ``finished`` for a finished task; 422 for
-            an unknown pseudonym.
+            409 ``no_tracker`` without the tracker, ``finished`` for a finished task,
+            ``hand_over`` for a task in work of another human without ``hand_over``; 422 for an
+            unknown pseudonym.
     """
     task, found = await task_for(db, team, number, actor, write=True)
     need_tracker(found)
+    label = f"{found.slug}/{ref(task.number)}"
     if task.finished_at is not None:
         raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            {"code": "finished", "message": f"{found.slug}/{ref(task.number)} is finished"},
+            status.HTTP_409_CONFLICT, {"code": "finished", "message": f"{label} is finished"}
         )
     user = await assignee_by_name(db, found.id, body.assignee) if body.assignee else None
     new_id = user.id if user else None
     recipients: set[int] = set()
     if new_id != task.assignee_id:
         former = await pseudonyms(db, {task.assignee_id})
+        stage = await db.get(Stage, task.stage_id)
+        assert stage is not None
+        in_work = CATEGORY[stage.kind] == Category.InProgress and task.assignee_id is not None
+        if in_work and not body.hand_over:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "hand_over",
+                    "message": (
+                        f"{label} is in work by {former.get(task.assignee_id or 0)}, stage "
+                        f"{stage.name}: handing it over tells their sessions to stop. Ask your "
+                        "human; only if they confirm, assign again with hand_over=true."
+                    ),
+                },
+            )
         record(db, task, "assigned", actor, {"from": task.assignee_id, "to": new_id})
         previous = former.get(task.assignee_id or 0)
         task.assignee_id = new_id

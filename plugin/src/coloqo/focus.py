@@ -125,14 +125,21 @@ def save(focus: Focus, session: str | None = None) -> Path:
     return path
 
 
-def allows(focus: Focus, kind: str, data: dict[str, Any], assistant: str) -> bool:
+def allows(
+    focus: Focus, kind: str, data: dict[str, Any], assistant: str, pseudonym: str | None = None
+) -> bool:
     """Whether an event may reach a session with this focus; the watch asks before printing.
+
+    ``mine`` passes the Topics of this session's Assistant and the events about its user's tasks:
+    one assigned to them, one handed away from them, one of theirs gone idle (decision 0022,
+    clarified 2026-11-11).
 
     Args:
         focus: The session's focus.
         kind: Event kind.
         data: Event data.
         assistant: This session's Assistant, by key (decision 0024).
+        pseudonym: This session's person.
     """
     if focus.mode == "all":
         return True
@@ -140,6 +147,9 @@ def allows(focus: Focus, kind: str, data: dict[str, Any], assistant: str) -> boo
         return False
     if focus.mode == "mine":
         involved = set(data.get("assistants") or []) | {data.get("holder"), data.get("from")}
-        return assistant in involved or data.get("to_assistant") == assistant
+        if assistant in involved or data.get("to_assistant") == assistant:
+            return True
+        users = {data.get("assignee"), data.get("previous")}
+        return kind in ("task", "task_idle") and pseudonym is not None and pseudonym in users
     author = str(data.get("author") or "").lower()
     return kind in ("message", "topic") and author in {p.lower() for p in focus.people}

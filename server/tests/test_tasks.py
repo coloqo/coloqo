@@ -532,7 +532,10 @@ def test_a_task_in_work_is_handed_over(
     number = _task(setup, alice)["number"]
     setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
 
-    handed = setup.alice.post(f"{_path(setup, number)}/assign", json={"assignee": "bob"})
+    unconfirmed = setup.alice.post(f"{_path(setup, number)}/assign", json={"assignee": "bob"})
+    handed = setup.alice.post(
+        f"{_path(setup, number)}/assign", json={"assignee": "bob", "hand_over": True}
+    )
     by_alice = alice.client.post(f"{_path(setup, number)}/stage", json={"stage": "Design"})
     closed_by_alice = alice.client.post(f"{_path(setup, number)}/close", json={"outcome": "done"})
     closed_by_old_plugin = setup.alice_api.client.patch(
@@ -545,6 +548,7 @@ def test_a_task_in_work_is_handed_over(
             "ORDER BY id DESC LIMIT 1"
         ).fetchone()
 
+    assert unconfirmed.json()["detail"]["code"] == "hand_over"
     assert handed.json()["assignee"] == "bob"
     assert (event["assignee"], event["previous"]) == ("bob", "alice")
     assert by_alice.json()["detail"]["code"] == "not_assignee"
@@ -552,6 +556,30 @@ def test_a_task_in_work_is_handed_over(
     assert closed_by_old_plugin.status_code == 409
     assert (taken["assignee"], taken["holder"]) == ("bob", bob.assistant)
     assert taken["category"] == "in_progress"
+
+
+def test_an_assistant_assigns_on_its_human_s_behalf(
+    setup: Setup, new: tuple[Plugin, Plugin]
+) -> None:
+    """An Assistant assigns and unassigns a task to do, like its human in the web (decisions
+    0031, 0032 clarified 2026-11-11); the timeline names the Assistant.
+
+    Args:
+        setup: The Team.
+        new: Assistants of the new plugin.
+    """
+    alice, _ = new
+    _tracker(setup)
+    number = _create(setup, "Export to CSV")["number"]
+
+    assigned = alice.client.post(f"{_path(setup, number)}/assign", json={"assignee": "@Bob"})
+    unassigned = alice.client.post(f"{_path(setup, number)}/assign", json={"assignee": None})
+    timeline = setup.alice.get(_path(setup, number)).json()["timeline"]
+
+    assert (assigned.status_code, assigned.json()["assignee"]) == (200, "bob")
+    assert unassigned.json()["assignee"] is None
+    events = [(e["data"].get("to"), e["assistant"]) for e in timeline if e["kind"] == "assigned"]
+    assert events == [("bob", alice.assistant), (None, alice.assistant)]
 
 
 def _create(setup: Setup, title: str, type_: str = "task", parent: int | None = None) -> dict:

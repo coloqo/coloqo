@@ -1505,10 +1505,12 @@ export interface paths {
         put?: never;
         /**
          * Assign Task
-         * @description Assign a task to a human of the Team, or unassign it: planning (decision 0031).
+         * @description Assign a task to a human of the Team, or unassign it: planning (decisions 0031, 0032).
          *
-         *     A task in work may be handed over too, e.g. when its assignee is ill: the event names the
-         *     former assignee, whose sessions are told to stop, and the new one's to take it.
+         *     A human assigns in the web or through their own Assistant. A task in work may be handed over
+         *     too, e.g. when its assignee is ill, only with ``hand_over``: the web asks first, an Assistant
+         *     asks its human after the refusal. The event names the former assignee, whose sessions are told
+         *     to stop, and the new one's to take it.
          *
          *     Args:
          *         request: The incoming request.
@@ -1520,8 +1522,9 @@ export interface paths {
          *
          *     Raises:
          *         HTTPException: 404 when there is no such task; 403 when the caller may not write there;
-         *             409 ``no_tracker`` without the tracker, ``finished`` for a finished task; 422 for
-         *             an unknown pseudonym.
+         *             409 ``no_tracker`` without the tracker, ``finished`` for a finished task,
+         *             ``hand_over`` for a task in work of another human without ``hand_over``; 422 for an
+         *             unknown pseudonym.
          */
         post: operations["assign_task_api_team__team__task__number__assign_post"];
         delete?: never;
@@ -2344,14 +2347,20 @@ export interface components {
         };
         /**
          * AssignIn
-         * @description Assigning a task: planning (decision 0031).
+         * @description Assigning a task: planning (decision 0031), by a human or their Assistant (0032).
          *
          *     Attributes:
          *         assignee: Pseudonym of a human of the Team; ``None`` to unassign.
+         *         hand_over: Take a task in work away from its assignee, after the human confirmed it.
          */
         AssignIn: {
             /** Assignee */
             assignee?: string | null;
+            /**
+             * Hand Over
+             * @default false
+             */
+            hand_over?: boolean;
         };
         /**
          * AssistantIn
@@ -2974,7 +2983,8 @@ export interface components {
          *         to: Pseudonym of a Member or an Assistant's name; empty for everyone in the Topic.
          *         files: Numbers of files uploaded to this Topic to attach.
          *         as_human: The Assistant relays its human's own words; resets the turn count.
-         *         with_human: The Assistant's human asked for this Message or saw its text (0026).
+         *         with_human: The Assistant's human asked for this Message or saw its text (0026); resets
+         *             the turn count too, the human's decision being in it (0007).
          *         reply_to: Number of an earlier Message of the Topic this one answers.
          */
         MessageIn: {
@@ -4147,7 +4157,8 @@ export interface components {
          *         holder_key: Its key.
          *         created_by: Pseudonym of whoever opened it.
          *         last_number: Number of the newest Message.
-         *         turns_since_human: Assistants' turns since the last human Message.
+         *         turns_since_human: Assistants' turns since a human last took part: their Message,
+         *             their words or a reply written with them.
          *         turn_limit: The Team's limit of such turns.
          *         unread: Messages the caller has not read, if they take part.
          *         addressed: Some unread Message is addressed to the caller.
