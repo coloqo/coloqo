@@ -1763,7 +1763,10 @@ async def assign_task(
         former = await pseudonyms(db, {task.assignee_id})
         stage = await db.get(Stage, task.stage_id)
         assert stage is not None
-        in_work = CATEGORY[stage.kind] == Category.InProgress and task.assignee_id is not None
+        # Another human's work: their sessions are told to stop, so their consent is asked first.
+        # A human handing over their own task has said so; nothing to confirm (0032, 2026-11-11).
+        held = task.assignee_id not in (None, actor.user.id)
+        in_work = CATEGORY[stage.kind] == Category.InProgress and held
         if in_work and not body.hand_over:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,

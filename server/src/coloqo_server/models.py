@@ -544,7 +544,8 @@ class Topic(Base):
         created_by: The User who opened it.
         holder_assistant_id: The Assistant that holds it (decision 0006).
         last_number: Number of the newest Message; the next one gets ``last_number + 1``.
-        turns_since_human: Assistants' turns since the last human Message (decision 0007).
+        turns_since_human: Assistants' turns since a human last took part: their Message, their
+            words or a reply written with them (decision 0007, clarified 2026-11-11).
         created_at: Creation time.
         updated_at: Time of the newest Message.
         closed_at: When it was closed; ``None`` while open.

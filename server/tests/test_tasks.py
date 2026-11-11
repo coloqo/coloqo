@@ -520,8 +520,8 @@ def test_the_briefing_names_the_stages_and_the_tracker(
 def test_a_task_in_work_is_handed_over(
     setup: Setup, new: tuple[Plugin, Plugin], settings: Settings
 ) -> None:
-    """A human hands a task in work to another person: the event names both, the former
-    assignee's Assistant can no longer move it, the new one's takes it with its Topic.
+    """A human hands another person's task in work over only when confirmed: the event names
+    both, the former assignee's Assistant can no longer move it, the new one's takes it.
 
     Args:
         setup: The Team.
@@ -532,8 +532,8 @@ def test_a_task_in_work_is_handed_over(
     number = _task(setup, alice)["number"]
     setup.alice.patch(f"/api/team/{setup.team}", json={"tracker": True})
 
-    unconfirmed = setup.alice.post(f"{_path(setup, number)}/assign", json={"assignee": "bob"})
-    handed = setup.alice.post(
+    unconfirmed = setup.bob.post(f"{_path(setup, number)}/assign", json={"assignee": "bob"})
+    handed = setup.bob.post(
         f"{_path(setup, number)}/assign", json={"assignee": "bob", "hand_over": True}
     )
     by_alice = alice.client.post(f"{_path(setup, number)}/stage", json={"stage": "Design"})
@@ -562,7 +562,8 @@ def test_an_assistant_assigns_on_its_human_s_behalf(
     setup: Setup, new: tuple[Plugin, Plugin]
 ) -> None:
     """An Assistant assigns and unassigns a task to do, like its human in the web (decisions
-    0031, 0032 clarified 2026-11-11); the timeline names the Assistant.
+    0031, 0032 clarified 2026-11-11); the timeline names the Assistant. Its human's own task in
+    work it hands over at their word, with nothing to confirm.
 
     Args:
         setup: The Team.
@@ -575,8 +576,11 @@ def test_an_assistant_assigns_on_its_human_s_behalf(
     assigned = alice.client.post(f"{_path(setup, number)}/assign", json={"assignee": "@Bob"})
     unassigned = alice.client.post(f"{_path(setup, number)}/assign", json={"assignee": None})
     timeline = setup.alice.get(_path(setup, number)).json()["timeline"]
+    own = _task(setup, alice)["number"]
+    handed = alice.client.post(f"{_path(setup, own)}/assign", json={"assignee": "bob"})
 
     assert (assigned.status_code, assigned.json()["assignee"]) == (200, "bob")
+    assert (handed.status_code, handed.json()["assignee"]) == (200, "bob")
     assert unassigned.json()["assignee"] is None
     events = [(e["data"].get("to"), e["assistant"]) for e in timeline if e["kind"] == "assigned"]
     assert events == [("bob", alice.assistant), (None, alice.assistant)]
